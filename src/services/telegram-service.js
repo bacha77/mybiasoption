@@ -2,8 +2,8 @@ import axios from 'axios';
 
 export class TelegramService {
     constructor() {
-        this.token = '8782167757:AAF12AF-wRlbJZ_HCzq1wMbCnZhdlDWdlcw';
-        this.chatId = '5882481235';
+        this.token = process.env.TELEGRAM_BOT_TOKEN;
+        this.chatId = process.env.TELEGRAM_CHAT_ID;
         this.baseUrl = `https://api.telegram.org/bot${this.token}`;
     }
 

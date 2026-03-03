@@ -5,7 +5,7 @@ const yahooFinance = new YahooFinance();
 
 export class RealDataManager {
     constructor() {
-        this.apiKey = 'cspolc9r01qj9q8n4pp0cspolc9r01qj9q8n4ppg';
+        this.apiKey = process.env.FINNHUB_API_KEY;
         this.watchlist = ['SPY', 'QQQ', 'IWM', 'SMH', 'NVDA', 'TSLA', 'AAPL', 'MSFT', 'META', 'AMZN', 'GOOGL', 'AMD', 'NFLX', 'BTC-USD'];
         this.timeframes = ['1m', '5m', '15m'];
         this.currentTimeframe = '1m';

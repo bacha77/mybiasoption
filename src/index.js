@@ -3,8 +3,11 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 import { LiquidityEngine } from './logic/liquidity-engine.js';
 import { RealDataManager } from './services/real-data-manager.js';
+
+dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
