@@ -1,21 +1,18 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 import { LiquidityEngine } from './logic/liquidity-engine.js';
 import { RealDataManager } from './services/real-data-manager.js';
-
-dotenv.config();
+import { telegram } from './services/telegram-service.js';
+import { simTrader } from './services/simulation-trader.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer);
-
-import { telegram } from './services/telegram-service.js';
-import { simTrader } from './services/simulation-trader.js';
 
 const engine = new LiquidityEngine();
 const simulator = new RealDataManager();
@@ -185,7 +182,7 @@ async function startServer() {
             const hour = nyTime.getHours();
 
             if (lastAlerts.get('MIDNIGHT_REPORT') !== dateStr) {
-                console.log("Generating Midnight Open Report...");
+                console.log(`[${new Date().toLocaleTimeString()}] 🟢 Triggering Midnight Open Report for ${dateStr}...`);
                 const reportData = simulator.watchlist.map(symbol => {
                     const m = simulator.getInstitutionalMarkers(symbol);
                     if (m.midnightOpen === 0) return null;

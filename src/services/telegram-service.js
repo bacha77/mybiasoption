@@ -5,6 +5,12 @@ export class TelegramService {
         this.token = process.env.TELEGRAM_BOT_TOKEN;
         this.chatId = process.env.TELEGRAM_CHAT_ID;
         this.baseUrl = `https://api.telegram.org/bot${this.token}`;
+
+        if (this.token) {
+            console.log(`[Telegram] Service initialized. Token: ${this.token.substring(0, 5)}...`);
+        } else {
+            console.error(`[Telegram] ❌ CRITICAL: No BOT_TOKEN found in environment!`);
+        }
     }
 
     async sendMessage(message) {
