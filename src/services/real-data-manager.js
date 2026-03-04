@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import YahooFinance from 'yahoo-finance2';
+import { LiquidityEngine } from '../logic/liquidity-engine.js';
 
 const yahooFinance = new YahooFinance();
 

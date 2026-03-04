@@ -211,7 +211,9 @@ async function startServer() {
                 }).filter(i => i !== null);
 
                 if (reportData.length > 0) {
-                    await telegram.sendMidnightOpenReport(reportData).catch(() => { });
+                    await telegram.sendMidnightOpenReport(reportData).catch(err => {
+                        console.error("❌ Failed to send Midnight Report:", err.message);
+                    });
                     lastAlerts.set('MIDNIGHT_REPORT', dateStr);
                 }
             }
