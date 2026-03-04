@@ -61,6 +61,17 @@ _Recommend scaling out or closing full position._
 
         await this.sendMessage(message);
     }
+
+    async sendMidnightOpenReport(data) {
+        let content = `🌕 *MIDNIGHT OPEN REPORT*\n`;
+        content += `----------------------------\n`;
+        data.forEach(item => {
+            content += `*${item.symbol}:* $${item.midnightOpen.toFixed(2)}\n`;
+        });
+        content += `\n_Institutional levels anchored for the session._`;
+
+        await this.sendMessage(content);
+    }
 }
 
 export const telegram = new TelegramService();

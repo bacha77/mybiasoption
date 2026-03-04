@@ -169,6 +169,25 @@ async function startServer() {
                 }
             });
 
+            // --- MIDNIGHT OPEN REPORT (DAILY AT 00:00 EST) ---
+            const now = new Date();
+            const nyTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            const dateStr = nyTime.toDateString();
+            const hour = nyTime.getHours();
+
+            if (hour === 0 && lastAlerts.get('MIDNIGHT_REPORT') !== dateStr) {
+                console.log("Generating Midnight Open Report...");
+                const reportData = simulator.watchlist.map(symbol => {
+                    const markers = simulator.getInstitutionalMarkers(symbol);
+                    return { symbol, midnightOpen: markers.midnightOpen };
+                }).filter(i => i.midnightOpen > 0);
+
+                if (reportData.length > 0) {
+                    await telegram.sendMidnightOpenReport(reportData).catch(() => { });
+                    lastAlerts.set('MIDNIGHT_REPORT', dateStr);
+                }
+            }
+
             io.emit('update', { ...currentUpdate, watchlist: watchlistUpdate });
         } catch (err) {
             console.error("Update Loop Error:", err.message);
