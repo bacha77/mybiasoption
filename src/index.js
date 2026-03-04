@@ -184,7 +184,7 @@ async function startServer() {
             const dateStr = nyTime.toDateString();
             const hour = nyTime.getHours();
 
-            if (hour === 0 && lastAlerts.get('MIDNIGHT_REPORT') !== dateStr) {
+            if (lastAlerts.get('MIDNIGHT_REPORT') !== dateStr) {
                 console.log("Generating Midnight Open Report...");
                 const reportData = simulator.watchlist.map(symbol => {
                     const m = simulator.getInstitutionalMarkers(symbol);
