@@ -4,242 +4,204 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BIAS | Daily Liquidation Strategy</title>
+    <title>BIAS | Elite Liquidation Dashboard</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+        rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 </head>
 
 <body>
-    <div class="glass-bg"></div>
+    <div class="app-container">
+        <!-- Dashboard Header -->
+        <header>
+            <div class="logo-section">
+                <span class="logo-main">B.I.A.S</span>
+                <span class="logo-sub">INSTITUTIONAL LIQUIDATION ENGINE</span>
+            </div>
 
-    <header>
-        <div class="logo">
-            <span class="accent-text">B.I.A.S</span>
-            <span class="sub-text">Liquidation Engine</span>
-        </div>
-        <div class="header-center">
-            <div class="news-ticker">
-                <div id="ticker-content" class="ticker-content">
-                    Loading Bloomberg Headlines...
+            <div class="header-stats">
+                <div class="session-bar">
+                    <div id="market-status-dot" class="session-dot pulse"></div>
+                    <span id="market-session-text">ESTABLISHING SESSION...</span>
                 </div>
+                <div id="sim-balance-display" class="sim-balance-pill">
+                    ⚡ SIM BALANCE: <span id="sim-balance-val">$10,000.00</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- News Ticker -->
+        <div class="ticker-wrap">
+            <div id="ticker-content" class="ticker-content">
+                Waiting for Bloomberg Data... • Detecting Institutional Blocks... • Monitoring Liquidity Sweeps...
             </div>
         </div>
-        <div class="market-status">
-            <div id="market-status-dot" class="status-dot pulse"></div>
-            <span id="market-session-text">US MARKET: ESTABLISHING...</span>
-        </div>
-    </header>
 
-    <main class="dashboard-grid">
-        <!-- Main Price Chart -->
-        <section class="card chart-container">
-            <div class="card-header">
-                <div class="header-left">
-                    <h2>Institutional Price Action | <span id="symbol-display" class="w-symbol">SPY</span></h2>
-                    <div class="tf-selector">
-                        <button class="tf-btn active" data-tf="1m">1m</button>
-                        <button class="tf-btn" data-tf="5m">5m</button>
-                        <button class="tf-btn" data-tf="15m">15m</button>
+        <main class="dashboard-main">
+            <!-- Left Column -->
+            <div class="main-content">
+                <!-- Primary Chart Card -->
+                <section class="card">
+                    <div class="chart-header">
+                        <div>
+                            <span id="symbol-display" class="chart-symbol">SPY</span>
+                            <div class="tf-selector" style="display:inline-flex; margin-left:15px;">
+                                <button class="tf-btn active" data-tf="1m">1m</button>
+                                <button class="tf-btn" data-tf="5m">5m</button>
+                                <button class="tf-btn" data-tf="15m">15m</button>
+                            </div>
+                        </div>
+                        <div class="chart-price-info">
+                            <div id="current-price" class="main-price">000.00</div>
+                            <div id="price-change" class="main-change">+0.00%</div>
+                        </div>
                     </div>
-                </div>
-                <div class="price-display">
-                    <span id="current-price">00,000.00</span>
-                    <span id="price-change" class="change-up">+0.00%</span>
-                </div>
-            </div>
-            <canvas id="priceChart"></canvas>
+                    <div class="chart-canvas-container">
+                        <canvas id="priceChart"></canvas>
+                    </div>
+                </section>
 
-            <!-- Success Checklist Overlay -->
-            <div class="success-checklist">
-                <h4>Execution Checklist</h4>
-                <div class="check-item" id="check-tf-alignment">
-                    <span class="dot"></span> 15m/5m Trend Alignment
-                </div>
-                <div class="check-item" id="check-trap-detected">
-                    <span class="dot"></span> Liquidity Sweep Detected
-                </div>
-                <div id="check-signal-stable" class="check-item">
-                    <span class="dot"></span> Stable Bias Confirmation
-                </div>
-                <div id="check-relative-strength" class="check-item">
-                    <span class="dot"></span> Relative Strength vs SPY
-                </div>
-            </div>
-        </section>
+                <!-- Institutional Metrics Grid -->
+                <section class="card accent-border">
+                    <div class="card-title">Institutional Markers & Data Points</div>
+                    <div class="metrics-grid">
+                        <div class="metric-item">
+                            <span class="m-label">Midnight Open</span>
+                            <span id="midnight-open-val" class="m-value accent-text">0.00</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="m-label">Prev Day High</span>
+                            <span id="pdh-val" class="m-value">0.00</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="m-label">Prev Day Low</span>
+                            <span id="pdl-val" class="m-value">0.00</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="m-label">VWAP</span>
+                            <span id="vwap-val" class="m-value">0.00</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="m-label">ADR (5-Day)</span>
+                            <span id="adr-val" class="m-value gold-text">0.00</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="m-label">POC</span>
+                            <span id="poc-val" class="m-value">0.00</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="m-label">CVD</span>
+                            <span id="cvd-val" class="m-value">0</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="m-label">VIX</span>
+                            <span id="vix-status" class="m-value">0.00</span>
+                        </div>
+                    </div>
+                </section>
 
-        <!-- Sidebar Components -->
-        <aside class="sidebar">
-            <!-- Bloomberg Monitor -->
-            <div class="card bloomberg-card">
-                <h3>Bloomberg Terminal Monitor</h3>
-                <div class="monitor-grid">
-                    <div class="monitor-item">
-                        <span class="m-label">WEI (Global)</span>
-                        <span id="wei-status" class="m-value">NEUTRAL</span>
+                <!-- Heatmap / Order Flow -->
+                <section class="card">
+                    <div class="card-title">Institutional Order Flow Heatmap</div>
+                    <div id="heatmap" class="heatmap-viz" style="min-height: 200px;">
+                        <!-- JS Loaded Levels -->
                     </div>
-                    <div class="monitor-item">
-                        <span class="m-label">OMON (Options)</span>
-                        <span id="omon-status" class="m-value">STALE</span>
-                    </div>
-                    <div class="monitor-item">
-                        <span class="m-label">BTM (Blocks)</span>
-                        <span id="btm-status" class="m-value">NO DATA</span>
-                    </div>
-                    <div class="monitor-item">
-                        <span class="m-label">SENTIMENT (AI)</span>
-                        <span id="sentiment-status" class="m-value">0.00</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bias Gauge -->
-            <div class="card bias-card">
-                <h3>Daily Bias Signal</h3>
-                <div id="multi-tf-bias" class="multi-tf-aggregator">
-                    <div class="tf-dot" data-tf="1m">1m <span>-</span></div>
-                    <div class="tf-dot" data-tf="5m">5m <span>-</span></div>
-                    <div class="tf-dot" data-tf="15m">15m <span>-</span></div>
-                </div>
-                <div class="bias-gauge">
-                    <div id="bias-needle" class="needle"></div>
-                    <div class="gauge-labels">
-                        <span>BEARISH</span>
-                        <span>NEUTRAL</span>
-                        <span>BULLISH</span>
-                    </div>
-                </div>
-                <div id="bias-label" class="bias-text">NEUTRAL</div>
-                <div id="institutional-markers" class="markers-list">
-                    <span>PDH: <b id="pdh-val">-</b></span>
-                    <span>PDL: <b id="pdl-val">-</b></span>
-                    <span>MIDNIGHT: <b id="midnight-open-val" class="accent-text">-</b></span>
-                    <span>LONDON OPEN: <b id="london-open-val" class="accent-text">-</b></span>
-                    <span>N.Y. OPEN: <b id="ny-open-val" class="accent-text">-</b></span>
-                    <span>DAY HIGH: <b id="dh-val" class="accent-text">-</b></span>
-                    <span>DAY LOW: <b id="dl-val" class="accent-text">-</b></span>
-                    <span>VWAP: <b id="vwap-val">-</b></span>
-                    <span>POC: <b id="poc-val">-</b></span>
-                    <span>CVD: <b id="cvd-val">-</b></span>
-                </div>
+                </section>
             </div>
 
-            <!-- Engine Room (Market Internals) -->
-            <div class="card engine-card">
-                <h3>Market Engine Room</h3>
-                <div class="monitor-grid">
-                    <div class="monitor-item">
-                        <span class="m-label">VIX (FEAR)</span>
-                        <span id="vix-status" class="m-value">0.00</span>
+            <!-- Right Column (Sidebar) -->
+            <aside class="sidebar">
+                <!-- Gauge Card -->
+                <section class="card">
+                    <div class="card-title">Daily Bias Confidence</div>
+                    <div class="bias-gauge-container">
+                        <div id="bias-label" class="bias-large">NEUTRAL</div>
+                        <div id="bias-strength-bar" class="bias-conf-bar">
+                            <div id="bias-conf-fill" class="bias-conf-fill"></div>
+                        </div>
+                        <div
+                            style="display:flex; justify-content: space-between; font-size: 0.65rem; color: var(--text-dim);">
+                            <span>BEARISH</span>
+                            <span>NEUTRAL</span>
+                            <span>BULLISH</span>
+                        </div>
                     </div>
-                    <div class="monitor-item">
-                        <span class="m-label">DXY (DOLLAR)</span>
-                        <span id="dxy-status" class="m-value">00.00</span>
-                    </div>
-                    <div class="monitor-item long-item">
-                        <span class="m-label">NEWS GUARDIAN</span>
-                        <span id="news-impact-status" class="m-value status-low">LOW IMPACT</span>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Option Recommendation -->
-            <div class="card recommendation-card">
-                <h3>Option Recommendation</h3>
-                <div id="rec-box" class="rec-box">
-                    <div class="rec-header">
-                        <span id="rec-action" class="rec-action">WAIT</span>
-                        <span id="rec-symbol" class="rec-symbol">-</span>
+                    <div class="checklist" style="margin-top:1.5rem;">
+                        <div class="check-item" id="check-tf-alignment">
+                            <div class="check-circle"></div> 15m/5m Trend Alignment
+                        </div>
+                        <div class="check-item" id="check-trap-detected">
+                            <div class="check-circle"></div> Liquidity Sweep Detected
+                        </div>
+                        <div class="check-item" id="check-signal-stable">
+                            <div class="check-circle"></div> Stable Bias Confirmation
+                        </div>
+                        <div class="check-item" id="check-relative-strength">
+                            <div class="check-circle"></div> Relative Strength High
+                        </div>
                     </div>
-                    <div class="rec-details">
-                        <p>Strike: <b id="rec-strike">-</b></p>
-                        <p>Confidence: <b id="rec-confidence" class="accent-text">-</b></p>
-                        <p>Trim (POC): <b id="rec-trim" class="accent-text">-</b></p>
-                        <p>Final Target: <b id="rec-target">-</b></p>
-                        <p>Stop Loss: <b id="rec-sl">-</b> (ATR)</p>
-                        <p>Inst. Size: <b id="rec-size">-</b> Contracts</p>
-                        <p id="rec-rationale" class="rec-rationale">No clear trap detected.</p>
+                </section>
+
+                <!-- Recommendation Card -->
+                <section class="card accent-border">
+                    <div class="card-title">Option Recommendation (Gold Standard)</div>
+                    <div id="rec-box" class="rec-box">
+                        <div class="rec-action-row">
+                            <span id="rec-action" class="rec-action-text">WAITING</span>
+                            <span id="rec-confidence" class="h-stat-value accent-text">0%</span>
+                        </div>
+                        <div class="rec-meta">
+                            <span>Strike: <b id="rec-strike">-</b></span>
+                            <span>Target: <b id="rec-target">-</b></span>
+                            <span>Trim: <b id="rec-trim">-</b></span>
+                            <span>Stop: <b id="rec-sl">-</b></span>
+                            <span>Size: <b id="rec-size">-</b> Ctr.</span>
+                            <span>Time: <b id="rec-duration">-</b></span>
+                        </div>
+                        <div id="rec-rationale"
+                            style="margin-top:1rem; font-size:0.75rem; color: var(--text-dim); line-height:1.4;">
+                            Monitoring institutional levels for high-probability trap...
+                        </div>
                     </div>
-                    <div class="rec-footer">
-                        <button id="btn-buy" class="trade-btn buy">EXECUTE BUY</button>
-                        <button id="btn-sell" class="trade-btn sell">EXECUTE SELL</button>
+                </section>
+
+                <!-- Portfolio / Sim Stats -->
+                <section class="card">
+                    <div class="card-title">Active Paper Trades (Simulation)</div>
+                    <div id="active-trades" style="min-height: 50px;">
+                        <p style="font-size:0.8rem; color:var(--text-dim); text-align:center;">No active positions.</p>
                     </div>
-                </div>
-            </div>
+                </section>
 
-            <!-- Trade Portfolio -->
-            <div class="card portfolio-card">
-                <h3>Active Trade Tracking</h3>
-                <div id="active-trades" class="trades-list">
-                    <p class="no-trades">No active trades in portfolio.</p>
-                </div>
-                <div class="portfolio-summary">
-                    <span>Net P/L: </span>
-                    <span id="total-pl" class="pl-neutral">$0.00</span>
-                </div>
-            </div>
-
-            <!-- Watchlist -->
-            <div class="card watchlist-card">
-                <div class="card-header">
-                    <h3>Watchlist - <span id="watchlist-tf" class="w-tf-label">1m</span></h3>
-                    <button id="btn-add-symbol" class="add-btn">+</button>
-                </div>
-                <table class="watchlist-table">
-                    <thead>
-                        <tr>
-                            <th>Stock</th>
-                            <th>Price</th>
-                            <th>Bias</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="watchlist-body">
-                        <!-- Dynamic items -->
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Institutional Calendar -->
-            <div class="card calendar-card">
-                <h3>Institutional Calendar</h3>
-                <div id="calendar-list" class="pixel-list">
-                    <div class="cal-item high-impact">
-                        <span class="cal-time">09:30</span>
-                        <span class="cal-event">NY Open / Opening Drive</span>
+                <!-- Watchlist -->
+                <section class="card">
+                    <div class="card-title">Watchlist <button id="btn-add-symbol"
+                            style="background:none; border:none; color:var(--accent); cursor:pointer;">[+]</button>
                     </div>
-                    <div class="cal-item">
-                        <span class="cal-time">10:30</span>
-                        <span class="cal-event">NY Reversal Window</span>
-                    </div>
-                    <div class="cal-item high-impact">
-                        <span class="cal-time">13:00</span>
-                        <span class="cal-event">London Close / AM Trap</span>
-                    </div>
-                </div>
-            </div>
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Price</th>
+                                <th>Bias</th>
+                                <th>Signal</th>
+                            </tr>
+                        </thead>
+                        <tbody id="watchlist-body">
+                            <!-- JS Generated -->
+                        </tbody>
+                    </table>
+                </section>
+            </aside>
+        </main>
+    </div>
 
-            <!-- Liquidity Draws -->
-            <div class="card liquidity-card">
-                <h3>Liquidity Draws (DOL)</h3>
-                <ul id="draws-list" class="pixel-list">
-                    <!-- Dynamic Items -->
-                </ul>
-            </div>
-        </aside>
-
-        <!-- Heatmap / Order Flow -->
-        <section class="card heatmap-container">
-            <h3>Institutional Order Flow Heatmap</h3>
-            <div class="heatmap-viz" id="heatmap">
-                <!-- Visual Heatmap Levels -->
-            </div>
-        </section>
-    </main>
-
-    <div id="toast-container" class="toast-container"></div>
-
+    <div id="toast-container" style="position:fixed; bottom:20px; right:20px; z-index:999;"></div>
     <script src="app.js"></script>
 </body>
 

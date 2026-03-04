@@ -215,7 +215,11 @@ async function startServer() {
                 }
             }
 
-            io.emit('update', { ...currentUpdate, watchlist: watchlistUpdate });
+            io.emit('update', {
+                ...currentUpdate,
+                watchlist: watchlistUpdate,
+                simBalance: simTrader.balance
+            });
         } catch (err) {
             console.error("Update Loop Error:", err.message);
         } finally {
