@@ -22,6 +22,7 @@ export class RealDataManager {
                 dailyChangePercent: 0,
                 cvd: 0,
                 volumeClusters: {},
+                dailyQuotes: [],
                 candles: { '1m': [], '5m': [], '15m': [] },
                 bloomberg: { omon: 'NEUTRAL', btm: 'STALE', wei: 'NEUTRAL', sentiment: 0 },
                 news: []
@@ -97,6 +98,7 @@ export class RealDataManager {
                 if (targetDay) {
                     this.stocks[symbol].pdh = targetDay.high;
                     this.stocks[symbol].pdl = targetDay.low;
+                    this.stocks[symbol].dailyQuotes = dailyRes.quotes.filter(q => q.high != null);
                     console.log(`[${symbol}] Anchored PDH: ${targetDay.high} | PDL: ${targetDay.low} (From: ${targetDay.date.toISOString().split('T')[0]})`);
                 }
             } else {
@@ -400,6 +402,9 @@ export class RealDataManager {
         const nyOpenCandle = findCandleAt(nyOpenTs);
         const lonOpenCandle = findCandleAt(lonOpenTs);
 
+        const adr = this.stocks[symbol].dailyQuotes ?
+            new LiquidityEngine().calculateADR(this.stocks[symbol].dailyQuotes) : 0;
+
         return {
             pdh: stock.pdh || 0,
             pdl: stock.pdl || 0,
@@ -410,7 +415,8 @@ export class RealDataManager {
             londonOpen: lonOpenCandle.open,
             vwap: this.calculateVWAP(symbol, tf),
             poc: poc || candles[0].close,
-            cvd: stock.cvd
+            cvd: stock.cvd,
+            adr
         };
     }
 

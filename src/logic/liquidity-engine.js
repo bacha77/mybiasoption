@@ -117,6 +117,16 @@ export class LiquidityEngine {
         return trSum / period;
     }
 
+    /**
+     * Calculates Average Daily Range (ADR)
+     * Used to determine if a move is "extended" or has room to run.
+     */
+    calculateADR(dailyQuotes, period = 5) {
+        if (!dailyQuotes || dailyQuotes.length < period) return 0;
+        const ranges = dailyQuotes.slice(-period).map(q => q.high - q.low);
+        return ranges.reduce((a, b) => a + b, 0) / period;
+    }
+
     calculateRelativeStrength(symbolCandles, spyCandles) {
         if (!symbolCandles.length || !spyCandles.length) return 0;
         const count = Math.min(symbolCandles.length, spyCandles.length, 15);
@@ -254,6 +264,14 @@ export class LiquidityEngine {
         let biasLabel = 'NEUTRAL';
         if (totalScore >= 5) biasLabel = 'BULLISH';
         else if (totalScore <= -5) biasLabel = 'BEARISH';
+
+        // ADR Exhaustion Check (New)
+        const dayRange = Math.max(...(markers.todayHigh ? [markers.todayHigh - markers.todayLow] : [0]));
+        if (markers.adr > 0 && dayRange > markers.adr * 0.9) {
+            // If we've already moved 90% of the daily average, be VERY careful
+            biasLabel = 'CONSOLIDATION/EXHAUSTED';
+            confPoints = Math.max(0, confPoints - 30);
+        }
 
         // Accuracy Booster: Confidence Logic
         if (midnightOpen > 0) {
