@@ -178,9 +178,28 @@ async function startServer() {
             if (hour === 0 && lastAlerts.get('MIDNIGHT_REPORT') !== dateStr) {
                 console.log("Generating Midnight Open Report...");
                 const reportData = simulator.watchlist.map(symbol => {
-                    const markers = simulator.getInstitutionalMarkers(symbol);
-                    return { symbol, midnightOpen: markers.midnightOpen };
-                }).filter(i => i.midnightOpen > 0);
+                    const m = simulator.getInstitutionalMarkers(symbol);
+                    if (m.midnightOpen === 0) return null;
+
+                    // Simple Bias Prediction:
+                    // If Midnight Open is above the midpoint of previous day's range, we lean Bullish.
+                    const midpoint = (m.pdh + m.pdl) / 2;
+                    let bias = 'NEUTRAL';
+                    if (m.midnightOpen > midpoint) bias = 'BULLISH';
+                    if (m.midnightOpen < midpoint) bias = 'BEARISH';
+
+                    // Extra weight: If we are already above PDH, very bullish.
+                    if (m.midnightOpen > m.pdh) bias = 'STRONG_BULLISH';
+                    if (m.midnightOpen < m.pdl) bias = 'STRONG_BEARISH';
+
+                    return {
+                        symbol,
+                        midnightOpen: m.midnightOpen,
+                        pdh: m.pdh,
+                        pdl: m.pdl,
+                        bias
+                    };
+                }).filter(i => i !== null);
 
                 if (reportData.length > 0) {
                     await telegram.sendMidnightOpenReport(reportData).catch(() => { });

@@ -63,12 +63,17 @@ _Recommend scaling out or closing full position._
     }
 
     async sendMidnightOpenReport(data) {
-        let content = `🌕 *MIDNIGHT OPEN REPORT*\n`;
+        let content = `🌕 *NIGHTLY BIAS REPORT*\n`;
         content += `----------------------------\n`;
         data.forEach(item => {
-            content += `*${item.symbol}:* $${item.midnightOpen.toFixed(2)}\n`;
+            const biasEmoji = item.bias === 'BULLISH' ? '🚀' : item.bias === 'BEARISH' ? '🔻' : '⚖️';
+            content += `*${item.symbol}* ${biasEmoji}\n`;
+            content += `• Midnight: $${item.midnightOpen.toFixed(2)}\n`;
+            content += `• PDH: $${item.pdh.toFixed(2)}\n`;
+            content += `• PDL: $${item.pdl.toFixed(2)}\n`;
+            content += `• Prediction: *${item.bias}*\n\n`;
         });
-        content += `\n_Institutional levels anchored for the session._`;
+        content += `_Institutional levels anchored. Watch for liquidity sweeps at PDH/PDL._`;
 
         await this.sendMessage(content);
     }
