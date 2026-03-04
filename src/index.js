@@ -15,6 +15,7 @@ const httpServer = createServer(app);
 const io = new Server(httpServer);
 
 import { telegram } from './services/telegram-service.js';
+import { simTrader } from './services/simulation-trader.js';
 
 const engine = new LiquidityEngine();
 const simulator = new RealDataManager();
@@ -167,7 +168,15 @@ async function startServer() {
                         lastAlerts.set(exitKey, Date.now());
                     }
                 }
+
+                // --- EXPERT UPGRADE: SIMULATED PAPER TRADING ---
+                if (rec && rec.action !== 'WAIT' && rec.isStable) {
+                    simTrader.processSignal(symbol, rec, stockData.currentPrice).catch(() => { });
+                }
             });
+
+            // Update all sim positions based on newest prices
+            await simTrader.updatePositions(simulator.stocks).catch(() => { });
 
             // --- MIDNIGHT OPEN REPORT (DAILY AT 00:00 EST) ---
             const now = new Date();
