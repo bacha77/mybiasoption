@@ -392,10 +392,33 @@ export class LiquidityEngine {
         let size = '-';
         let exitSignal = null;
 
+        // --- EXPERT UPGRADE: KILL ZONE FILTER ---
+        const isKillZone = (session.session === 'NY_OPEN' || session.session === 'NY_PM');
+        const killZoneWarning = !isKillZone ? '⚠️ OFF-HOURS: Low Institutional Volume. ' : '';
+
         if (stable.action !== 'WAIT') {
             const isCall = stable.action.includes('CALL');
             sl = isCall ? (currentPrice - (atr * 1.8)).toFixed(2) : (currentPrice + (atr * 1.8)).toFixed(2);
-            const riskPerContract = Math.abs(currentPrice - parseFloat(sl));
+
+            // --- EXPERT UPGRADE: RISK-TO-REWARD (R:R) VALIDATION ---
+            const targetPrice = parseFloat(stable.target);
+            const slPrice = parseFloat(sl);
+            const potentialProfit = Math.abs(targetPrice - currentPrice);
+            const potentialRisk = Math.abs(currentPrice - slPrice);
+            const rrRatio = potentialRisk > 0 ? potentialProfit / potentialRisk : 0;
+
+            // Block low R:R trades (Must be at least 1.5:1)
+            if (rrRatio < 1.5) {
+                return {
+                    action: 'WAIT',
+                    strike: '-',
+                    target: '-',
+                    rationale: `Low R:R Ratio (${rrRatio.toFixed(1)}:1). Reward doesn't justify risk.`,
+                    isStable: true
+                };
+            }
+
+            const riskPerContract = potentialRisk;
             size = riskPerContract > 0 ? Math.floor(100 / (riskPerContract * 10)) : 1;
             if (isNewsHigh) size = Math.max(1, Math.floor(size / 2));
             if (size < 1) size = 1; else if (size > 15) size = 15;
@@ -405,8 +428,8 @@ export class LiquidityEngine {
                     this.activePositions[symbol] = {
                         type: stable.action,
                         entry: currentPrice,
-                        sl: parseFloat(sl),
-                        tp: parseFloat(stable.target),
+                        sl: slPrice,
+                        tp: targetPrice,
                         trim: parseFloat(stable.trim),
                         active: true,
                         trimmed: false,
@@ -472,9 +495,9 @@ export class LiquidityEngine {
             tp: stable.target,
             size,
             duration: timeframe === '1m' ? '15m' : '1h',
-            rationale: stable.rationale,
+            rationale: killZoneWarning + newsWarning + stable.rationale,
             session: session.session,
-            isStable: stable.count >= 8, // Increased from 5 to 8 (40 seconds stability) for accuracy
+            isStable: stable.count >= 8,
             confidence: bias.confidence || 0,
             exit: exitSignal
         };
