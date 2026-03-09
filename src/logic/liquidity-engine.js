@@ -254,7 +254,7 @@ export class LiquidityEngine {
 
         // --- DXY CORRELATION (Critical for Forex) ---
         if (isForex && internals.dxy > 0) {
-            const dxyStrength = internals.dxy > 26.5; // Using UUP proxy threshold
+            const dxyStrength = internals.dxy > 103.5; 
             if (isUSDQuote) {
                 if (dxyStrength) bearishScore += 2.5; // DXY UP = EURUSD DOWN
                 else bullishScore += 1.5;
@@ -281,9 +281,9 @@ export class LiquidityEngine {
         if (!isForex) {
             const dxy = internals.dxy || 0;
             const tnx = internals.tnx || 0; // 10Y Yield
-
+            
             // Strong Dollar = Headwind for Stocks
-            if (dxy > 27.80) bearishScore += 2; // Threshold for UUP/DXY strength
+            if (dxy > 104.5) bearishScore += 2; 
 
             // Rising Yields = Headwind for Tech
             const isTech = ['QQQ', 'NVDA', 'AAPL', 'MSFT', 'AMD', 'SMH'].includes(symbol);

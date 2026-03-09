@@ -8,6 +8,26 @@ import { LiquidityEngine } from './logic/liquidity-engine.js';
 import { RealDataManager } from './services/real-data-manager.js';
 import { telegram } from './services/telegram-service.js';
 import { simTrader } from './services/simulation-trader.js';
+import fs from 'fs';
+
+const logFile = path.join(process.cwd(), 'system.log');
+function logToFile(msg) {
+    const timestamp = new Date().toISOString();
+    fs.appendFileSync(logFile, `[${timestamp}] ${msg}\n`);
+}
+
+process.on('unhandledRejection', (reason, promise) => {
+    const msg = `Unhandled Rejection at: ${promise} reason: ${reason}`;
+    console.error(msg);
+    logToFile(msg);
+});
+
+process.on('uncaughtException', (err) => {
+    const msg = `Uncaught Exception: ${err.message}\n${err.stack}`;
+    console.error(msg);
+    logToFile(msg);
+    process.exit(1);
+});
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -116,15 +136,29 @@ async function startServer() {
         socket.on('switch_symbol', async (symbol) => {
             try {
                 symbol = symbol.toUpperCase().trim();
-                console.log(`[SOCKET] switch_symbol: ${symbol}`);
+                
+                // Normalization for common search formats to Yahoo-friendly ones
+                if (symbol === 'BTCUSD') symbol = 'BTC-USD';
+                if (symbol === 'ETHUSD') symbol = 'ETH-USD';
+                if (symbol === 'EURUSD') symbol = 'EURUSD=X';
+                if (symbol === 'GBPUSD') symbol = 'GBPUSD=X';
+                if (symbol === 'USDJPY') symbol = 'USDJPY=X';
+                if (symbol === 'DXY' || symbol === 'DX-Y') symbol = 'DX-Y.NYB';
 
-                // If not in watchlist, add it first so we have data
-                if (!simulator.watchlist.includes(symbol)) {
-                    console.log(`[SEARCH] Symbol ${symbol} not in watchlist. Adding now...`);
+                console.log(`[SOCKET] switch_symbol normalized to: ${symbol}`);
+                
+                // Update internal symbol tracker
+                simulator.currentSymbol = symbol;
+
+                // Ensure data exists for this symbol
+                if (!simulator.stocks[symbol]) {
+                    console.log(`[SEARCH] Symbol ${symbol} not in system. Fetching quote...`);
                     await simulator.addSymbol(symbol);
                 }
 
-                simulator.currentSymbol = symbol;
+                // CRITICAL: Force history refresh for the new symbol on-demand
+                await simulator.refreshHistoricalData(symbol);
+                
                 const update = processData();
                 const wl = processWatchlist();
 
@@ -139,7 +173,7 @@ async function startServer() {
                         change: simulator.stocks[s]?.dailyChangePercent || 0
                     }))
                 });
-                console.log(`[SOCKET] Sent symbol_updated for ${symbol}. Watchlist size: ${wl.length}`);
+                console.log(`[SOCKET] Sent symbol_updated for ${symbol}.`);
             } catch (err) {
                 console.error(`[SEARCH ERROR] Failed to switch to ${symbol}:`, err.message);
             }
@@ -426,30 +460,46 @@ async function startServer() {
     const PORT = process.env.PORT || 3000;
     httpServer.listen(PORT, () => {
         console.log(`BIAS Strategy Server running at http://localhost:${PORT}`);
+        logToFile(`Server started on port ${PORT}`);
+    }).on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            const msg = `[CRITICAL] Port ${PORT} is already in use. Please close any other BIAS windows or other apps using this port.`;
+            console.error(msg);
+            logToFile(msg);
+            // On Windows, the batch pause will catch this if we don't exit too fast
+            setTimeout(() => process.exit(1), 5000);
+        } else {
+            console.error("Server error:", err.message);
+            logToFile(`Server error: ${err.message}`);
+        }
     });
 }
 
 function processData(symbol = simulator.currentSymbol) {
-    const stock = simulator.stocks[symbol];
+    // Normalize Yahoo symbols (e.g., BRK.B -> BRK-B)
+    const normalizedSymbol = symbol.replace(/\./g, '-');
+
+    const stock = simulator.stocks[normalizedSymbol];
     const tf = simulator.currentTimeframe;
 
     // Safety check: ensure stock exists and has candles for current timeframe
     // If 1m is empty (weekend/holiday), fall back to the next available timeframe
     let activeTf = tf;
     if (!stock || !stock.candles) {
-        return { symbol, loading: true, bias: { bias: 'LOADING' }, recommendation: { action: 'WAIT' }, markers: {} };
+        console.warn(`[${normalizedSymbol}] No stock data or candles found. Loading: true.`);
+        return { symbol: normalizedSymbol, timeframe: activeTf, candles: [], loading: true, bias: { bias: 'LOADING' }, recommendation: { action: 'WAIT' }, markers: {} };
     }
     if (!stock.candles[tf] || stock.candles[tf].length === 0) {
         const fallbackOrder = ['5m', '15m', '1h', '1d'];
         for (const fallback of fallbackOrder) {
             if (stock.candles[fallback] && stock.candles[fallback].length > 0) {
                 activeTf = fallback;
-                console.log(`[${symbol}] No ${tf} candles available. Falling back to ${fallback}.`);
+                console.log(`[${normalizedSymbol}] No ${tf} candles available. Falling back to ${fallback}.`);
                 break;
             }
         }
-        if (activeTf === tf) {
-            return { symbol, loading: true, bias: { bias: 'LOADING' }, recommendation: { action: 'WAIT' }, markers: {} };
+        if (activeTf === tf || !stock.candles[activeTf] || stock.candles[activeTf].length === 0) {
+            return { symbol, timeframe: activeTf, candles: [], loading: true, bias: { bias: 'LOADING' }, recommendation: { action: 'WAIT' }, markers: {} };
         }
     }
 
@@ -537,7 +587,11 @@ function processData(symbol = simulator.currentSymbol) {
         bias,
         heatmap,
         bloomberg,
-        markers,
+        markers: {
+            ...markers,
+            dxy: simulator.stocks['DX-Y.NYB']?.currentPrice || internals.dxy || 0,
+            vix: simulator.stocks['^VIX']?.currentPrice || internals.vix || 0,
+        },
         absorption,
         sweeps,
         recommendation,

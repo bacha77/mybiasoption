@@ -143,37 +143,120 @@ let tvChart;
 let candleSeries;
 let currentPriceLines = [];
 
+// Initialize Chart once
+function initChartInstance() {
+    const container = document.getElementById('priceChart');
+    if (!container || tvChart) return;
+
+    console.log("[CHART] Initializing permanent chart instance.");
+
+    const width = container.clientWidth || 800;
+    const height = 400;
+
+    tvChart = LightweightCharts.createChart(container, {
+        width: width,
+        height: height,
+        layout: {
+            background: { color: '#0b1120' },
+            textColor: '#94a3b8',
+            fontFamily: "'Inter', sans-serif",
+        },
+        grid: {
+            vertLines: { color: 'rgba(255, 255, 255, 0.03)', style: 1 },
+            horzLines: { color: 'rgba(255, 255, 255, 0.03)', style: 1 },
+        },
+        rightPriceScale: {
+            borderColor: '#1e293b',
+            visible: true,
+            autoScale: true,
+            scaleMargins: { top: 0.1, bottom: 0.1 },
+        },
+        timeScale: {
+            borderColor: '#1e293b',
+            timeVisible: true,
+            barSpacing: 10,
+        }
+    });
+
+    candleSeries = tvChart.addCandlestickSeries({
+        upColor: '#10b981',
+        downColor: '#f43f5e',
+        borderVisible: false,
+        wickColor: '#10b981',
+    });
+
+    window.addEventListener('resize', () => {
+        if (tvChart) tvChart.applyOptions({ width: container.clientWidth });
+    });
+}
+initChartInstance();
+
+function setChartData(candles) {
+    if (!candleSeries || !candles) return;
+    try {
+        const formatted = candles
+            .filter(c => c.open > 0 && c.high > 0 && c.low > 0 && c.close > 0) // Strict positive filter
+            .map(c => ({
+                time: Math.floor(Number(c.timestamp) / 1000),
+                open: Number(c.open),
+                high: Number(c.high),
+                low: Number(c.low),
+                close: Number(c.close)
+            }))
+            .sort((a, b) => a.time - b.time);
+
+        if (formatted.length > 0) {
+            candleSeries.setData(formatted);
+            setTimeout(() => {
+                if (tvChart) {
+                    tvChart.timeScale().fitContent();
+                    tvChart.timeScale().scrollToRealTime();
+                }
+            }, 300);
+        } else {
+            candleSeries.setData([]);
+        }
+    } catch (e) {
+        console.error("[CHART] Error in setChartData:", e);
+    }
+}
 function updateChartOverlays(data) {
-    if (!candleSeries || !data.markers) return;
+    if (!candleSeries || !data.markers || !data.currentPrice) return;
 
     // Clear old lines
     currentPriceLines.forEach(line => candleSeries.removePriceLine(line));
     currentPriceLines = [];
 
     const m = data.markers;
-    const currentPrice = data.currentPrice;
-    const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
+    const currentPrice = data.currentPrice || 0;
     const labelThreshold = currentPrice * 0.0015; // 0.15% threshold for label collision
+    const outerThreshold = currentPrice * 0.15; // 15% outlier threshold to prevent scaling bugs
 
     const levels = [];
 
+    const addLevel = (price, color, style, title, weight) => {
+        if (price > 0 && Math.abs(price - currentPrice) < outerThreshold) {
+            levels.push({ price: Number(price), color, style, title, weight });
+        }
+    };
+
     // --- Institutional Priority System ---
-    if (m.midnightOpen > 0) levels.push({ price: m.midnightOpen, color: '#38bdf8', style: 1, title: 'MID OPEN', weight: 10 });
-    if (m.nyOpen > 0) levels.push({ price: m.nyOpen, color: '#10b981', style: 2, title: 'NY OPEN', weight: 9 });
-    if (m.pdh > 0) levels.push({ price: m.pdh, color: 'rgba(255, 255, 255, 0.7)', style: 1, title: 'PDH', weight: 8 });
-    if (m.pdl > 0) levels.push({ price: m.pdl, color: 'rgba(255, 255, 255, 0.7)', style: 1, title: 'PDL', weight: 8 });
-    if (m.vwap > 0) levels.push({ price: m.vwap, color: '#f59e0b', style: 0, title: 'VWAP', weight: 7 });
-    if (m.poc > 0) levels.push({ price: m.poc, color: '#8b5cf6', style: 1, title: 'POC', weight: 6 });
+    addLevel(m.midnightOpen, '#38bdf8', 1, 'MID OPEN', 10);
+    addLevel(m.nyOpen, '#10b981', 2, 'NY OPEN', 9);
+    addLevel(m.pdh, 'rgba(255, 255, 255, 0.7)', 1, 'PDH', 8);
+    addLevel(m.pdl, 'rgba(255, 255, 255, 0.7)', 1, 'PDL', 8);
+    addLevel(m.vwap, '#f59e0b', 0, 'VWAP', 7);
+    addLevel(m.poc, '#8b5cf6', 1, 'POC', 6);
 
     // Equilibrium / Range
     if (m.todayHigh > 0 && m.todayLow > 0) {
         const equilibrium = (m.todayHigh + m.todayLow) / 2;
-        levels.push({ price: equilibrium, color: 'rgba(245, 158, 11, 0.4)', style: 2, title: 'EQ', weight: 5 });
-        levels.push({ price: m.todayHigh, color: 'rgba(148, 163, 184, 0.2)', style: 1, title: 'T-HIGH', weight: 3 });
-        levels.push({ price: m.todayLow, color: 'rgba(148, 163, 184, 0.2)', style: 1, title: 'T-LOW', weight: 3 });
+        addLevel(equilibrium, 'rgba(245, 158, 11, 0.4)', 2, 'EQ', 5);
+        addLevel(m.todayHigh, 'rgba(148, 163, 184, 0.2)', 1, 'T-HIGH', 3);
+        addLevel(m.todayLow, 'rgba(148, 163, 184, 0.2)', 1, 'T-LOW', 3);
     }
 
-    if (m.pdc > 0) levels.push({ price: m.pdc, color: 'rgba(148, 163, 184, 0.4)', style: 2, title: 'PDC', weight: 4 });
+    addLevel(m.pdc, 'rgba(148, 163, 184, 0.4)', 2, 'PDC', 4);
 
     // 1. ORDER BLOCKS (Zones)
     if (data.bias && data.bias.orderBlock) {
@@ -266,175 +349,14 @@ function updateChartOverlays(data) {
     candleSeries.setMarkers(allMarkers);
 }
 
-// Initialize Chart
-function initChart(initialCandles) {
-    try {
-        console.log(`[CHART] initChart starting with ${initialCandles?.length || 0} candles.`);
-        const container = document.getElementById('priceChart');
-        if (!container) {
-            console.error("[CHART] Container #priceChart not found!");
-            return;
-        }
-
-        container.innerHTML = '';
-        const width = container.clientWidth || (window.innerWidth < 768 ? 300 : 800);
-        const height = window.innerWidth < 768 ? 300 : 400;
-        console.log(`[CHART] Initializing chart with size: ${width}x${height}`);
-
-        if (typeof LightweightCharts === 'undefined') {
-            console.error("[CHART] LightweightCharts library is NOT loaded!");
-            return;
-        }
-
-        // --- Responsive Resizer ---
-        window.addEventListener('resize', () => {
-            if (tvChart && container) {
-                const newWidth = container.clientWidth;
-                const newHeight = window.innerWidth < 768 ? 300 : 400;
-                tvChart.applyOptions({ width: newWidth, height: newHeight });
-            }
-        });
-
-        tvChart = LightweightCharts.createChart(container, {
-            width: width,
-            height: height,
-            layout: {
-                background: { color: '#0b1120' },
-                textColor: '#94a3b8',
-                fontFamily: "'Inter', sans-serif",
-            },
-            grid: {
-                vertLines: { color: 'rgba(255, 255, 255, 0.03)', style: 1 },
-                horzLines: { color: 'rgba(255, 255, 255, 0.03)', style: 1 },
-            },
-            rightPriceScale: {
-                borderColor: '#1e293b',
-                visible: true,
-                autoScale: true,
-                scaleMargins: {
-                    top: 0.15,
-                    bottom: 0.15,
-                },
-            },
-            watermark: {
-                visible: true,
-                fontSize: 24,
-                horzAlign: 'center',
-                vertAlign: 'center',
-                color: 'rgba(56, 189, 248, 0.05)',
-                text: 'B.I.A.S ELITE',
-            },
-            localization: {
-                locale: 'en-US',
-                timeFormatter: (timestamp) => {
-                    return new Date(timestamp * 1000).toLocaleString('en-US', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false,
-                        timeZone: 'America/New_York'
-                    });
-                },
-            },
-            timeScale: {
-                borderColor: '#1e293b',
-                timeVisible: true,
-                secondsVisible: false,
-                barSpacing: 10,
-                rightOffset: 5,
-                tickMarkFormatter: (time, tickMarkType, locale) => {
-                    const date = new Date(time * 1000);
-                    const options = { timeZone: 'America/New_York', hour12: false };
-
-                    let result;
-                    if (tickMarkType < 2) {
-                        options.month = 'short';
-                        options.day = 'numeric';
-                        result = date.toLocaleString('en-US', options);
-                    } else {
-                        options.hour = '2-digit';
-                        options.minute = '2-digit';
-                        result = date.toLocaleString('en-US', options);
-                    }
-                    return result;
-                },
-            },
-            crosshair: {
-                mode: LightweightCharts.CrosshairMode.Normal,
-                vertLine: { color: '#38bdf8', width: 1, style: 2, labelBackgroundColor: '#38bdf8' },
-                horzLine: { color: '#38bdf8', width: 1, style: 2, labelBackgroundColor: '#38bdf8' },
-            }
-        });
-
-        candleSeries = tvChart.addCandlestickSeries({
-            upColor: '#10b981',
-            downColor: '#f43f5e',
-            borderVisible: true,
-            borderColor: '#10b981',
-            wickColor: '#10b981',
-            borderUpColor: '#10b981',
-            borderDownColor: '#f43f5e',
-            wickUpColor: '#10b981',
-            wickDownColor: '#f43f5e',
-        });
-
-        if (initialCandles && initialCandles.length > 0) {
-            const seenTs = new Set();
-            const formattedData = initialCandles
-                .filter(c => c.open != null && c.open > 0 && c.high != null && c.low != null && c.close != null)
-                .map(c => ({
-                    time: Math.floor(c.timestamp / 1000),
-                    open: c.open,
-                    high: c.high,
-                    low: c.low,
-                    close: c.close
-                }))
-                .filter(c => {
-                    if (seenTs.has(c.time)) return false;
-                    seenTs.add(c.time);
-                    return true;
-                })
-                .sort((a, b) => a.time - b.time);
-
-            console.log(`[CHART] Formatted ${formattedData.length} unique candles. First: ${formattedData[0]?.time}, Last: ${formattedData[formattedData.length - 1]?.time}`);
-
-            if (formattedData.length > 0) {
-                candleSeries.setData(formattedData);
-                console.log("[CHART] setData executed.");
-                setTimeout(() => {
-                    if (tvChart) {
-                        tvChart.timeScale().fitContent();
-                        tvChart.timeScale().applyOptions({ barSpacing: 12 });
-                    }
-                    console.log("[CHART] fitContent + barSpacing applied.");
-                }, 200);
-            }
-        }
-
-        const resizeObserver = new ResizeObserver(entries => {
-            if (tvChart && entries.length > 0) {
-                const { width } = entries[0].contentRect;
-                tvChart.applyOptions({ width });
-            }
-        });
-        resizeObserver.observe(container);
-    } catch (err) {
-        console.error("[CHART] ERROR in initChart:", err);
-    }
-}
+// Legacy initChart removed. Using initChartInstance and setChartData now.
 
 socket.on('init', (data) => {
     console.log(`[SOCKET] Received init for ${data.symbol}`);
-    initChart(data.candles || []);
+    setChartData(data.candles || []);
     updateUI(data);
 
-    // If no candles were returned (weekend/holiday/market closed), auto-request 5m data
-    if (!data.candles || data.candles.length === 0) {
-        console.log('[UI] No 1m candles received on init — market may be closed. Auto-switching to 5m...');
-        const btn5m = document.querySelector('.tf-btn[data-tf="5m"]');
-        if (btn5m) {
-            document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
-            btn5m.classList.add('active');
-        }
+    if ((!data.candles || data.candles.length === 0) && data.timeframe === '1m') {
         socket.emit('switch_timeframe', '5m');
     }
 });
@@ -462,6 +384,7 @@ socket.on('update', (data) => {
 
 socket.on('tf_updated', (data) => {
     console.log(`[SOCKET] TF Updated: ${data.timeframe}, candles: ${data.candles?.length}`);
+    updateUI(data); // CRITICAL: Update the whole HUD and overlays when TF changes
     if (data.candles && candleSeries) {
         const seenTs = new Set();
         const formattedData = data.candles
@@ -492,7 +415,7 @@ socket.on('tf_updated', (data) => {
 
 socket.on('symbol_updated', (data) => {
     console.log(`[SOCKET] Symbol Updated: ${data.symbol}`);
-    initChart(data.candles || []);
+    setChartData(data.candles || []);
     updateUI(data);
 });
 
@@ -671,15 +594,17 @@ function updateUI(data) {
             }
 
             // Update Macro HUD
-            if (dxyHudEl && data.bias && data.bias.internals) {
-                const dxy = data.bias.internals.dxy || 0;
-                dxyHudEl.innerText = dxy.toFixed(2);
-                dxyHudEl.className = dxy > 103 ? 'bearish-text' : 'bullish-text';
+            const dxyValue = data.markers.dxy || (data.bias && data.bias.internals ? data.bias.internals.dxy : 0);
+            if (dxyHudEl) {
+                dxyHudEl.innerText = (dxyValue || 0).toFixed(2);
+                dxyHudEl.className = dxyValue > 103 ? 'bearish-text' : 'bullish-text';
             }
-            if (tnxHudEl && data.bias && data.bias.internals) {
-                const tnx = data.bias.internals.tnx || 0;
-                tnxHudEl.innerText = `${tnx.toFixed(2)}%`;
-                tnxHudEl.className = tnx > 4.2 ? 'bearish-text' : 'bullish-text';
+            if (dxyValEl) dxyValEl.innerText = (dxyValue || 0).toFixed(2);
+
+            const tnxValue = data.markers.tnx || (data.bias && data.bias.internals ? data.bias.internals.tnx : 0);
+            if (tnxHudEl) {
+                tnxHudEl.innerText = `${(tnxValue || 0).toFixed(2)}%`;
+                tnxHudEl.className = tnxValue > 4.2 ? 'bearish-text' : 'bullish-text';
             }
         }
 
@@ -1098,7 +1023,16 @@ function updateWatchlist(data) {
 
             card.onclick = () => {
                 console.log(`[UI] Switching focus to: ${stock.symbol}`);
-                socket.emit('switch_symbol', stock.symbol);
+                let symbolToEmit = stock.symbol;
+                // Normalization for common search formats to Yahoo-friendly ones
+                if (symbolToEmit === 'BTCUSD') symbolToEmit = 'BTC-USD';
+                if (symbolToEmit === 'ETHUSD') symbolToEmit = 'ETH-USD';
+                if (symbolToEmit === 'EURUSD') symbolToEmit = 'EURUSD=X';
+                if (symbolToEmit === 'GBPUSD') symbolToEmit = 'GBPUSD=X';
+                if (symbolToEmit === 'USDJPY') symbolToEmit = 'USDJPY=X';
+                if (symbolToEmit === 'DXY' || symbolToEmit === 'DX-Y') symbolToEmit = 'DX-Y.NYB';
+                
+                socket.emit('switch_symbol', symbolToEmit);
                 // Instant UI feedback
                 document.querySelectorAll('.ticker-card').forEach(c => c.classList.remove('active-symbol'));
                 card.classList.add('active-symbol');

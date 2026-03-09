@@ -17,5 +17,7 @@
   "GBPUSD=X",
   "USDJPY=X",
   "AUDUSD=X",
-  "MSF"
+  "MSF",
+  "BTCUSD",
+  "BTCUSDSPY"
 ]

@@ -3,6 +3,7 @@ import YahooFinance from 'yahoo-finance2';
 import { LiquidityEngine } from '../logic/liquidity-engine.js';
 import fs from 'fs';
 import path from 'path';
+import axios from 'axios';
 
 const yahooFinance = new YahooFinance();
 
@@ -17,7 +18,8 @@ export class RealDataManager {
             'GBPUSD=X': 'OANDA:GBP_USD',
             'USDJPY=X': 'OANDA:USD_JPY',
             'AUDUSD=X': 'OANDA:AUD_USD',
-            'BTC-USD': 'BINANCE:BTCUSDT'
+            'BTC-USD': 'BINANCE:BTCUSDT',
+            'DX-Y.NYB': 'DX-Y'
         };
         this.revMap = Object.fromEntries(Object.entries(this.symbolMap).map(([k, v]) => [v, k]));
 
@@ -29,7 +31,7 @@ export class RealDataManager {
         this.ws = null;
         this.isInitialized = false;
 
-        [...this.watchlist, '^VIX', 'UUP', ...this.sectors].forEach(symbol => { // UUP as DXY proxy
+        [...this.watchlist, '^VIX', 'DX-Y.NYB', ...this.sectors].forEach(symbol => { 
             this.stocks[symbol] = {
                 currentPrice: 0,
                 previousClose: 0,
@@ -57,106 +59,131 @@ export class RealDataManager {
         if (this.isInitialized) return;
         console.log("Initializing Real-Time Data Manager (Finnhub + Yahoo)...");
 
-        const allSymbols = [...this.watchlist, '^VIX', 'UUP', ...this.sectors];
+        const allSymbols = [...this.watchlist, '^VIX', 'DX-Y.NYB', ...this.sectors];
+        
+        // Step 1: Sequential Quote Fetch (Essential for current state)
+        console.log("Fetching current quotes and market state...");
         for (const symbol of allSymbols) {
-            console.log(`Fetching historical data for ${symbol}...`);
-            await this.refreshHistoricalData(symbol);
+            try {
+                await this.refreshQuote(symbol);
+            } catch (err) { }
         }
 
-        this.isInitialized = true;
+        // Step 2: Fetch history only for current symbol (to start UI immediately)
+        console.log(`Loading initial history for ${this.currentSymbol}...`);
+        await this.refreshHistoricalData(this.currentSymbol);
 
-        // Sync internals immediately after history fetch
+        // Step 3: Background fetch for others (Delayed to avoid rate limit/spike)
+        this.isInitialized = true;
         this.internals.vix = this.stocks['^VIX']?.currentPrice || 0;
-        this.internals.dxy = this.stocks['UUP']?.currentPrice || 0;
+        this.internals.dxy = this.stocks['DX-Y.NYB']?.currentPrice || 0;
 
         this.connectWebSocket();
         console.log("Real-Time Data Manager Initialized.");
+
+        // Load thermal/history for sector matrix + macro in background
+        const priorityList = ['^VIX', 'DX-Y.NYB', ...this.sectors];
+        priorityList.forEach((s, idx) => {
+            setTimeout(() => {
+                this.refreshHistoricalData(s).catch(() => {});
+            }, 3000 + (idx * 2000));
+        });
+    }
+
+    async refreshQuote(symbol) {
+        try {
+            const quote = await yahooFinance.quote(symbol);
+            if (quote) {
+                const stock = this.stocks[symbol];
+                stock.currentPrice = quote.regularMarketPrice;
+                stock.previousClose = quote.regularMarketPreviousClose || quote.regularMarketOpen || quote.regularMarketPrice;
+                stock.dailyChangePercent = quote.regularMarketChangePercent || 0;
+                stock.bloomberg = this.calculateBloombergMetrics(quote);
+                
+                // Sanity check for PDH/PDL fallback
+                if (!stock.pdh || isNaN(stock.pdh)) {
+                    stock.pdh = quote.regularMarketDayHigh || stock.previousClose;
+                    stock.pdl = quote.regularMarketDayLow || stock.previousClose;
+                }
+            }
+        } catch (error) {
+            if (error.message.includes('429')) {
+                console.warn(`[RATE LIMIT] Quote fetch for ${symbol}`);
+            }
+        }
     }
 
     async refreshHistoricalData(symbol) {
         try {
-            const quote = await yahooFinance.quote(symbol);
-            if (quote) {
-                this.stocks[symbol].currentPrice = quote.regularMarketPrice;
-                this.stocks[symbol].previousClose = quote.regularMarketPreviousClose || quote.regularMarketOpen || quote.regularMarketPrice;
-                this.stocks[symbol].dailyChangePercent = quote.regularMarketChangePercent || 0;
-                this.stocks[symbol].bloomberg = this.calculateBloombergMetrics(quote);
-            } else {
-                console.warn(`Quote data not available for ${symbol}. Skipping some initializations.`);
-            }
+            await this.refreshQuote(symbol);
+            const stock = this.stocks[symbol];
 
             // --- SOPHISTICATED PDH/PDL SELECTOR ---
             const date10d = new Date();
             date10d.setDate(date10d.getDate() - 10);
             const p1String = date10d.toISOString().split('T')[0];
-            const dailyRes = await yahooFinance.chart(symbol, { period1: p1String, interval: '1d' });
-            if (dailyRes && dailyRes.quotes && dailyRes.quotes.length > 0) {
-                const nyNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
-                const currentNYDate = nyNow.toISOString().split('T')[0];
-                const hour = nyNow.getHours();
-                const minute = nyNow.getMinutes();
+            
+            try {
+                const dailyRes = await yahooFinance.chart(symbol, { period1: p1String, interval: '1d' });
+                if (dailyRes && dailyRes.quotes && dailyRes.quotes.length > 0) {
+                    const nyNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+                    const currentNYDate = nyNow.toISOString().split('T')[0];
+                    const hour = nyNow.getHours();
 
-                // Check if current candle is "Today"
-                const quotes = dailyRes.quotes.filter(q => q.high !== null);
-                const lastIdx = quotes.length - 1;
-                const lastQuote = quotes[lastIdx];
-                const lastQuoteDate = lastQuote.date.toISOString().split('T')[0];
+                    const quotes = dailyRes.quotes.filter(q => q.high !== null);
+                    const lastIdx = quotes.length - 1;
+                    const lastQuote = quotes[lastIdx];
+                    const lastQuoteDate = lastQuote.date.toISOString().split('T')[0];
 
-                let targetDay;
-                // If it's before the market open (9:30) OR after the close (16:00) 
-                // and the last candle matches today, then today's (just ended) candle IS our PDH.
-                // Otherwise, the PDH is the one before the current "active" session.
-                const isAfterClose = (hour >= 16);
-                const isBeforeOpen = (hour < 9 || (hour === 9 && minute < 30));
+                    let targetDay;
+                    const isAfterClose = (hour >= 16);
+                    if (lastQuoteDate === currentNYDate) {
+                        targetDay = isAfterClose ? lastQuote : quotes[lastIdx - 1];
+                    } else {
+                        targetDay = lastQuote;
+                    }
 
-                if (lastQuoteDate === currentNYDate) {
-                    // Today exists in the data. 
-                    // Use today if session ended (isAfterClose), else use yesterday (lastIdx - 1).
-                    targetDay = isAfterClose ? lastQuote : quotes[lastIdx - 1];
-                } else {
-                    // Today doesn't exist yet, last quote is definitively the previous session.
-                    targetDay = lastQuote;
+                    if (targetDay) {
+                        // Sanity Check: Ensure PDH/PDL aren't thousands of % away
+                        const current = stock.currentPrice || targetDay.close;
+                        if (Math.abs(targetDay.high - current) / current < 0.5) {
+                            stock.pdh = targetDay.high;
+                            stock.pdl = targetDay.low;
+                        }
+                        stock.dailyQuotes = dailyRes.quotes.filter(q => q.high != null);
+                        console.log(`[${symbol}] Anchored Daily Levels.`);
+                    }
                 }
-
-                if (targetDay) {
-                    this.stocks[symbol].pdh = targetDay.high;
-                    this.stocks[symbol].pdl = targetDay.low;
-                    this.stocks[symbol].dailyQuotes = dailyRes.quotes.filter(q => q.high != null);
-                    console.log(`[${symbol}] Anchored PDH: ${targetDay.high} | PDL: ${targetDay.low} (From: ${targetDay.date.toISOString().split('T')[0]})`);
-                }
-            } else {
-                console.warn(`Insufficient daily data for ${symbol}. Falling back to intraday estimation.`);
-            }
+            } catch (err) { }
 
             for (const tf of this.timeframes) {
-                let daysBack = 30;
-                if (tf === '1m') daysBack = 5;  // Use 5 days to cover weekends/holidays
-                else if (tf === '5m') daysBack = 5;
+                let daysBack = 5;
+                if (tf === '1h') daysBack = 15;
                 else if (tf === '1d') daysBack = 365;
 
                 const p1 = new Date();
                 p1.setDate(p1.getDate() - daysBack);
 
-                const chart = await yahooFinance.chart(symbol, { period1: p1, interval: tf });
-                if (chart && chart.quotes) {
-                    const candles = chart.quotes
-                        .filter(q => q.open != null && q.open > 0)
-                        .map(q => ({
-                            timestamp: q.date.getTime(),
-                            open: q.open,
-                            high: q.high,
-                            low: q.low,
-                            close: q.close,
-                            volume: q.volume
-                        }));
-                    if (candles.length > 0) {
-                        this.stocks[symbol].candles[tf] = candles;
-                        console.log(`[${symbol}] ${tf}: ${candles.length} candles loaded.`);
-                    } else {
-                        console.warn(`[${symbol}] ${tf}: No candles returned (weekend/holiday?). Will fallback to previous data.`);
+                try {
+                    const chart = await yahooFinance.chart(symbol, { period1: p1, interval: tf });
+                    if (chart && chart.quotes) {
+                        const candles = chart.quotes
+                            .filter(q => q.open != null && q.open > 0)
+                            .map(q => ({
+                                timestamp: q.date.getTime(),
+                                open: q.open,
+                                high: q.high,
+                                low: q.low,
+                                close: q.close,
+                                volume: q.volume
+                            }));
+                        if (candles.length > 0) {
+                            stock.candles[tf] = candles;
+                        }
                     }
-                }
+                } catch (err) { }
             }
+            console.log(`[${symbol}] Candles loaded.`);
         } catch (error) {
             console.error(`Historical fetch failed for ${symbol}:`, error.message);
         }
@@ -343,17 +370,24 @@ export class RealDataManager {
 
     async updateAll() {
         await this.refreshNews();
-        // Force refresh macro indices and sectors if they are zero or every 30 seconds
+        
         const now = Date.now();
-        if (!this.lastMacroRefresh || now - this.lastMacroRefresh > 30000) {
-            await this.refreshHistoricalData('^VIX');
-            await this.refreshHistoricalData('UUP');
-
-            // Also refresh sectors + drivers
+        // Quote update is fast, do it every 30s
+        if (!this.lastQuoteUpdate || now - this.lastQuoteUpdate > 30000) {
+            await this.refreshQuote('^VIX');
+            await this.refreshQuote('DX-Y.NYB');
             for (const sector of this.sectors) {
-                await this.refreshHistoricalData(sector);
+                await this.refreshQuote(sector);
             }
+            this.lastQuoteUpdate = now;
+        }
 
+        // Heavy history refresh only every 10 minutes OR when specifically needed
+        if (!this.lastMacroRefresh || now - this.lastMacroRefresh > 600000) {
+            console.log("Performing essential macro history refresh...");
+            await this.refreshHistoricalData('^VIX');
+            await this.refreshHistoricalData('DX-Y.NYB');
+            await this.refreshHistoricalData(this.currentSymbol);
             this.lastMacroRefresh = now;
         }
     }
@@ -361,8 +395,7 @@ export class RealDataManager {
     async refreshNews() {
         try {
             const feedUrl = 'https://feeds.bloomberg.com/markets/news.rss';
-            const axios = (await import('axios')).default;
-            const res = await axios.get(feedUrl);
+            const res = await axios.get(feedUrl, { timeout: 10000 });
             const xml = res.data;
 
             const items = [];
