@@ -82,6 +82,13 @@ async function startServer() {
         res.json(simTrader.tradeHistory.slice(-10).reverse());
     });
 
+    app.get('/api/config', (req, res) => {
+        res.json({
+            supabaseUrl: process.env.SUPABASE_URL,
+            supabaseAnonKey: process.env.SUPABASE_ANON_KEY
+        });
+    });
+
     app.get('/debug-state', (req, res) => {
         res.json({
             internals: simulator.internals,

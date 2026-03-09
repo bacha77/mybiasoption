@@ -1,5 +1,69 @@
 const socket = io();
 
+// Supabase Auth Integration
+let supabaseClient;
+const loginOverlay = document.getElementById('login-overlay');
+const logoutBtn = document.getElementById('logout-btn');
+const googleLoginBtn = document.getElementById('google-login-btn');
+
+async function initAuth() {
+    try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        
+        if (!config.supabaseUrl || !config.supabaseAnonKey || config.supabaseAnonKey.includes('your')) {
+            console.warn("[AUTH] Supabase keys missing or invalid. Dashboard running in bypass mode.");
+            return;
+        }
+
+        supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        
+        if (!session) {
+            loginOverlay.style.display = 'flex';
+            logoutBtn.style.display = 'none';
+            document.body.style.overflow = 'hidden';
+        } else {
+            console.log("[AUTH] Verified Identity:", session.user.email);
+            loginOverlay.style.display = 'none';
+            logoutBtn.style.display = 'block';
+            document.body.style.overflow = 'auto';
+        }
+
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN') {
+                loginOverlay.style.display = 'none';
+                logoutBtn.style.display = 'block';
+                document.body.style.overflow = 'auto';
+            } else if (session === null) {
+                loginOverlay.style.display = 'flex';
+                logoutBtn.style.display = 'none';
+                document.body.style.overflow = 'hidden';
+            }
+        });
+
+        logoutBtn.onclick = async () => {
+            await supabaseClient.auth.signOut();
+            window.location.reload();
+        };
+
+        googleLoginBtn.onclick = async () => {
+            console.log("[AUTH] Initiating Institutional Google Login...");
+            await supabaseClient.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: window.location.origin
+                }
+            });
+        };
+
+    } catch (e) {
+        console.error("[AUTH] Error initializing identity service:", e);
+    }
+}
+initAuth();
+
 socket.on('whale_alert', (block) => {
     showToast(`🐋 WHALE ALERT: ${block.symbol} | $${(block.value / 1000000).toFixed(2)}M Block!`);
     const card = document.querySelector('.sidebar section:nth-child(4)'); // Block Feed card

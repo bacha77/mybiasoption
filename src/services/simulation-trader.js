@@ -1,4 +1,5 @@
 import { telegram } from './telegram-service.js';
+import supabase from './supabase-client.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -9,8 +10,16 @@ export class SimulationTrader {
         this.activePositions = new Map();
         this.historyPath = path.join(process.cwd(), 'trades.json');
         this.statePath = path.join(process.cwd(), 'sim-state.json');
-        this.tradeHistory = this.loadHistory();
-        this.loadState();
+        this.tradeHistory = [];
+        this.totalTrades = 0;
+        this.wins = 0;
+        this.losses = 0;
+        this.initialize();
+    }
+
+    async initialize() {
+        await this.loadState();
+        this.tradeHistory = await this.loadHistory();
         this.totalTrades = this.tradeHistory.length;
         this.wins = this.tradeHistory.filter(t => t.profit > 0).length;
         this.losses = this.tradeHistory.filter(t => t.profit <= 0).length;
@@ -48,7 +57,7 @@ export class SimulationTrader {
 
             this.activePositions.set(symbol, position);
             this.balance -= cost;
-            this.saveState();
+            await this.saveState();
 
             console.log(`[SIM] ENTERED ${symbol} ${recommendation.action} @ $${currentPrice.toFixed(2)} | Size: ${size}`);
 
@@ -124,9 +133,9 @@ _Current Sim Balance: $${this.balance.toFixed(2)}_
         const totalProfit = (this.balance - this.startBalance).toFixed(2);
 
         this.tradeHistory.push({ ...pos, exitPrice, profit, reason, exitTime: Date.now() });
-        this.saveHistory();
+        await this.saveHistory(this.tradeHistory[this.tradeHistory.length - 1]);
         this.activePositions.delete(symbol);
-        this.saveState();
+        await this.saveState();
 
         const isForex = symbol.includes('=X') || symbol === 'BTC-USD';
         console.log(`[SIM] CLOSED ${symbol} | ${reason} | Profit: $${profit.toFixed(2)} | New Balance: $${this.balance.toFixed(2)}`);
@@ -145,8 +154,71 @@ _Current Sim Balance: $${this.balance.toFixed(2)}_
         `.trim());
     }
 
-    loadHistory() {
+    async saveHistory(trade = null) {
         try {
+            fs.writeFileSync(this.historyPath, JSON.stringify(this.tradeHistory, null, 2));
+
+            if (supabase && trade) {
+                const { error } = await supabase.from('trades').insert([{
+                    symbol: trade.symbol,
+                    type: trade.type,
+                    entry_price: trade.entryPrice,
+                    strike: trade.strike,
+                    size: trade.size,
+                    sl: trade.sl,
+                    tp: trade.tp,
+                    trim: trade.trim,
+                    cost: trade.cost,
+                    trimmed: trade.trimmed,
+                    timestamp: trade.timestamp,
+                    exit_price: trade.exitPrice,
+                    profit: trade.profit,
+                    reason: trade.reason,
+                    exit_time: trade.exitTime
+                }]);
+                if (error) console.error("Supabase Save Trade Error:", error.message);
+            }
+        } catch (e) { console.error("Save History Error:", e.message); }
+    }
+
+    async saveState() {
+        try {
+            const state = {
+                balance: this.balance,
+                activePositions: Array.from(this.activePositions.entries())
+            };
+            fs.writeFileSync(this.statePath, JSON.stringify(state, null, 2));
+
+            if (supabase) {
+                const { error } = await supabase.from('sim_state').upsert({
+                    id: 'main',
+                    balance: this.balance,
+                    active_positions: state.activePositions,
+                    updated_at: new Date().toISOString()
+                });
+                if (error) console.error("Supabase Save State Error:", error.message);
+            }
+        } catch (e) { console.error("Save State Error:", e.message); }
+    }
+
+    async loadHistory() {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase
+                    .from('trades')
+                    .select('*')
+                    .order('timestamp', { ascending: true });
+
+                if (!error && data && data.length > 0) {
+                    return data.map(d => ({
+                        ...d,
+                        entryPrice: d.entry_price,
+                        exitPrice: d.exit_price,
+                        exitTime: d.exit_time
+                    }));
+                }
+            }
+
             if (fs.existsSync(this.historyPath)) {
                 return JSON.parse(fs.readFileSync(this.historyPath, 'utf8'));
             }
@@ -154,29 +226,28 @@ _Current Sim Balance: $${this.balance.toFixed(2)}_
         return [];
     }
 
-    saveHistory() {
+    async loadState() {
         try {
-            fs.writeFileSync(this.historyPath, JSON.stringify(this.tradeHistory, null, 2));
-        } catch (e) { console.error("Save History Error:", e.message); }
-    }
+            if (supabase) {
+                const { data, error } = await supabase
+                    .from('sim_state')
+                    .select('*')
+                    .eq('id', 'main')
+                    .single();
 
-    saveState() {
-        try {
-            const state = {
-                balance: this.balance,
-                activePositions: Array.from(this.activePositions.entries())
-            };
-            fs.writeFileSync(this.statePath, JSON.stringify(state, null, 2));
-        } catch (e) { console.error("Save State Error:", e.message); }
-    }
+                if (!error && data) {
+                    this.balance = data.balance;
+                    this.activePositions = new Map(data.active_positions);
+                    console.log(`[SUPABASE] State Restored. Balance: $${this.balance.toFixed(2)}`);
+                    return;
+                }
+            }
 
-    loadState() {
-        try {
             if (fs.existsSync(this.statePath)) {
                 const state = JSON.parse(fs.readFileSync(this.statePath, 'utf8'));
                 this.balance = state.balance;
                 this.activePositions = new Map(state.activePositions);
-                console.log(`[SIM] State Restored. Balance: $${this.balance.toFixed(2)} | Active: ${this.activePositions.size}`);
+                console.log(`[SIM] State Restored from local. Balance: $${this.balance.toFixed(2)}`);
             }
         } catch (e) { console.error("Load State Error:", e.message); }
     }
