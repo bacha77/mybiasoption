@@ -66,6 +66,35 @@ export class LiquidityEngine {
         return extrema;
     }
 
+    // --- NEW: Gamma Walls & Magnet Strikes ---
+    getGammaWalls(currentPrice, symbol) {
+        const walls = [];
+        const isForex = symbol.includes('=X') || symbol.includes('USD');
+        const isCrypto = symbol.includes('BTC') || symbol.includes('ETH');
+
+        if (isForex) {
+            // FX Walls every 0.0050 (50 pips)
+            const base = Math.floor(currentPrice * 200) / 200;
+            walls.push(base, base + 0.0050, base - 0.0050, base + 0.0100, base - 0.0100);
+        } else if (isCrypto) {
+            // Crypto Walls every $500 or $1000
+            const step = currentPrice > 10000 ? 1000 : 500;
+            const base = Math.floor(currentPrice / step) * step;
+            walls.push(base, base + step, base - step);
+        } else {
+            // Stock/ETF Walls: Major round numbers and $5/$10 intervals
+            const step = currentPrice > 100 ? 5 : 1;
+            const base = Math.floor(currentPrice / step) * step;
+            walls.push(base, base + step, base - step);
+
+            // Major "Century" Walls
+            const centuryStep = 50;
+            const centuryBase = Math.floor(currentPrice / centuryStep) * centuryStep;
+            if (!walls.includes(centuryBase)) walls.push(centuryBase);
+        }
+        return walls;
+    }
+
     detectLiquidationSweep(candles, draws) {
         const lastCandle = candles[candles.length - 1];
         const prevCandle = candles[candles.length - 2];
@@ -89,17 +118,51 @@ export class LiquidityEngine {
     /**
      * Detects Absorption: High volume at a price level with minimal price movement.
      */
-    detectAbsorption(candles) {
-        if (candles.length < 5) return null;
-        const lastCandles = candles.slice(-5);
-        const avgVol = lastCandles.reduce((s, c) => s + c.volume, 0) / 5;
-        const lastCandle = lastCandles[lastCandles.length - 1];
+    detectAbsorption(candles, markers = {}) {
+        if (candles.length < 10) return null;
+        const lastCandle = candles[candles.length - 1];
+        const prevCandles = candles.slice(-11, -1);
+        const avgVol = prevCandles.reduce((s, c) => s + c.volume, 0) / 10;
 
+        const isHighVol = lastCandle.volume > avgVol * 1.5;
+        const totalRange = lastCandle.high - lastCandle.low;
         const bodySize = Math.abs(lastCandle.open - lastCandle.close);
-        const candleRange = lastCandle.high - lastCandle.low;
 
-        if (lastCandle.volume > avgVol * 1.8 && bodySize < candleRange * 0.25) {
-            return { type: 'ABSORPTION', price: lastCandle.close, volume: lastCandle.volume };
+        // Absorption: High Volume but Price is "Stuck" (Small body relative to wick/range)
+        const isStuck = totalRange > 0 && (bodySize / totalRange) < 0.35;
+
+        if (isHighVol && isStuck) {
+            // Check if at key level
+            const levels = [markers.vwap, markers.poc, markers.pdh, markers.pdl, markers.midnightOpen];
+            const atLevel = levels.some(lvl => lvl > 0 && Math.abs(lastCandle.close - lvl) / lvl < 0.0005);
+
+            if (atLevel) {
+                return {
+                    price: lastCandle.close,
+                    type: lastCandle.close > lastCandle.open ? 'BULLISH_ABSORPTION' : 'BEARISH_ABSORPTION',
+                    message: 'Institutional Absorption (Iceberg Order) detected at key level.'
+                };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Detects Delta Traps (Divergence between Price and CVD)
+     */
+    detectDeltaTrap(currentPrice, cvd, candles) {
+        if (candles.length < 5) return null;
+        const lastCandle = candles[candles.length - 1];
+        const firstCandle = candles[candles.length - 5];
+        const priceChange = lastCandle.close - firstCandle.open;
+
+        // Bull Trap: Price Up, CVD significantly Down
+        if (priceChange > 0 && cvd < -1000) {
+            return { type: 'BULL_TRAP', severity: 'HIGH' };
+        }
+        // Bear Trap: Price Down, CVD significantly Up
+        if (priceChange < 0 && cvd > 1000) {
+            return { type: 'BEAR_TRAP', severity: 'HIGH' };
         }
         return null;
     }
@@ -147,31 +210,105 @@ export class LiquidityEngine {
     /**
      * Identifies current trading session based on US Market Hours.
      */
-    getSessionInfo() {
+    getSessionInfo(symbol = 'SPY') {
         const now = new Date();
         const nyTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
         const hour = nyTime.getHours();
         const minute = nyTime.getMinutes();
         const day = nyTime.getDay();
-        const isWeekend = day === 0 || day === 6;
+        const isWeekend = day === 0 || (day === 6 && hour < 17); // Saturday or early Sunday
         const totalMinutes = (hour * 60) + minute;
 
+        const isForex = symbol === 'BTC-USD' || symbol.includes('=X');
         const marketOpen = 570; // 9:30 AM
         const marketClose = 960; // 4:00 PM
-        const isMarketOpen = !isWeekend && totalMinutes >= marketOpen && totalMinutes < marketClose;
+
+        // Forex is 24/5. US Market is 9:30-4:00.
+        let isMarketOpen = !isWeekend && totalMinutes >= marketOpen && totalMinutes < marketClose;
+        if (isForex && !isWeekend) isMarketOpen = true;
 
         if (isWeekend) return { session: 'WEEKEND', status: 'MARKET CLOSED', color: '#ff3366', isMarketOpen: false };
 
-        if (totalMinutes >= 570 && totalMinutes <= 660) return { session: 'NY_OPEN', status: 'HIGH VOLATILITY', color: '#00f2ff', isMarketOpen: true };
-        if (totalMinutes > 660 && totalMinutes < 780) return { session: 'NY_AM', status: 'TRENDING', color: '#00ff88', isMarketOpen: true };
-        if (totalMinutes >= 780 && totalMinutes <= 810) return { session: 'LUNCH', status: 'CONSOLIDATION', color: '#94a3b8', isMarketOpen: true };
-        if (totalMinutes > 810 && totalMinutes < 960) return { session: 'NY_PM', status: 'EOD DRIVE', color: '#00f2ff', isMarketOpen: true };
+        if (!isForex) {
+            if (totalMinutes >= 570 && totalMinutes <= 660) return { session: 'NY_OPEN', status: 'HIGH VOLATILITY', color: '#00f2ff', isMarketOpen: true };
+            if (totalMinutes > 660 && totalMinutes < 780) return { session: 'NY_AM', status: 'TRENDING', color: '#00ff88', isMarketOpen: true };
+            if (totalMinutes >= 780 && totalMinutes <= 810) return { session: 'LUNCH', status: 'CONSOLIDATION', color: '#94a3b8', isMarketOpen: true };
+            if (totalMinutes > 810 && totalMinutes < 960) return { session: 'NY_PM', status: 'EOD DRIVE', color: '#00f2ff', isMarketOpen: true };
 
-        return { session: 'OFF_HOURS', status: 'NO TRADE ZONE', color: '#94a3b8', isMarketOpen: false };
+            // If it's a weekday but outside the above windows
+            return { session: 'OFF_HOURS', status: 'MARKET CLOSED', color: '#334155', isMarketOpen: false };
+        } else {
+            // Forex-specific session logic
+            if (hour >= 3 && hour < 11) return { session: 'LONDON', status: 'HIGH VOLUME', color: '#00f2ff', isMarketOpen: true };
+            if (hour >= 8 && hour < 17) return { session: 'NY_FX', status: 'OVERLAP/LIQUIDITY', color: '#00ff88', isMarketOpen: true };
+            if (hour >= 19 || hour < 4) return { session: 'ASIA', status: 'STEADY', color: '#94a3b8', isMarketOpen: true };
+            return { session: 'FOREX_QUIET', status: 'LOW VOLUME', color: '#334155', isMarketOpen: true };
+        }
     }
-    calculateBias(currentPrice, fvgs, liquidityDraws, bloombergMetrics = {}, markers = {}, relativeStrength = 0, internals = { vix: 0, dxy: 0, newsImpact: 'LOW' }) {
+
+    calculateBias(currentPrice, fvgs, liquidityDraws, bloombergMetrics = {}, markers = {}, relativeStrength = 0, internals = { vix: 0, dxy: 0, newsImpact: 'LOW', sectors: [] }, symbol = 'SPY', candles = []) {
         let bullishScore = 0;
         let bearishScore = 0;
+        const isForex = symbol.includes('=X') || symbol === 'BTC-USD';
+        const isUSDQuote = symbol.includes('USD') && !symbol.startsWith('USD'); // e.g., EURUSD
+
+        // --- DXY CORRELATION (Critical for Forex) ---
+        if (isForex && internals.dxy > 0) {
+            const dxyStrength = internals.dxy > 26.5; // Using UUP proxy threshold
+            if (isUSDQuote) {
+                if (dxyStrength) bearishScore += 2.5; // DXY UP = EURUSD DOWN
+                else bullishScore += 1.5;
+            }
+        }
+
+        // --- VIX DYNAMIC SENSITIVITY (Fear Gauge) ---
+        if (!isForex) {
+            const vix = internals.vix || 0;
+            const vixPrev = internals.vixPrev || vix;
+            const vixVelocity = vixPrev > 0 ? (vix - vixPrev) / vixPrev : 0;
+
+            if (vix > 20) bearishScore += 2;
+            if (vix > 30) { bearishScore += 5; bullishScore -= 3; }
+
+            // Fear Spike: If VIX jumps > 2% rapidly, suppress longs
+            if (vixVelocity > 0.02) {
+                bearishScore += 4;
+                bullishScore -= 5;
+            }
+        }
+
+        // --- DXY & YIELD HEADWINDS (Macro Filters) ---
+        if (!isForex) {
+            const dxy = internals.dxy || 0;
+            const tnx = internals.tnx || 0; // 10Y Yield
+
+            // Strong Dollar = Headwind for Stocks
+            if (dxy > 27.80) bearishScore += 2; // Threshold for UUP/DXY strength
+
+            // Rising Yields = Headwind for Tech
+            const isTech = ['QQQ', 'NVDA', 'AAPL', 'MSFT', 'AMD', 'SMH'].includes(symbol);
+            if (isTech && tnx > 4.2) bearishScore += 3; // Yields above 4.2% pressure tech
+        }
+
+        // --- SECTOR UNDER THE HOOD CHECK ---
+        if (internals.sectors && internals.sectors.length > 0) {
+            const tech = internals.sectors.find(s => s.symbol === 'XLK');
+            const cons = internals.sectors.find(s => s.symbol === 'XLY');
+            const fin = internals.sectors.find(s => s.symbol === 'XLF');
+
+            // If Technology is strong, it's a tailwind for SPY/QQQ/Tech stocks
+            const techHeavy = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'MSFT', 'AMD', 'SMH'];
+            if (techHeavy.includes(symbol) && tech) {
+                if (tech.change > 0.3) bullishScore += 3; // Increased impact
+                else if (tech.change < -0.3) bearishScore += 3;
+            }
+
+            // Market Breadth (Percentage of watchlist trending)
+            const breadth = internals.breadth || 0;
+            if (breadth > 70) bullishScore += 2; // 70%+ of market is bullish
+            else if (breadth < 30) bearishScore += 2; // 70%+ of market is bearish
+        }
+
         const vwap = markers.vwap || 0;
         const poc = markers.poc || 0;
         const cvd = markers.cvd || 0;
@@ -179,11 +316,6 @@ export class LiquidityEngine {
         const londonOpen = markers.londonOpen || 0;
         const nyOpen = markers.nyOpen || 0;
         let confPoints = 0;
-
-        // Market Internals Filter (VIX/DXY)
-        if (internals.vix > 20) bearishScore += 2;
-        if (internals.vix > 30) { bearishScore += 5; bullishScore -= 3; }
-        if (internals.dxy > 26.5) bearishScore += 1;
 
         if (bloombergMetrics.wei === 'BULLISH') bullishScore += 3;
         if (bloombergMetrics.wei === 'BEARISH') bearishScore += 3;
@@ -231,6 +363,22 @@ export class LiquidityEngine {
         if (cvd < -1000) bearishScore += 2;
 
         if (markers.pdh && currentPrice > markers.pdh * 0.998 && cvd < -500) bearishScore += 4;
+
+        // --- Gamma Wall & Psychological Magnet Logic ---
+        const gammaWalls = this.getGammaWalls(currentPrice, symbol);
+        gammaWalls.forEach(wall => {
+            const distance = Math.abs(currentPrice - wall) / currentPrice;
+            if (distance < 0.001) { // Within 0.1% of a major level
+                // If approaching from below, it's a resistance/magnet
+                if (currentPrice < wall) {
+                    bearishScore += 1; // Anticipate rejection/consolidation
+                    bullishScore += 1; // Attracted as magnet
+                } else {
+                    bullishScore += 1; // Support/magnet
+                    bearishScore += 1; // Rejection probability
+                }
+            }
+        });
         if (markers.pdl && currentPrice < markers.pdl * 1.002 && cvd > 500) bullishScore += 4;
 
         // Fair Value Gaps (FVGs)
@@ -253,24 +401,60 @@ export class LiquidityEngine {
         if (markers.pdh > 0 && currentPrice < markers.pdh) bullishScore += 1.5;
         if (markers.pdl > 0 && currentPrice > markers.pdl) bearishScore += 1.5;
 
-        let finalBullish = bullishScore;
-        let finalBearish = bearishScore;
-        if (internals.newsImpact === 'HIGH') {
-            finalBullish *= 0.5;
-            finalBearish *= 0.5;
+        // --- ELITE: HOLY GRAIL SIGNALS ---
+        // 1. SMT Divergence (+5 pts)
+        if (markers.smt) {
+            if (markers.smt.type === 'BULLISH') bullishScore += 5;
+            else if (markers.smt.type === 'BEARISH') bearishScore += 5;
         }
 
-        const totalScore = finalBullish - finalBearish;
-        let biasLabel = 'NEUTRAL';
-        if (totalScore >= 5) biasLabel = 'BULLISH';
-        else if (totalScore <= -5) biasLabel = 'BEARISH';
+        // 2. Institutional Absorption (+3 pts)
+        const absorption = this.detectAbsorption(candles, markers);
+        if (absorption) {
+            if (absorption.type.includes('BULLISH')) bullishScore += 3;
+            else bearishScore += 3;
+        }
 
-        // ADR Exhaustion Check (New)
-        const dayRange = Math.max(...(markers.todayHigh ? [markers.todayHigh - markers.todayLow] : [0]));
-        if (markers.adr > 0 && dayRange > markers.adr * 0.9) {
-            // If we've already moved 90% of the daily average, be VERY careful
-            biasLabel = 'CONSOLIDATION/EXHAUSTED';
-            confPoints = Math.max(0, confPoints - 30);
+        // 3. Institutional Displacement (FVG) (+5 pts)
+        const fvg = this.detectFVG(candles);
+        if (fvg) {
+            if (fvg.type.includes('BULLISH')) bullishScore += 5;
+            else bearishScore += 5;
+        }
+
+        // 4. Whale Imbalance skewing (+2 pts for over 70% imbalance)
+        if (markers.whaleImbalance > 70) bullishScore += 2;
+        if (markers.whaleImbalance < -70) bearishScore += 2;
+
+        // --- PROFESSIONAL UPGRADE: SETUP-BASED BIAS WEIGHTING ---
+        // Trap detection (Now influences Bias Score)
+        const trap = this.detectDeltaTrap(currentPrice, markers.cvd || 0, candles);
+        if (trap) {
+            if (trap.type.includes('BEAR_TRAP')) bullishScore += 12; // Powerful reversal logic
+            else if (trap.type.includes('BULL_TRAP')) bearishScore += 12;
+        }
+
+        // Bullish/Bearish Divergence (Now influences Bias Score)
+        const isBullishDiv = (markers.pdl > 0 && currentPrice < markers.pdl * 1.002 && (markers.cvd || 0) > 500);
+        const isBearishDiv = (markers.pdh > 0 && currentPrice > markers.pdh * 0.998 && (markers.cvd || 0) < -500);
+
+        if (isBullishDiv) bullishScore += 15;
+        if (isBearishDiv) bearishScore += 15;
+
+        const finalMultiplier = (internals && internals.newsImpact === 'HIGH') ? 0.5 : 1;
+        const totalScore = (bullishScore * finalMultiplier) - (bearishScore * finalMultiplier);
+
+        let biasLabel = 'NEUTRAL';
+        if (totalScore >= 10) biasLabel = 'STRONG BULLISH';
+        else if (totalScore >= 3) biasLabel = 'BULLISH';
+        else if (totalScore <= -10) biasLabel = 'STRONG BEARISH';
+        else if (totalScore <= -3) biasLabel = 'BEARISH';
+
+        // ADR Extended check: Only override to CONSOLIDATION if not strongly trending
+        const dayRange = (markers.todayHigh && markers.todayLow) ? markers.todayHigh - markers.todayLow : 0;
+        if (markers.adr > 0 && dayRange > markers.adr * 1.4 && Math.abs(totalScore) < 10) {
+            biasLabel = 'CONSOLIDATION';
+            confPoints = Math.max(0, confPoints - 20);
         }
 
         // Accuracy Booster: Confidence Logic
@@ -286,16 +470,171 @@ export class LiquidityEngine {
         if (internals.newsImpact === 'LOW') confPoints += 20;
         if (Math.abs(totalScore) >= 10) confPoints += 40;
 
-        return { bias: biasLabel, score: totalScore, confidence: Math.min(confPoints, 100), metrics: bloombergMetrics, vwap, poc, cvd, internals };
+        return {
+            bias: biasLabel,
+            score: totalScore,
+            confidence: Math.min(confPoints, 100),
+            metrics: bloombergMetrics,
+            vwap,
+            poc,
+            cvd,
+            internals,
+            trap,
+            smt: markers.smt,
+            amdPhase: this.getAMDPhase(),
+            mss: this.detectMSS(candles, liquidityDraws, markers),
+            fundingCandle: this.detectFundingCandle(candles, markers),
+            absorption: this.detectAbsorption(candles, markers),
+            fvg: this.detectFVG(candles),
+            orderBlock: this.detectOrderBlocks(candles),
+            whaleImbalance: markers.whaleImbalance,
+            bloombergSentiment: this.getBloombergSentiment(markers, internals),
+            intermarketCorrelation: this.getIntermarketCorrelation(symbol, markers)
+        };
+    }
+
+    getAMDPhase() {
+        // Power of 3: Accumulation, Manipulation, Distribution
+        const nyTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const hour = nyTime.getHours();
+
+        if (hour >= 0 && hour < 3) return { label: 'ACCUMULATION', color: '#38bdf8', desc: 'Institutions building size', narrative: 'Price is consolidating within a tight range. Big players are quietly building positions before the fakeout.', next: 'MANIPULATION' };
+        if (hour >= 3 && hour < 10) return { label: 'MANIPULATION', color: '#f59e0b', desc: 'The Judas Swing / Fakeout Phase', narrative: 'The "Judas Swing" is in effect. Price is moving AGAINST the true trend to trap retail and hit stops before the real run.', next: 'DISTRIBUTION' };
+        if (hour >= 10 && hour < 16) return { label: 'DISTRIBUTION', color: '#10b981', desc: 'Large players exiting near trend high/low', narrative: 'The real expansion is happening. Institutions are distributing orders to the late-comers. Look for the expansion run.', next: 'OFF-SESSION' };
+        return { label: 'OFF-SESSION', color: '#64748b', desc: 'Waiting for Midnight liquidity', narrative: 'The algorithmic cycle has ended. Searching for the next liquidity pool for the Midnight restart.', next: 'ACCUMULATION' };
+    }
+
+    getIntermarketCorrelation(symbol, markers) {
+        // Feature 4: SMT Pulse / Intermarket Correlation
+        // This is a proxy for divergence strength
+        if (!markers.smt) return { strength: 0, status: 'STABLE' };
+        return {
+            strength: markers.smt.divergence || 85,
+            status: markers.smt.type === 'BULLISH' ? 'BULLISH DIVERGENCE' : 'BEARISH DIVERGENCE'
+        };
+    }
+
+    detectMSS(candles, draws, markers) {
+        if (!candles || candles.length < 20) return null;
+        // MSS (Market Structure Shift) = Swept Liquidity + Break of Last Swing Point + FVG/Displacement
+        const lastCandle = candles[candles.length - 1];
+        const lastSwingHigh = draws?.bsl ? draws.bsl[0] : 0;
+        const lastSwingLow = draws?.ssl ? draws.ssl[0] : 0;
+
+        // Bullish MSS: Price swept liquidity, then broke original swing high
+        if (lastCandle.close > lastSwingHigh && lastSwingHigh > 0) {
+            return { type: 'BULLISH_MSS', price: lastSwingHigh, timestamp: lastCandle.timestamp };
+        }
+        // Bearish MSS: Price swept, then broke original swing low
+        if (lastCandle.close < lastSwingLow && lastSwingLow > 0) {
+            return { type: 'BEARISH_MSS', price: lastSwingLow, timestamp: lastCandle.timestamp };
+        }
+        return null;
+    }
+
+    detectFundingCandle(candles, markers) {
+        if (!candles || candles.length < 10) return null;
+        // Funding Candle: Institutional injection (Extreme volume + range)
+        for (let i = candles.length - 1; i >= candles.length - 10; i--) {
+            const c = candles[i];
+            const prevCandles = candles.slice(Math.max(0, i - 10), i);
+            const avgVol = prevCandles.reduce((a, b) => a + b.volume, 0) / prevCandles.length;
+            const avgRange = prevCandles.reduce((a, b) => a + Math.abs(b.close - b.open), 0) / prevCandles.length;
+            const range = Math.abs(c.close - c.open);
+
+            if (c.volume > avgVol * 2.5 && range > avgRange * 2) {
+                return { timestamp: c.timestamp, price: (c.high + c.low) / 2, type: c.close > c.open ? 'BULLISH' : 'BEARISH' };
+            }
+        }
+        return null;
+    }
+
+    getBloombergSentiment(markers, internals) {
+        // High-level Bloomberg Terminal style sentiment fusion
+        const score = (markers.whaleImbalance / 2) + (internals.breadth / 2) - 50;
+        if (score > 20) return { label: 'HEAVY ACCUMULATION', color: '#10b981' };
+        if (score < -20) return { label: 'HEAVY DISTRIBUTION', color: '#f43f5e' };
+        return { label: 'NEUTRAL FLOW', color: '#94a3b8' };
+    }
+
+    detectOrderBlocks(candles) {
+        if (!candles || candles.length < 10) return null;
+        // Institutional Order Block: The last opposite candle before a strong displacement (FVG)
+        for (let i = candles.length - 2; i >= 5; i--) {
+            const current = candles[i];
+            const next = candles[i + 1];
+            const prev = candles[i - 1];
+
+            // Bullish OB: Red candle before a strong Green move (FVG)
+            if (current.close < current.open && next.low > current.high) {
+                return { type: 'BULLISH_OB', top: current.high, bottom: current.low, timestamp: current.timestamp };
+            }
+            // Bearish OB: Green candle before a strong Red move (FVG)
+            if (current.close > current.open && next.high < current.low) {
+                return { type: 'BEARISH_OB', top: current.high, bottom: current.low, timestamp: current.timestamp };
+            }
+        }
+        return null;
+    }
+
+    detectFVG(candles) {
+        if (!candles || candles.length < 5) return null;
+        // Check last 3 candles for a fresh FVG
+        for (let i = candles.length - 1; i >= 3; i--) {
+            const c0 = candles[i];     // current
+            const c1 = candles[i - 1]; // middle (displacement)
+            const c2 = candles[i - 2]; // root
+
+            // Bullish FVG: Low of candle 0 is higher than High of candle 2
+            if (c0.low > c2.high) {
+                return { type: 'BULLISH_FVG', status: 'UNFILLED', top: c0.low, bottom: c2.high };
+            }
+            // Bearish FVG: High of candle 0 is lower than Low of candle 2
+            if (c0.high < c2.low) {
+                return { type: 'BEARISH_FVG', status: 'UNFILLED', top: c2.low, bottom: c0.high };
+            }
+        }
+        return null;
     }
 
     getOptionRecommendation(bias, markers, currentPrice, timeframe = '1m', symbol = 'SPY', candles = []) {
-        const session = this.getSessionInfo();
+        const session = this.getSessionInfo(symbol);
         const multipliers = { '1m': 1, '5m': 5, '15m': 15 };
         const stateKey = `${symbol}_${timeframe}`;
 
-        if (!session.isMarketOpen) {
-            return { action: 'WAIT', strike: '-', target: '-', rationale: 'US MARKET CLOSED', duration: '-', isStable: true };
+        const nyTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const hour = nyTime.getHours();
+        const minute = nyTime.getMinutes();
+        const totalMinutes = (hour * 60) + minute;
+        const isForex = symbol === 'BTC-USD' || symbol.includes('=X');
+
+        // Midnight Strategy Window (00:00 AM - 09:30 AM EST)
+        const isMidnightWindow = totalMinutes >= 0 && totalMinutes < 570;
+
+        if (!isForex) {
+            // Stocks/ETFs logic
+            if (!session.isMarketOpen && !isMidnightWindow) {
+                return {
+                    action: 'WAIT',
+                    strike: '-',
+                    target: '-',
+                    rationale: `STOCK MARKET CLOSED (${session.session}). Signaling resumes at Midnight EST for Judas Swings.`,
+                    duration: '-',
+                    isStable: true
+                };
+            }
+        } else {
+            // Forex/Crypto logic
+            if (!session.isMarketOpen) {
+                return {
+                    action: 'WAIT',
+                    strike: '-',
+                    target: '-',
+                    rationale: `FOREX MARKET CLOSED (${session.session}).`,
+                    duration: '-',
+                    isStable: true
+                };
+            }
         }
 
         const isNewsHigh = bias.internals && bias.internals.newsImpact === 'HIGH';
@@ -344,10 +683,11 @@ export class LiquidityEngine {
 
         if ((hasTechnicalConfluence && hasBullishDelta) || isBullishDiv || ultraHighProbBull || isJudasLong) {
             rawAction = 'BUY CALL';
-            const raw = currentPrice + (0.1 * multipliers[timeframe]);
-            rawStrike = Math.round(raw * 2) / 2;
-            rawTrim = vwap.toFixed(2);
-            rawTarget = (pdh > currentPrice) ? pdh.toFixed(2) : (currentPrice * 1.01).toFixed(2);
+            const isForexSymbol = symbol.includes('=X') || symbol === 'BTC-USD';
+            const raw = currentPrice + (isForexSymbol ? 0.001 : 0.1) * multipliers[timeframe];
+            rawStrike = isForexSymbol ? raw.toFixed(5) : Math.round(raw * 2) / 2;
+            rawTrim = vwap.toFixed(isForexSymbol ? 5 : 2);
+            rawTarget = (pdh > currentPrice) ? pdh.toFixed(isForexSymbol ? 5 : 2) : (currentPrice * (isForexSymbol ? 1.005 : 1.01)).toFixed(isForexSymbol ? 5 : 2);
 
             if (isJudasLong) {
                 rawRationale = `👑 MIDNIGHT STRATEGY: Judas Swing detected. Buying below True Open with Bullish Confluence.`;
@@ -358,10 +698,11 @@ export class LiquidityEngine {
             }
         } else if ((hasBearishTechnical && hasBearishDelta) || isBearishDiv || ultraHighProbBear || isJudasShort) {
             rawAction = 'BUY PUT';
-            const raw = currentPrice - (0.1 * multipliers[timeframe]);
-            rawStrike = Math.round(raw * 2) / 2;
-            rawTrim = vwap.toFixed(2);
-            rawTarget = (pdl < currentPrice && pdl > 0) ? pdl.toFixed(2) : (currentPrice * 0.99).toFixed(2);
+            const isForexSymbol = symbol.includes('=X') || symbol === 'BTC-USD';
+            const raw = currentPrice - (isForexSymbol ? 0.001 : 0.1) * multipliers[timeframe];
+            rawStrike = isForexSymbol ? raw.toFixed(5) : Math.round(raw * 2) / 2;
+            rawTrim = vwap.toFixed(isForexSymbol ? 5 : 2);
+            rawTarget = (pdl < currentPrice && pdl > 0) ? pdl.toFixed(isForexSymbol ? 5 : 2) : (currentPrice * (isForexSymbol ? 0.995 : 0.99)).toFixed(isForexSymbol ? 5 : 2);
 
             if (isJudasShort) {
                 rawRationale = `👑 MIDNIGHT STRATEGY: Judas Swing detected. Selling above True Open with Bearish Confluence.`;
@@ -390,6 +731,7 @@ export class LiquidityEngine {
         const atr = this.calculateATR(candles);
         let sl = '-';
         let size = '-';
+        let rrRatioValue = 0;
         let exitSignal = null;
 
         // --- EXPERT UPGRADE: KILL ZONE FILTER ---
@@ -405,16 +747,17 @@ export class LiquidityEngine {
             const slPrice = parseFloat(sl);
             const potentialProfit = Math.abs(targetPrice - currentPrice);
             const potentialRisk = Math.abs(currentPrice - slPrice);
-            const rrRatio = potentialRisk > 0 ? potentialProfit / potentialRisk : 0;
+            rrRatioValue = potentialRisk > 0 ? potentialProfit / potentialRisk : 0;
 
             // Block low R:R trades (Must be at least 1.5:1)
-            if (rrRatio < 1.5) {
+            if (rrRatioValue < 1.5) {
                 return {
                     action: 'WAIT',
                     strike: '-',
                     target: '-',
-                    rationale: `Low R:R Ratio (${rrRatio.toFixed(1)}:1). Reward doesn't justify risk.`,
-                    isStable: true
+                    rationale: `Low R:R Ratio (${rrRatioValue.toFixed(1)}:1). Reward doesn't justify risk.`,
+                    isStable: true,
+                    rrRatio: rrRatioValue.toFixed(1)
                 };
             }
 
@@ -499,6 +842,7 @@ export class LiquidityEngine {
             session: session.session,
             isStable: stable.count >= 8,
             confidence: bias.confidence || 0,
+            rrRatio: rrRatioValue.toFixed(1),
             exit: exitSignal
         };
     }

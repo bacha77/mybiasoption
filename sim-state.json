@@ -1,0 +1,53 @@
+{
+  "balance": 2022.9999999999932,
+  "activePositions": [
+    [
+      "AMD",
+      {
+        "symbol": "AMD",
+        "type": "BUY PUT",
+        "entryPrice": 202.76,
+        "strike": 201,
+        "size": 1,
+        "sl": 202.76,
+        "tp": 189.86,
+        "trim": 200.32,
+        "cost": 1013.8,
+        "trimmed": true,
+        "timestamp": 1772722181422
+      }
+    ],
+    [
+      "GOOGL",
+      {
+        "symbol": "GOOGL",
+        "type": "BUY CALL",
+        "entryPrice": 294.48,
+        "strike": 296,
+        "size": 2,
+        "sl": 294.48,
+        "tp": 303.3,
+        "trim": 294.66,
+        "cost": 2944.8,
+        "trimmed": true,
+        "timestamp": 1772807042973
+      }
+    ],
+    [
+      "MSFT",
+      {
+        "symbol": "MSFT",
+        "type": "BUY PUT",
+        "entryPrice": 411.88,
+        "strike": 409.5,
+        "size": 1,
+        "sl": 411.88,
+        "tp": 404.4,
+        "trim": 410.95,
+        "cost": 2059.4,
+        "trimmed": true,
+        "timestamp": 1772816084131
+      }
+    ]
+  ]
+}

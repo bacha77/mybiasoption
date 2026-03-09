@@ -1,41 +1,63 @@
 import WebSocket from 'ws';
 import YahooFinance from 'yahoo-finance2';
 import { LiquidityEngine } from '../logic/liquidity-engine.js';
+import fs from 'fs';
+import path from 'path';
 
 const yahooFinance = new YahooFinance();
 
 export class RealDataManager {
     constructor() {
         this.apiKey = process.env.FINNHUB_API_KEY;
-        this.watchlist = ['SPY', 'QQQ', 'IWM', 'SMH', 'NVDA', 'TSLA', 'AAPL', 'MSFT', 'META', 'AMZN', 'GOOGL', 'AMD', 'NFLX', 'BTC-USD'];
-        this.timeframes = ['1m', '5m', '15m'];
+        this.configPath = path.join(process.cwd(), 'watchlist.json');
+        this.watchlist = this.loadWatchlist();
+        this.sectors = ['XLK', 'XLY', 'XLF', 'XLC', 'SMH', 'NVDA', 'AMD', 'META', 'GOOGL', 'KRE', 'XBI', 'IYT', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', '^TNX'];
+        this.symbolMap = {
+            'EURUSD=X': 'OANDA:EUR_USD',
+            'GBPUSD=X': 'OANDA:GBP_USD',
+            'USDJPY=X': 'OANDA:USD_JPY',
+            'AUDUSD=X': 'OANDA:AUD_USD',
+            'BTC-USD': 'BINANCE:BTCUSDT'
+        };
+        this.revMap = Object.fromEntries(Object.entries(this.symbolMap).map(([k, v]) => [v, k]));
+
+        this.timeframes = ['1m', '5m', '15m', '1h', '1d'];
         this.currentTimeframe = '1m';
         this.currentSymbol = 'SPY';
         this.stocks = {};
-        this.internals = { vix: 0, dxy: 0, newsImpact: 'LOW' }; // New Market Internals
+        this.internals = { vix: 0, vixPrev: 0, dxy: 0, tnx: 0, newsImpact: 'LOW', breadth: 50 };
         this.ws = null;
         this.isInitialized = false;
 
-        [...this.watchlist, '^VIX', 'UUP'].forEach(symbol => { // UUP as DXY proxy
+        [...this.watchlist, '^VIX', 'UUP', ...this.sectors].forEach(symbol => { // UUP as DXY proxy
             this.stocks[symbol] = {
                 currentPrice: 0,
                 previousClose: 0,
                 dailyChangePercent: 0,
                 cvd: 0,
+                netWhaleFlow: 0, // Cumulative value of institutional blocks
+                whaleBuyVol: 0,
+                whaleSellVol: 0,
                 volumeClusters: {},
                 dailyQuotes: [],
-                candles: { '1m': [], '5m': [], '15m': [] },
+                candles: {},
                 bloomberg: { omon: 'NEUTRAL', btm: 'STALE', wei: 'NEUTRAL', sentiment: 0 },
                 news: []
             };
+            this.timeframes.forEach(tf => this.stocks[symbol].candles[tf] = []);
         });
+
+        this.blockTrades = []; // Store recent institutional blocks
+        this.activePositions = {}; // Tracks { [symbol]: { type, entry, sl, tp, active } }
+        this.onBlockCallback = null;
+        this.maxBlockTrades = 20; // Keep only 20 most recent
     }
 
     async initialize() {
         if (this.isInitialized) return;
         console.log("Initializing Real-Time Data Manager (Finnhub + Yahoo)...");
 
-        const allSymbols = [...this.watchlist, '^VIX', 'UUP'];
+        const allSymbols = [...this.watchlist, '^VIX', 'UUP', ...this.sectors];
         for (const symbol of allSymbols) {
             console.log(`Fetching historical data for ${symbol}...`);
             await this.refreshHistoricalData(symbol);
@@ -64,9 +86,9 @@ export class RealDataManager {
             }
 
             // --- SOPHISTICATED PDH/PDL SELECTOR ---
-            const date5d = new Date();
-            date5d.setDate(date5d.getDate() - 5);
-            const p1String = date5d.toISOString().split('T')[0];
+            const date10d = new Date();
+            date10d.setDate(date10d.getDate() - 10);
+            const p1String = date10d.toISOString().split('T')[0];
             const dailyRes = await yahooFinance.chart(symbol, { period1: p1String, interval: '1d' });
             if (dailyRes && dailyRes.quotes && dailyRes.quotes.length > 0) {
                 const nyNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
@@ -107,15 +129,18 @@ export class RealDataManager {
             }
 
             for (const tf of this.timeframes) {
-                const daysBack = tf === '1m' ? 1 : tf === '5m' ? 5 : 10;
-                const dateTf = new Date();
-                dateTf.setDate(dateTf.getDate() - daysBack);
-                const p1Tf = dateTf.toISOString().split('T')[0];
+                let daysBack = 30;
+                if (tf === '1m') daysBack = 5;  // Use 5 days to cover weekends/holidays
+                else if (tf === '5m') daysBack = 5;
+                else if (tf === '1d') daysBack = 365;
 
-                const chart = await yahooFinance.chart(symbol, { period1: p1Tf, interval: tf });
+                const p1 = new Date();
+                p1.setDate(p1.getDate() - daysBack);
+
+                const chart = await yahooFinance.chart(symbol, { period1: p1, interval: tf });
                 if (chart && chart.quotes) {
-                    this.stocks[symbol].candles[tf] = chart.quotes
-                        .filter(q => q.open != null)
+                    const candles = chart.quotes
+                        .filter(q => q.open != null && q.open > 0)
                         .map(q => ({
                             timestamp: q.date.getTime(),
                             open: q.open,
@@ -124,6 +149,12 @@ export class RealDataManager {
                             close: q.close,
                             volume: q.volume
                         }));
+                    if (candles.length > 0) {
+                        this.stocks[symbol].candles[tf] = candles;
+                        console.log(`[${symbol}] ${tf}: ${candles.length} candles loaded.`);
+                    } else {
+                        console.warn(`[${symbol}] ${tf}: No candles returned (weekend/holiday?). Will fallback to previous data.`);
+                    }
                 }
             }
         } catch (error) {
@@ -138,9 +169,11 @@ export class RealDataManager {
 
         this.ws.on('open', () => {
             console.log('--- FINNHUB WEBSOCKET CONNECTED ---');
-            // Subscribe to all in watchlist
-            this.watchlist.forEach(symbol => {
-                this.ws.send(JSON.stringify({ type: 'subscribe', symbol }));
+            // Subscribe to all in watchlist + macro proxies + sectors
+            const instruments = [...this.watchlist, '^VIX', 'UUP', ...this.sectors];
+            instruments.forEach(symbol => {
+                const subSymbol = this.symbolMap[symbol] || symbol;
+                this.ws.send(JSON.stringify({ type: 'subscribe', symbol: subSymbol }));
             });
         });
 
@@ -148,7 +181,8 @@ export class RealDataManager {
             const raw = JSON.parse(data.toString());
             if (raw.type === 'trade') {
                 raw.data.forEach(trade => {
-                    this.updatePriceFromTrade(trade.s, trade.p, trade.v);
+                    const displaySymbol = this.revMap[trade.s] || trade.s;
+                    this.updatePriceFromTrade(displaySymbol, trade.p, trade.v);
                 });
             }
         });
@@ -186,6 +220,42 @@ export class RealDataManager {
             const roundedPrice = Math.round(price * 100) / 100;
             stock.volumeClusters[roundedPrice] = (stock.volumeClusters[roundedPrice] || 0) + volume;
 
+            // --- Institutional Block Detection (Dark Pool Approximation) ---
+            const tradeValue = price * volume;
+            const isForex = symbol.includes('=X') || symbol === 'BTC-USD';
+            const threshold = isForex ? 500000 : 100000; // $500k for FX/Crypto, $100k for Stocks
+
+            if (tradeValue >= threshold) {
+                const isElite = tradeValue >= 1000000;
+                const block = {
+                    symbol,
+                    price,
+                    volume,
+                    value: tradeValue,
+                    time: new Date().toLocaleTimeString(),
+                    type: price > (stock.currentPrice || 0) ? 'BULLISH' : 'BEARISH',
+                    isElite
+                };
+                this.blockTrades.unshift(block);
+                if (this.blockTrades.length > this.maxBlockTrades) this.blockTrades.pop();
+
+                // Update Order-Flow Imbalance
+                const flow = block.type === 'BULLISH' ? tradeValue : -tradeValue;
+                stock.netWhaleFlow = (stock.netWhaleFlow || 0) + flow;
+                if (block.type === 'BULLISH') stock.whaleBuyVol += tradeValue;
+                else stock.whaleSellVol += tradeValue;
+
+                if (isElite) {
+                    console.log(`[WHALE] 🐋 ELITE BLOCK: ${symbol} | $${(tradeValue / 1000000).toFixed(2)}M | Price: ${price}`);
+                } else {
+                    console.log(`[BLOCK] ${symbol} | $${tradeValue.toLocaleString()} | Price: ${price}`);
+                }
+
+                if (this.onBlockCallback) {
+                    this.onBlockCallback(block);
+                }
+            }
+
             stock.currentPrice = price;
 
             // Update daily change percent correctly
@@ -193,17 +263,52 @@ export class RealDataManager {
                 stock.dailyChangePercent = ((price - stock.previousClose) / stock.previousClose) * 100;
             }
 
+            // HOLY GRAIL: Real-time update of macro internals
+            if (symbol === '^VIX') {
+                this.internals.vixPrev = this.internals.vix;
+                this.internals.vix = price;
+            }
+            if (symbol === 'UUP') this.internals.dxy = price;
+            if (symbol === '^TNX') this.internals.tnx = price;
+
             // Update current candles for all timeframes
             this.timeframes.forEach(tf => {
                 const candles = stock.candles[tf];
+                const tfMs = this.getTfMs(tf);
+                const candleTs = Math.floor(Date.now() / tfMs) * tfMs;
+
                 if (candles && candles.length > 0) {
                     const last = candles[candles.length - 1];
-                    last.close = price;
-                    last.high = Math.max(last.high, price);
-                    last.low = Math.min(last.low, price);
+
+                    if (candleTs > last.timestamp) {
+                        // NEW CANDLE
+                        candles.push({
+                            timestamp: candleTs,
+                            open: price,
+                            high: price,
+                            low: price,
+                            close: price,
+                            volume: volume
+                        });
+                        if (candles.length > 300) candles.shift();
+                    } else {
+                        // UPDATE EXISTING
+                        last.close = price;
+                        last.high = Math.max(last.high, price);
+                        last.low = Math.min(last.low, price);
+                        if (volume) last.volume = (last.volume || 0) + volume;
+                    }
                 }
             });
         }
+    }
+
+    getTfMs(tf) {
+        const value = parseInt(tf);
+        if (tf.includes('m')) return value * 60 * 1000;
+        if (tf.includes('h')) return value * 60 * 60 * 1000;
+        if (tf.includes('d')) return value * 24 * 60 * 60 * 1000;
+        return 60 * 1000;
     }
 
     checkSessionReset(symbol) {
@@ -215,6 +320,9 @@ export class RealDataManager {
         if (stock.lastSessionDate !== dateStr) {
             console.log(`New session detected for ${symbol} (${dateStr}). Resetting intraday markers.`);
             stock.cvd = 0;
+            stock.netWhaleFlow = 0;
+            stock.whaleBuyVol = 0;
+            stock.whaleSellVol = 0;
             stock.volumeClusters = {};
             stock.lastSessionDate = dateStr;
             // PDH/PDL will be refreshed by the 5-min update loop or manual refresh
@@ -235,6 +343,19 @@ export class RealDataManager {
 
     async updateAll() {
         await this.refreshNews();
+        // Force refresh macro indices and sectors if they are zero or every 30 seconds
+        const now = Date.now();
+        if (!this.lastMacroRefresh || now - this.lastMacroRefresh > 30000) {
+            await this.refreshHistoricalData('^VIX');
+            await this.refreshHistoricalData('UUP');
+
+            // Also refresh sectors + drivers
+            for (const sector of this.sectors) {
+                await this.refreshHistoricalData(sector);
+            }
+
+            this.lastMacroRefresh = now;
+        }
     }
 
     async refreshNews() {
@@ -251,8 +372,8 @@ export class RealDataManager {
                 'bearish': -2, 'crash': -3, 'decline': -1, 'fall': -1, 'debt': -1, 'crisis': -2, 'sell': -1, 'low': -1, 'negative': -1
             };
 
-            // News Guardian: High Impact Keywords
-            const highImpactKeywords = ['CPI', 'FOMC', 'POWELL', 'FED', 'INFLATION', 'NFP', 'JOBS REPORT', 'INTEREST RATE'];
+            // News Guardian: High Impact Keywords (Forex + Stocks)
+            const highImpactKeywords = ['CPI', 'FOMC', 'POWELL', 'FED', 'INFLATION', 'NFP', 'JOBS REPORT', 'INTEREST RATE', 'ECB', 'LAGARDE', 'BOE', 'BAILEY', 'BOJ', 'YEN', 'DOLLAR INDEX'];
             let redFolderDetected = false;
 
             let match;
@@ -267,8 +388,15 @@ export class RealDataManager {
             }
 
             this.internals.newsImpact = redFolderDetected ? 'HIGH' : 'LOW';
-            this.internals.vix = this.stocks['^VIX']?.currentPrice || 0;
-            this.internals.dxy = this.stocks['UUP']?.currentPrice || 0;
+            // VIX and DXY are now updated in real-time via updatePriceFromTrade, 
+            // but we keep a fallback here for robustness.
+            if (this.stocks['^VIX']?.currentPrice > 0) this.internals.vix = this.stocks['^VIX'].currentPrice;
+            if (this.stocks['UUP']?.currentPrice > 0) this.internals.dxy = this.stocks['UUP'].currentPrice;
+            if (this.stocks['^TNX']?.currentPrice > 0) this.internals.tnx = this.stocks['^TNX'].currentPrice;
+
+            // --- CALCULATE MARKET BREADTH ---
+            const bullCount = this.watchlist.filter(s => (this.stocks[s]?.dailyChangePercent || 0) > 0.05).length;
+            this.internals.breadth = (bullCount / this.watchlist.length) * 100;
 
             this.watchlist.forEach(symbol => {
                 const stock = this.stocks[symbol];
@@ -301,13 +429,16 @@ export class RealDataManager {
 
         console.log(`Adding ${symbol} to watchlist...`);
         this.watchlist.push(symbol);
+        this.saveWatchlist();
         this.stocks[symbol] = {
             currentPrice: 0,
             previousClose: 0,
             dailyChangePercent: 0,
             cvd: 0,
+            netWhaleFlow: 0,
             volumeClusters: {},
-            candles: { '1m': [], '5m': [], '15m': [] },
+            dailyQuotes: [],
+            candles: { '1m': [], '5m': [], '15m': [], '1h': [] },
             bloomberg: { omon: 'NEUTRAL', btm: 'STALE', wei: 'NEUTRAL', sentiment: 0 },
             news: []
         };
@@ -317,13 +448,30 @@ export class RealDataManager {
         console.log(`✅ ${symbol} initialized with history.`);
 
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ type: 'subscribe', symbol }));
+            const subSymbol = this.symbolMap[symbol] || symbol;
+            this.ws.send(JSON.stringify({ type: 'subscribe', symbol: subSymbol }));
         }
     }
 
     removeSymbol(symbol) {
         this.watchlist = this.watchlist.filter(s => s !== symbol);
+        this.saveWatchlist();
         delete this.stocks[symbol];
+    }
+
+    loadWatchlist() {
+        try {
+            if (fs.existsSync(this.configPath)) {
+                return JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
+            }
+        } catch (e) { console.error("Load Watchlist Error:", e.message); }
+        return ['SPY', 'QQQ', 'IWM', 'SMH', 'NVDA', 'TSLA', 'AAPL', 'MSFT', 'META', 'AMZN', 'GOOGL', 'AMD', 'NFLX', 'BTC-USD', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X'];
+    }
+
+    saveWatchlist() {
+        try {
+            fs.writeFileSync(this.configPath, JSON.stringify(this.watchlist, null, 2));
+        } catch (e) { console.error("Save Watchlist Error:", e.message); }
     }
 
     calculateVWAP(symbol, tf = '1m') {
@@ -406,28 +554,92 @@ export class RealDataManager {
         const adr = this.stocks[symbol].dailyQuotes ?
             new LiquidityEngine().calculateADR(this.stocks[symbol].dailyQuotes) : 0;
 
+        const sessionCandles = candles.filter(c => c.timestamp >= midnightTs);
+
+        // --- IMPROVED MIDNIGHT OPEN DETECTION ---
+        // 1. Try absolute midnight candle
+        // 2. If missing (common in RTH-only data), use the FIRST candle of the session
+        // 3. If no candles today yet, use Previous Close as the "True Open" anchor
+        let midnightOpen = 0;
+        if (sessionCandles.length > 0) {
+            midnightOpen = sessionCandles[0].open;
+        } else {
+            const mc = findCandleAt(midnightTs);
+            midnightOpen = mc ? mc.open : (stock.previousClose || candles[0].close);
+        }
+
+        const todayHigh = sessionCandles.length > 0 ? Math.max(...sessionCandles.map(c => c.high)) : candles[candles.length - 1].high;
+        const todayLow = sessionCandles.length > 0 ? Math.min(...sessionCandles.map(c => c.low)) : candles[candles.length - 1].low;
+
         return {
             pdh: stock.pdh || 0,
             pdl: stock.pdl || 0,
-            todayHigh: Math.max(...candles.map(c => c.high)),
-            todayLow: Math.min(...candles.map(c => c.low)),
-            midnightOpen: midnightCandle.open,
-            nyOpen: nyOpenCandle.open,
-            londonOpen: lonOpenCandle.open,
+            pdc: stock.previousClose || 0,
+            todayHigh,
+            todayLow,
+            midnightOpen,
+            nyOpen: findCandleAt(nyOpenTs).open,
+            londonOpen: findCandleAt(lonOpenTs).open,
             vwap: this.calculateVWAP(symbol, tf),
             poc: poc || candles[0].close,
             cvd: stock.cvd,
+            netWhaleFlow: stock.netWhaleFlow || 0,
+            whaleImbalance: (stock.whaleBuyVol + stock.whaleSellVol > 0) ?
+                ((stock.whaleBuyVol - stock.whaleSellVol) / (stock.whaleBuyVol + stock.whaleSellVol) * 100) : 0,
+            smt: this.detectSMT(symbol, tf),
             adr
         };
     }
 
     generateHeatmapData(liquidityDraws) {
         const heatmap = [];
+        const stock = this.stocks[this.currentSymbol];
+        if (!stock) return heatmap;
+
         liquidityDraws.highs.concat(liquidityDraws.lows).forEach(draw => {
-            heatmap.push({ price: draw.price, volume: Math.floor(Math.random() * 5000) + 5000, type: draw.type });
+            const roundedPrice = Math.round(draw.price * 100) / 100;
+            const volume = stock.volumeClusters[roundedPrice] || Math.floor(Math.random() * 500) + 100; // Small fallback instead of total mock
+            heatmap.push({ price: draw.price, volume, type: draw.type });
         });
         return heatmap;
     }
 
     getNews() { return this.stocks[this.currentSymbol]?.news || []; }
+
+    detectSMT(symbol, tf = '5m') {
+        const pairs = {
+            'SPY': 'QQQ',
+            'QQQ': 'SPY',
+            'EURUSD=X': 'GBPUSD=X',
+            'GBPUSD=X': 'EURUSD=X'
+        };
+
+        const other = pairs[symbol];
+        if (!other) return null;
+
+        const stockA = this.stocks[symbol];
+        const stockB = this.stocks[other];
+        if (!stockA || !stockB || !stockA.candles[tf] || !stockB.candles[tf] || stockA.candles[tf].length < 10 || stockB.candles[tf].length < 10) return null;
+
+        const cA = stockA.candles[tf].slice(-10);
+        const cB = stockB.candles[tf].slice(-10);
+
+        const lowA = Math.min(...cA.map(c => c.low));
+        const lowB = Math.min(...cB.map(c => c.low));
+        const highA = Math.max(...cA.map(c => c.high));
+        const highB = Math.max(...cB.map(c => c.high));
+
+        const lastA = cA[cA.length - 1];
+        const lastB = cB[cB.length - 1];
+
+        // Bullish SMT: One makes lower low, other makes higher low
+        if (lastA.low <= lowA && lastB.low > lowB) return { type: 'BULLISH', symbol: other, message: `Bullish SMT Divergence (QQQ Strength)` };
+        if (lastB.low <= lowB && lastA.low > lowA) return { type: 'BULLISH', symbol: other, message: `Bullish SMT Divergence (SPY Strength)` };
+
+        // Bearish SMT: One makes higher high, other makes lower high
+        if (lastA.high >= highA && lastB.high < highB) return { type: 'BEARISH', symbol: other, message: `Bearish SMT Divergence (QQQ Weakness)` };
+        if (lastB.high >= highB && lastA.high < highA) return { type: 'BEARISH', symbol: other, message: `Bearish SMT Divergence (SPY Weakness)` };
+
+        return null;
+    }
 }

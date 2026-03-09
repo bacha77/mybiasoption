@@ -21,6 +21,15 @@ const lastAlerts = new Map();
 async function startServer() {
     console.log("Starting BIAS Strategy Server...");
     await simulator.initialize();
+    console.log(`[INIT] Watchlist loaded with ${simulator.watchlist.length} symbols.`);
+
+    // Whale Alert Integration
+    simulator.onBlockCallback = (block) => {
+        if (block.isElite) {
+            telegram.sendWhaleAlert(block.symbol, block.price, block.value, block.type).catch(() => { });
+            io.emit('whale_alert', block);
+        }
+    };
 
     // Serve static dashboard
     app.use(express.static(path.join(__dirname, '../public')));
@@ -31,7 +40,9 @@ async function startServer() {
         const { symbol } = req.body;
         if (symbol) {
             await simulator.addSymbol(symbol);
-            res.json({ success: true, watchlist: simulator.watchlist });
+            const wl = processWatchlist();
+            io.emit('watchlist_updated', { watchlist: wl });
+            res.json({ success: true, watchlist: wl });
         } else {
             res.status(400).json({ error: 'Symbol required' });
         }
@@ -47,25 +58,95 @@ async function startServer() {
         }
     });
 
+    app.get('/api/trades', (req, res) => {
+        res.json(simTrader.tradeHistory.slice(-10).reverse());
+    });
+
+    app.get('/debug-state', (req, res) => {
+        res.json({
+            internals: simulator.internals,
+            sectors: simulator.sectors.map(s => ({
+                symbol: s,
+                price: simulator.stocks[s]?.currentPrice,
+                prev: simulator.stocks[s]?.previousClose,
+                change: simulator.stocks[s]?.dailyChangePercent
+            })),
+            vix_stock: simulator.stocks['^VIX'],
+            dxy_stock: simulator.stocks['UUP']
+        });
+    });
+
     // SSE / WebSocket updates
     io.on('connection', (socket) => {
         console.log('Client connected to BIAS dashboard');
 
         const initialData = processData();
-        socket.emit('init', { ...initialData, watchlist: processWatchlist() });
+        socket.emit('init', {
+            ...initialData,
+            watchlist: processWatchlist(),
+            simBalance: simTrader.balance,
+            activeTrades: Array.from(simTrader.activePositions.values()),
+            blockTrades: simulator.blockTrades,
+            sectors: simulator.sectors.map(s => ({
+                symbol: s,
+                change: simulator.stocks[s]?.dailyChangePercent || 0
+            }))
+        });
 
         socket.on('switch_timeframe', (tf) => {
             if (simulator.timeframes.includes(tf)) {
                 simulator.currentTimeframe = tf;
-                socket.emit('tf_updated', { timeframe: tf, watchlist: processWatchlist() });
+                const update = processData();
+                const wl = processWatchlist();
+                socket.emit('tf_updated', {
+                    ...update,
+                    watchlist: wl,
+                    simBalance: simTrader.balance,
+                    activeTrades: Array.from(simTrader.activePositions.values()),
+                    blockTrades: simulator.blockTrades,
+                    sectors: simulator.sectors.map(s => ({
+                        symbol: s,
+                        change: simulator.stocks[s]?.dailyChangePercent || 0
+                    }))
+                });
+                console.log(`[SOCKET] Emitted tf_updated to client for timeframe ${tf}. Watchlist size: ${wl.length}`);
             }
         });
 
-        socket.on('switch_symbol', (symbol) => {
-            if (simulator.watchlist.includes(symbol)) {
+        socket.on('switch_symbol', async (symbol) => {
+            try {
+                symbol = symbol.toUpperCase().trim();
+                console.log(`[SOCKET] switch_symbol: ${symbol}`);
+
+                // If not in watchlist, add it first so we have data
+                if (!simulator.watchlist.includes(symbol)) {
+                    console.log(`[SEARCH] Symbol ${symbol} not in watchlist. Adding now...`);
+                    await simulator.addSymbol(symbol);
+                }
+
                 simulator.currentSymbol = symbol;
-                socket.emit('symbol_updated', { symbol, watchlist: processWatchlist() });
+                const update = processData();
+                const wl = processWatchlist();
+
+                socket.emit('symbol_updated', {
+                    ...update,
+                    watchlist: wl,
+                    simBalance: simTrader.balance,
+                    activeTrades: Array.from(simTrader.activePositions.values()),
+                    blockTrades: simulator.blockTrades,
+                    sectors: simulator.sectors.map(s => ({
+                        symbol: s,
+                        change: simulator.stocks[s]?.dailyChangePercent || 0
+                    }))
+                });
+                console.log(`[SOCKET] Sent symbol_updated for ${symbol}. Watchlist size: ${wl.length}`);
+            } catch (err) {
+                console.error(`[SEARCH ERROR] Failed to switch to ${symbol}:`, err.message);
             }
+        });
+
+        socket.on('ping_latency', (callback) => {
+            if (typeof callback === 'function') callback();
         });
     });
 
@@ -79,6 +160,36 @@ async function startServer() {
             // Heartbeat log
             console.log(`[${new Date().toLocaleTimeString()}] Pulse: Check ${simulator.watchlist.length} symbols. SPY Price: $${simulator.stocks['SPY']?.currentPrice || 'N/A'}`);
 
+            // --- INSTITUTIONAL HEALTH MATRIX ENGINE MONITORING ---
+            const engineDefs = {
+                'SPY_ENGINE': ['XLK', 'XLY', 'XLF'],
+                'QQQ_ENGINE': ['XLK', 'XLC', 'SMH', 'AMD'],
+                'IWM_ENGINE': ['KRE', 'XBI', 'IYT'],
+                'FX_ENGINE': ['UUP', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', '^TNX']
+            };
+
+            Object.entries(engineDefs).forEach(([engineName, symbols]) => {
+                const statuses = symbols.map(s => {
+                    const price = simulator.stocks[s]?.currentPrice || 0;
+                    const prev = simulator.stocks[s]?.previousClose || 0;
+                    const change = prev > 0 ? (price - prev) / prev * 100 : 0;
+                    // Strict threshold: 0.1% for matrix alignment
+                    return change > 0.1 ? 'BULLISH' : change < -0.1 ? 'BEARISH' : 'NEUTRAL';
+                });
+
+                const allBullish = statuses.every(s => s === 'BULLISH');
+                const allBearish = statuses.every(s => s === 'BEARISH');
+
+                if (allBullish || allBearish) {
+                    const direction = allBullish ? 'BULLISH' : 'BEARISH';
+                    const alertKey = `${engineName}_MATRIX_${direction}_${new Date().getHours()}`;
+                    if (!lastAlerts.has(alertKey)) {
+                        telegram.sendEngineConfluenceAlert(engineName, direction, symbols).catch(() => { });
+                        lastAlerts.set(alertKey, Date.now());
+                    }
+                }
+            });
+
             // Telegram Alert Logic - Check all symbols in watchlist
             simulator.watchlist.forEach(symbol => {
                 const stockData = processData(symbol);
@@ -89,10 +200,10 @@ async function startServer() {
                         console.log(`[${symbol}] ACTION: ${rec.action} | Stable: ${rec.isStable} | Bias: ${stockData.bias.score}`);
                     } else {
                         // Periodic debug for first few symbols to see why they WAIT
-                        if (symbol === 'SPY' || symbol === 'NVDA') {
-                            const m = stockData.markers;
-                            console.log(`[DEBUG ${symbol}] Price: ${stockData.currentPrice} | VWAP: ${m.vwap.toFixed(2)} | POC: ${m.poc.toFixed(2)} | Rationale: ${rec.rationale}`);
-                        }
+                        // if (symbol === 'SPY' || symbol === 'NVDA') {
+                        //     const m = stockData.markers;
+                        //     console.log(`[DEBUG ${symbol}] Price: ${stockData.currentPrice} | VWAP: ${m.vwap.toFixed(2)} | POC: ${m.poc.toFixed(2)} | Rationale: ${rec.rationale}`);
+                        // }
                     }
                 }
 
@@ -101,7 +212,48 @@ async function startServer() {
                 // 1. Stable Signal (40+ seconds of consistent confluence)
                 // 2. Trend Alignment (1m, 5m, 15m agreeing)
                 // 3. High Confidence Score (80+)
-                const isGoldStandard = rec && rec.isStable && stockData.checklist.trendAlign && (rec.confidence >= 80);
+                // 4. HOLY GRAIL: Macro Internals Aligned (DXY/VIX)
+
+                const internals = simulator.internals;
+                const dxyPrev = simulator.stocks['UUP']?.previousClose || 0;
+                const isCall = rec && rec.action.includes('CALL');
+                const isPut = rec && rec.action.includes('PUT');
+
+                // Macro Filter:
+                // Calls: VIX < 22 and DXY not soaring
+                // Puts: VIX > 15 and DXY not crashing
+                const macroAligned = isCall ? (internals.vix < 22 && internals.dxy <= dxyPrev * 1.002) :
+                    isPut ? (internals.vix > 15 && internals.dxy >= dxyPrev * 0.998) : false;
+
+                const sectors = simulator.sectors.map(s => ({
+                    symbol: s,
+                    change: simulator.stocks[s]?.dailyChangePercent || 0
+                }));
+                const techSector = sectors.find(s => s.symbol === 'XLK')?.change || 0;
+                const techHeavy = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'MSFT', 'AMD', 'SMH'];
+
+                // --- INSTITUTIONAL HEALTH MATRIX AGREEMENT ---
+                // We only signal if the specific sub-sectors for the ticker are aligned
+                const smhSector = sectors.find(s => s.symbol === 'SMH')?.change || 0;
+                const semiStock = ['NVDA', 'AMD', 'MU', 'TSM', 'ASML', 'AVGO'];
+
+                let matrixAgreement = true;
+                if (techHeavy.includes(symbol)) {
+                    // Tech/Semis: XLK must be in trend and SMH must be aligned if it's a chip stock
+                    const techAligned = isCall ? techSector > 0.1 : isPut ? techSector < -0.1 : true;
+                    const semiAligned = semiStock.includes(symbol) ? (isCall ? smhSector > 0.1 : isPut ? smhSector < -0.1 : true) : true;
+                    matrixAgreement = techAligned && semiAligned;
+                }
+
+                // The Golden Filter: 
+                // 1. All standard confluence (Stable + Trend)
+                // 2. High Confidence (80+)
+                // 3. MASTER HEALTH SCORE (The 85%+ threshold)
+                // 4. Macro & Matrix Agreement
+                const isGoldStandard = stockData && !stockData.loading && rec && rec.isStable &&
+                    stockData.checklist?.trendAlign && (rec.confidence >= 80) &&
+                    (stockData.confluenceScore >= 85) && // MUST have 85%+ Health Matrix alignment
+                    macroAligned && matrixAgreement;
 
                 if (isGoldStandard && rec.action !== 'WAIT') {
                     const symbolKey = `${symbol}_LAST_ACTION`;
@@ -152,7 +304,7 @@ async function startServer() {
                 } else if (rec && rec.action !== 'WAIT') {
                     // LOG why we didn't send
                     if (symbol === 'SPY' || symbol === 'NVDA') {
-                        console.log(`[DEBUG ${symbol}] Potential signal bypassed: Stable=${rec.isStable} | TrendAlign=${stockData.checklist.trendAlign} | Conf=${rec.confidence}`);
+                        console.log(`[DEBUG ${symbol}] Potential signal bypassed: Stable=${rec.isStable} | TrendAlign=${stockData.checklist?.trendAlign} | Conf=${rec.confidence}`);
                     }
                 }
 
@@ -169,6 +321,33 @@ async function startServer() {
                 // --- EXPERT UPGRADE: SIMULATED PAPER TRADING ---
                 if (rec && rec.action !== 'WAIT' && rec.isStable) {
                     simTrader.processSignal(symbol, rec, stockData.currentPrice).catch(() => { });
+                }
+
+                // --- NEW: HIGH CONFLUENCE ALERT (Whale Detector) ---
+                const check = stockData.checklist || {};
+                const activeCriteria = [];
+                if (check.trendAlign) activeCriteria.push("1m/5m/15m Trend Alignment");
+                if (check.sweepDetected) activeCriteria.push("Institutional Liquidity Sweep");
+                if (check.stableSignal) activeCriteria.push("Stable Signal (Time-Based)");
+                if (check.relativeStrength) activeCriteria.push("Relative Strength High");
+                if (check.gammaCheck) activeCriteria.push("Gamma Wall / Price Magnet Confluence");
+
+                if (activeCriteria.length >= 5) {
+                    const confluenceKey = `${symbol}_CONFLUENCE_ALERT`;
+                    const lastAlertTime = lastAlerts.get(confluenceKey) || 0;
+
+                    if (Date.now() - lastAlertTime > 7200000) { // 2 Hour cooldown per symbol
+                        console.log(`[${symbol}] >>> FIRING HIGH CONFLUENCE ALERT: ${activeCriteria.length}/5 Indicators <<<`);
+                        telegram.sendConfluenceAlert(
+                            symbol,
+                            stockData.currentPrice,
+                            stockData.bias.bias,
+                            activeCriteria.length,
+                            5,
+                            activeCriteria
+                        ).catch(() => { });
+                        lastAlerts.set(confluenceKey, Date.now());
+                    }
                 }
             });
 
@@ -215,10 +394,17 @@ async function startServer() {
                 }
             }
 
+            console.log(`[EMIT] Sending update. Watchlist symbols: ${watchlistUpdate.length}`);
             io.emit('update', {
                 ...currentUpdate,
                 watchlist: watchlistUpdate,
-                simBalance: simTrader.balance
+                simBalance: simTrader.balance,
+                activeTrades: Array.from(simTrader.activePositions.values()),
+                blockTrades: simulator.blockTrades,
+                sectors: simulator.sectors.map(s => ({
+                    symbol: s,
+                    change: simulator.stocks[s]?.dailyChangePercent || 0
+                }))
             });
         } catch (err) {
             console.error("Update Loop Error:", err.message);
@@ -245,24 +431,41 @@ async function startServer() {
 
 function processData(symbol = simulator.currentSymbol) {
     const stock = simulator.stocks[symbol];
-    if (!stock || !stock.candles[simulator.currentTimeframe] || stock.candles[simulator.currentTimeframe].length === 0) {
-        return { symbol, loading: true };
+    const tf = simulator.currentTimeframe;
+
+    // Safety check: ensure stock exists and has candles for current timeframe
+    // If 1m is empty (weekend/holiday), fall back to the next available timeframe
+    let activeTf = tf;
+    if (!stock || !stock.candles) {
+        return { symbol, loading: true, bias: { bias: 'LOADING' }, recommendation: { action: 'WAIT' }, markers: {} };
+    }
+    if (!stock.candles[tf] || stock.candles[tf].length === 0) {
+        const fallbackOrder = ['5m', '15m', '1h', '1d'];
+        for (const fallback of fallbackOrder) {
+            if (stock.candles[fallback] && stock.candles[fallback].length > 0) {
+                activeTf = fallback;
+                console.log(`[${symbol}] No ${tf} candles available. Falling back to ${fallback}.`);
+                break;
+            }
+        }
+        if (activeTf === tf) {
+            return { symbol, loading: true, bias: { bias: 'LOADING' }, recommendation: { action: 'WAIT' }, markers: {} };
+        }
     }
 
-    const tf = simulator.currentTimeframe;
-    const candles = stock.candles[tf];
+    const candles = stock.candles[activeTf];
     const fvgs = engine.findFVGs(candles);
     const draws = engine.findLiquidityDraws(candles);
     const bloomberg = stock.bloomberg;
-    const markers = simulator.getInstitutionalMarkers(symbol, tf);
+    const markers = simulator.getInstitutionalMarkers(symbol, activeTf);
 
     // Calculate Relative Strength vs SPY
     const spy = simulator.stocks['SPY'];
     const relativeStrength = (spy && symbol !== 'SPY') ?
-        engine.calculateRelativeStrength(candles, spy.candles[tf]) : 0;
+        engine.calculateRelativeStrength(candles, spy.candles[activeTf] || spy.candles['5m'] || []) : 0;
 
     const internals = simulator.internals;
-    const bias = engine.calculateBias(stock.currentPrice, fvgs, draws, bloomberg, markers, relativeStrength, internals);
+    const bias = engine.calculateBias(stock.currentPrice, fvgs, draws, bloomberg, markers, relativeStrength, internals, symbol, candles);
     const heatmap = simulator.generateHeatmapData(draws);
 
     const absorption = engine.detectAbsorption(candles);
@@ -276,24 +479,59 @@ function processData(symbol = simulator.currentSymbol) {
             const tfDraws = engine.findLiquidityDraws(tfCandles);
             const tfFvgs = engine.findFVGs(tfCandles);
             const tfMarkers = simulator.getInstitutionalMarkers(symbol, timeframe);
-            const tfBias = engine.calculateBias(stock.currentPrice, tfFvgs, tfDraws, bloomberg, tfMarkers, 0, internals);
+            const tfBias = engine.calculateBias(stock.currentPrice, tfFvgs, tfDraws, bloomberg, tfMarkers, 0, internals, symbol, tfCandles);
             multiTfBias[timeframe] = tfBias.bias;
         } else {
             multiTfBias[timeframe] = 'NEUTRAL';
         }
     });
 
-    // Checklist Highlights
-    const trendAlign = (multiTfBias['15m'] === multiTfBias['5m']) && (multiTfBias['5m'] === multiTfBias['1m']) && multiTfBias['1m'] !== 'NEUTRAL';
+    const gammaWalls = engine.getGammaWalls(stock.currentPrice, symbol);
+    const gammaCheck = gammaWalls.some(w => Math.abs(stock.currentPrice - w) / stock.currentPrice < 0.001);
     const sweepDetected = sweeps.length > 0;
     const stableSignal = recommendation.isStable;
-    const rsCheck = relativeStrength > 0.05; // 0.05% outperformance threshold
+    const rsCheck = relativeStrength > 0.05;
+
+    // --- Master Global Confluence Score Calculation ---
+    // Alignment Points:
+    // 1. Bias vs Multi-TF Bias (40 pts)
+    // 2. Midnight Open Confluence (20 pts)
+    // 3. CVD & Volume Confirmation (20 pts)
+    // 4. Relative Strength Alignment (20 pts)
+    let confScoreValue = 0;
+    if (bias.bias !== 'NEUTRAL') {
+        // TF Alignment check (Strong alignment if all TFs match)
+        const tfs = ['1m', '5m', '15m'];
+        const matchCount = tfs.filter(t => multiTfBias[t] === bias.bias).length;
+        confScoreValue += (matchCount / tfs.length) * 40;
+
+        // Midnight Open Alignment
+        if (markers.midnightOpen > 0) {
+            const isAbv = stock.currentPrice > markers.midnightOpen;
+            if ((bias.bias === 'BULLISH' && isAbv) || (bias.bias === 'BEARISH' && !isAbv)) {
+                confScoreValue += 20;
+            }
+        }
+
+        // CVD / Volume Confirmation
+        if (markers.cvd !== undefined) {
+            if ((bias.bias === 'BULLISH' && markers.cvd > 0) || (bias.bias === 'BEARISH' && markers.cvd < 0)) {
+                confScoreValue += 20;
+            }
+        }
+
+        // Relative Strength vs SPY (Market Leadership)
+        if ((bias.bias === 'BULLISH' && relativeStrength > 0) || (bias.bias === 'BEARISH' && relativeStrength < 0)) {
+            confScoreValue += 20;
+        }
+    }
+    const finalConfScore = Math.round(confScoreValue);
 
     return {
         symbol,
         currentPrice: stock.currentPrice,
         dailyChangePercent: stock.dailyChangePercent,
-        candles: candles.slice(-50),
+        candles: candles.slice(-200),
         fvgs,
         draws,
         bias,
@@ -303,39 +541,71 @@ function processData(symbol = simulator.currentSymbol) {
         absorption,
         sweeps,
         recommendation,
-        timeframe: tf,
+        confluenceScore: finalConfScore,
+        timeframe: activeTf,
         multiTfBias,
         news: simulator.getNews(),
-        session: engine.getSessionInfo(),
+        session: engine.getSessionInfo(symbol),
         checklist: {
-            trendAlign,
+            trendAlign: (multiTfBias['1h'] === multiTfBias['15m']) && (multiTfBias['15m'] === multiTfBias['5m']) && (multiTfBias['5m'] === multiTfBias['1m']) && multiTfBias['1m'] !== 'NEUTRAL',
             sweepDetected,
             stableSignal,
-            relativeStrength: rsCheck
+            relativeStrength: rsCheck,
+            gammaCheck,
+            confluenceScore: finalConfScore
         }
     };
 }
 
 function processWatchlist() {
-    return simulator.watchlist.map(symbol => {
-        const stock = simulator.stocks[symbol];
-        const tf = simulator.currentTimeframe;
-        const candles = stock.candles[tf];
-        const draws = (candles && candles.length > 0) ? engine.findLocalExtrema(candles.map(c => c.high), 'max').length : 0; // Simple check
-        const bloomberg = stock.bloomberg;
-        const markers = simulator.getInstitutionalMarkers(symbol, tf);
-        const internals = simulator.internals;
-        const bias = engine.calculateBias(stock.currentPrice, [], { highs: [], lows: [] }, bloomberg, markers, 0, internals);
-        const recommendation = engine.getOptionRecommendation(bias, markers, stock.currentPrice, tf, symbol, candles);
+    console.log(`[WATCHLIST] Processing ${simulator.watchlist.length} symbols...`);
+    const spy = simulator.stocks['SPY'];
+    const spyChange = spy ? spy.dailyChangePercent : 0;
 
-        return {
-            symbol,
-            price: stock.currentPrice,
-            dailyChangePercent: stock.dailyChangePercent,
-            bias: bias.bias,
-            omon: bloomberg.omon,
-            recommendation
-        };
+    return simulator.watchlist.map(symbol => {
+        try {
+            const stock = simulator.stocks[symbol];
+            if (!stock) {
+                return { symbol, price: 0, bias: 'OFFLINE', recommendation: { action: 'WAIT' } };
+            }
+
+            const tf = simulator.currentTimeframe;
+            const candles = stock.candles[tf] || [];
+            const markers = simulator.getInstitutionalMarkers(symbol, tf);
+            const internals = simulator.internals;
+            const bloomberg = stock.bloomberg || { omon: 'NEUTRAL' };
+            const bias = engine.calculateBias(stock.currentPrice || 0, [], { highs: [], lows: [] }, bloomberg, markers, 0, internals, symbol, candles);
+            const recommendation = engine.getOptionRecommendation(bias, markers, stock.currentPrice || 0, tf, symbol, candles);
+            const hasRS = (stock.dailyChangePercent || 0) > spyChange;
+
+            // Simple Score for Watchlist
+            let score = 0;
+            if (bias.bias !== 'NEUTRAL') {
+                if (markers.midnightOpen > 0) {
+                    const isAbv = stock.currentPrice > markers.midnightOpen;
+                    if ((bias.bias === 'BULLISH' && isAbv) || (bias.bias === 'BEARISH' && !isAbv)) score += 25;
+                }
+                if (markers.cvd !== undefined) {
+                    if ((bias.bias === 'BULLISH' && markers.cvd > 0) || (bias.bias === 'BEARISH' && markers.cvd < 0)) score += 25;
+                }
+                if (recommendation.isStable) score += 25;
+                if ((bias.bias === 'BULLISH' && hasRS) || (bias.bias === 'BEARISH' && !hasRS)) score += 25;
+            }
+
+            return {
+                symbol,
+                price: stock.currentPrice || 0,
+                dailyChangePercent: stock.dailyChangePercent || 0,
+                bias: bias ? bias.bias : 'NEUTRAL',
+                omon: bloomberg.omon || 'NEUTRAL',
+                recommendation: recommendation || { action: 'WAIT' },
+                hasRS: hasRS,
+                confluenceScore: score
+            };
+        } catch (err) {
+            console.error(`[WATCHLIST] Error processing ${symbol}:`, err.message);
+            return { symbol, price: 0, bias: 'ERROR' };
+        }
     });
 }
 

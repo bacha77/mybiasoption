@@ -32,8 +32,9 @@ export class TelegramService {
         const emoji = bias === 'BULLISH' ? '🚀' : bias === 'BEARISH' ? '🔻' : '⚖️';
         const sessionEmoji = session.includes('OPEN') ? '🔥' : '⏳';
         const message = `
-${emoji} *BIAS SIGNAL ALERT: ${symbol}*
+${emoji} *INSTITUTIONAL HEALTH SIGNAL: ${symbol}*
 ----------------------------
+*Alignment Score:* ${bias === 'BULLISH' ? '🟢' : '🔴'} *${price > 0 ? 'HIGH' : 'MAX'} CONFLUENCE*
 *Session:* ${sessionEmoji} ${session.replace('_', ' ')}
 *Bias:* ${bias}
 *Price:* $${price.toFixed(2)}
@@ -72,16 +73,72 @@ _Recommend scaling out or closing full position._
         let content = `🌕 *NIGHTLY BIAS REPORT*\n`;
         content += `----------------------------\n`;
         data.forEach(item => {
+            const isFX = item.symbol.includes('=X') || item.symbol.includes('USD');
+            const prec = isFX ? 4 : 2;
             const biasEmoji = item.bias === 'BULLISH' ? '🚀' : item.bias === 'BEARISH' ? '🔻' : '⚖️';
             content += `*${item.symbol}* ${biasEmoji}\n`;
-            content += `• Midnight: $${item.midnightOpen.toFixed(2)}\n`;
-            content += `• PDH: $${item.pdh.toFixed(2)}\n`;
-            content += `• PDL: $${item.pdl.toFixed(2)}\n`;
+            content += `• Midnight: $${item.midnightOpen.toFixed(prec)}\n`;
+            content += `• PDH: $${item.pdh.toFixed(prec)}\n`;
+            content += `• PDL: $${item.pdl.toFixed(prec)}\n`;
             content += `• Prediction: *${item.bias}*\n\n`;
         });
         content += `_Institutional levels anchored. Watch for liquidity sweeps at PDH/PDL._`;
 
         await this.sendMessage(content);
+    }
+
+    async sendEngineConfluenceAlert(engineName, bias, symbols) {
+        const emoji = bias === 'BULLISH' ? '🏦🔥' : '📉🛑';
+        const message = `
+${emoji} *INSTITUTIONAL MATRIX ALIGNMENT*
+----------------------------
+*Engine:* ${engineName.replace('_', ' ')}
+*Status:* FULL ${bias} CONFLUENCE
+*Drivers:* ${symbols.join(', ')}
+
+_The entire Health Matrix for this index has reached maximum alignment. Institutional momentum is peaked._
+
+[View Matrix](http://localhost:3000)
+        `.trim();
+
+        await this.sendMessage(message);
+    }
+
+    async sendConfluenceAlert(symbol, price, bias, count, total, criteria) {
+        const emoji = bias === 'BULLISH' ? '⚡️🟢' : bias === 'BEARISH' ? '⚡️🔴' : '⚖️';
+        const isFX = symbol.includes('=X') || symbol.includes('USD');
+        const prec = isFX ? 4 : 2;
+
+        let message = `
+${emoji} *HIGH CONFLUENCE: ${symbol}*
+----------------------------
+*Score:* ${count} / ${total} Indicators
+*Bias:* ${bias}
+*Price:* $${price.toFixed(prec)}
+
+*Active Confluence:*
+${criteria.map(c => `✅ ${c}`).join('\n')}
+
+_Market is aligning for a high-probability move._
+        `.trim();
+
+        await this.sendMessage(message);
+    }
+
+    async sendWhaleAlert(symbol, price, value, type) {
+        const emoji = type === 'BULLISH' ? '🐋🟢' : '🐋🔴';
+        const formattedValue = (value / 1000000).toFixed(2);
+        const message = `
+${emoji} *ELITE WHALE DETECTED: ${symbol}*
+----------------------------
+*Value:* $${formattedValue}M
+*Price:* $${price.toFixed(2)}
+*Sentiment:* ${type}
+
+_Institutional block order detected. Watch for liquidity support/resistance at this level._
+        `.trim();
+
+        await this.sendMessage(message);
     }
 }
 

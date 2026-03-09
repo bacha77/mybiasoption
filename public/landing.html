@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B.I.A.S Elite — Institutional Liquidation Engine</title>
+    <meta name="description" content="B.I.A.S Elite gives retail traders institutional-grade tools: real-time liquidity sweeps, darkpool order flow, SMT divergence, and precision options signals — all in one engine.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-deep:    #060b14;
+            --bg-card:    #0b1424;
+            --bg-glass:   rgba(11, 20, 36, 0.75);
+            --border:     rgba(56, 189, 248, 0.12);
+            --border-hot: rgba(56, 189, 248, 0.35);
+            --cyan:       #38bdf8;
+            --cyan-dim:   rgba(56, 189, 248, 0.15);
+            --gold:       #f59e0b;
+            --gold-dim:   rgba(245, 158, 11, 0.15);
+            --green:      #10b981;
+            --red:        #f43f5e;
+            --text:       #e2e8f0;
+            --text-dim:   #64748b;
+            --text-mid:   #94a3b8;
+            --grad-hero: linear-gradient(135deg, #060b14 0%, #0a1628 50%, #06101e 100%);
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-deep);
+            color: var(--text);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* ── NAVBAR ── */
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 1rem 4rem;
+            background: rgba(6, 11, 20, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+        .nav-logo {
+            font-size: 1.2rem; font-weight: 900; letter-spacing: 0.05em;
+            color: var(--cyan);
+        }
+        .nav-logo span { color: var(--text); }
+        .nav-links { display: flex; gap: 2.5rem; }
+        .nav-links a {
+            color: var(--text-mid); text-decoration: none; font-size: 0.875rem;
+            font-weight: 500; transition: color 0.2s;
+        }
+        .nav-links a:hover { color: var(--cyan); }
+        .btn-nav {
+            background: var(--cyan); color: #000; padding: 0.55rem 1.4rem;
+            border-radius: 6px; font-weight: 700; font-size: 0.85rem;
+            text-decoration: none; transition: all 0.2s; letter-spacing: 0.02em;
+        }
+        .btn-nav:hover { background: #fff; transform: translateY(-1px); box-shadow: 0 0 20px rgba(56,189,248,0.5); }
+
+        /* ── HERO ── */
+        .hero {
+            min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 8rem 2rem 4rem;
+            position: relative; overflow: hidden;
+            text-align: center;
+        }
+        .hero-bg {
+            position: absolute; inset: 0; z-index: 0;
+            background: var(--grad-hero);
+        }
+        .hero-grid {
+            position: absolute; inset: 0; z-index: 0;
+            background-image:
+                linear-gradient(rgba(56,189,248,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(56,189,248,0.04) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+        .hero-glow {
+            position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+            width: 900px; height: 500px;
+            background: radial-gradient(ellipse, rgba(56,189,248,0.08) 0%, transparent 70%);
+            z-index: 0;
+        }
+        .hero-content { position: relative; z-index: 2; max-width: 860px; }
+
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            background: var(--cyan-dim); border: 1px solid var(--border-hot);
+            color: var(--cyan); padding: 0.4rem 1.1rem; border-radius: 100px;
+            font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em;
+            margin-bottom: 2rem; text-transform: uppercase;
+        }
+        .hero-badge::before {
+            content: ''; width: 6px; height: 6px; border-radius: 50%;
+            background: var(--green); box-shadow: 0 0 8px var(--green);
+            animation: pulse-dot 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .hero h1 {
+            font-size: clamp(2.8rem, 6vw, 5.5rem);
+            font-weight: 900; line-height: 1.08; margin-bottom: 1.5rem;
+            letter-spacing: -0.02em;
+        }
+        .hero h1 .accent { color: var(--cyan); }
+        .hero h1 .gold { color: var(--gold); }
+
+        .hero-sub {
+            font-size: 1.15rem; color: var(--text-mid); max-width: 620px;
+            margin: 0 auto 2.5rem; font-weight: 400; line-height: 1.7;
+        }
+
+        .hero-cta { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 4rem; }
+        .btn-primary {
+            background: var(--cyan); color: #000; padding: 0.9rem 2.2rem;
+            border-radius: 8px; font-weight: 800; font-size: 1rem;
+            text-decoration: none; transition: all 0.25s; letter-spacing: 0.01em;
+        }
+        .btn-primary:hover { background: #fff; transform: translateY(-2px); box-shadow: 0 0 40px rgba(56,189,248,0.45); }
+        .btn-secondary {
+            background: transparent; color: var(--text); padding: 0.9rem 2.2rem;
+            border-radius: 8px; font-weight: 600; font-size: 1rem;
+            text-decoration: none; border: 1px solid var(--border-hot);
+            transition: all 0.25s;
+        }
+        .btn-secondary:hover { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-dim); }
+
+        /* Hero Chart Image */
+        .hero-chart {
+            position: relative; z-index: 2; max-width: 1000px; width: 100%;
+            margin: 0 auto;
+        }
+        .hero-chart img {
+            width: 100%; border-radius: 16px;
+            border: 1px solid var(--border-hot);
+            box-shadow: 0 0 80px rgba(56,189,248,0.15), 0 40px 80px rgba(0,0,0,0.5);
+        }
+        .hero-chart-overlay {
+            position: absolute; inset: 0; border-radius: 16px;
+            background: linear-gradient(to bottom, transparent 60%, var(--bg-deep));
+        }
+
+        /* Floating stat cards on hero */
+        .float-card {
+            position: absolute; background: var(--bg-glass);
+            backdrop-filter: blur(20px); border: 1px solid var(--border-hot);
+            border-radius: 10px; padding: 0.85rem 1.2rem; z-index: 5;
+            animation: float-card 4s ease-in-out infinite;
+        }
+        .float-card:nth-child(2) { animation-delay: 1s; }
+        .float-card:nth-child(3) { animation-delay: 2s; }
+        @keyframes float-card { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+        .float-card-label { font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+        .float-card-val { font-size: 1.1rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+        .fc-bull { color: var(--green); }
+        .fc-gold { color: var(--gold); }
+        .fc-cyan { color: var(--cyan); }
+        .fc-top-left  { top: 12%; left: -5%; }
+        .fc-top-right { top: 15%; right: -5%; }
+        .fc-bot-left  { bottom: 18%; left: -3%; }
+
+        /* ── TICKER TAPE ── */
+        .ticker-tape {
+            background: rgba(56,189,248,0.06);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            padding: 0.7rem 0; overflow: hidden; white-space: nowrap;
+        }
+        .ticker-inner {
+            display: inline-flex; gap: 3rem;
+            animation: ticker 25s linear infinite;
+        }
+        @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        .ticker-item { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
+        .t-sym { color: var(--text-mid); margin-right: 0.4rem; }
+        .t-up { color: var(--green); }
+        .t-dn { color: var(--red); }
+
+        /* ── SECTION BASE ── */
+        section { padding: 6rem 2rem; }
+        .section-inner { max-width: 1200px; margin: 0 auto; }
+        .section-tag {
+            display: inline-block; color: var(--cyan); font-size: 0.75rem;
+            text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+        .section-title {
+            font-size: clamp(1.8rem, 3.5vw, 2.8rem); font-weight: 800;
+            line-height: 1.15; margin-bottom: 1rem; letter-spacing: -0.01em;
+        }
+        .section-sub {
+            font-size: 1.05rem; color: var(--text-mid); max-width: 580px;
+            line-height: 1.7; margin-bottom: 3rem;
+        }
+
+        /* ── STATS ROW ── */
+        .stats-row {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem;
+            margin-bottom: 5rem;
+        }
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 2rem 1.75rem; text-align: center;
+            transition: all 0.3s; cursor: default;
+        }
+        .stat-card:hover {
+            border-color: var(--border-hot);
+            box-shadow: 0 0 30px rgba(56,189,248,0.08);
+            transform: translateY(-4px);
+        }
+        .stat-num {
+            font-size: 2.8rem; font-weight: 900; font-family: 'JetBrains Mono', monospace;
+            color: var(--cyan); line-height: 1;
+        }
+        .stat-label { font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem; font-weight: 500; }
+
+        /* ── FEATURES GRID ── */
+        .features-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;
+        }
+        .feature-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 14px; padding: 2rem;
+            transition: all 0.3s; position: relative; overflow: hidden;
+        }
+        .feature-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .feature-card:hover::before { opacity: 1; }
+        .feature-card:hover {
+            border-color: var(--border-hot); transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .feature-icon {
+            width: 48px; height: 48px; border-radius: 10px;
+            background: var(--cyan-dim); border: 1px solid var(--border-hot);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.4rem; margin-bottom: 1.25rem;
+        }
+        .feature-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.6rem; }
+        .feature-desc { font-size: 0.875rem; color: var(--text-mid); line-height: 1.65; }
+
+        /* ── HOW IT WORKS ── */
+        .how-section { background: rgba(56,189,248,0.02); }
+        .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+        .step {
+            text-align: center; padding: 2rem 1.5rem;
+        }
+        .step-num {
+            width: 56px; height: 56px; border-radius: 50%;
+            background: var(--cyan-dim); border: 2px solid var(--cyan);
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-family: 'JetBrains Mono', monospace; font-size: 1.25rem; font-weight: 700;
+            color: var(--cyan); position: relative;
+        }
+        .step-num::after {
+            content: ''; position: absolute; left: 100%; top: 50%;
+            width: 200%; height: 1px; background: linear-gradient(90deg, var(--border-hot), transparent);
+        }
+        .step:last-child .step-num::after { display: none; }
+        .step-title { font-size: 1rem; font-weight: 700; margin-bottom: 0.6rem; }
+        .step-desc { font-size: 0.875rem; color: var(--text-mid); line-height: 1.65; }
+
+        /* ── SIGNAL FEED (LIVE DEMO) ── */
+        .signal-feed { position: relative; }
+        .signal-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: center; }
+        .signal-text { }
+        .signal-terminal {
+            background: #050d1a; border: 1px solid var(--border-hot);
+            border-radius: 14px; overflow: hidden;
+            box-shadow: 0 0 60px rgba(56,189,248,0.1);
+        }
+        .terminal-header {
+            background: #0b1424; border-bottom: 1px solid var(--border);
+            padding: 0.8rem 1.2rem; display: flex; align-items: center; gap: 0.6rem;
+        }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .d-red { background: #f43f5e; }
+        .d-gold { background: var(--gold); }
+        .d-green { background: var(--green); }
+        .terminal-title { font-size: 0.75rem; color: var(--text-dim); margin-left: 0.5rem; font-family: 'JetBrains Mono', monospace; }
+        .terminal-body { padding: 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; line-height: 1.9; }
+        .t-line-gold { color: var(--gold); }
+        .t-line-green { color: var(--green); }
+        .t-line-cyan { color: var(--cyan); }
+        .t-line-red { color: var(--red); }
+        .t-line-dim { color: var(--text-dim); }
+        .t-line-white { color: #fff; }
+        .cursor { display: inline-block; width: 8px; height: 1em; background: var(--cyan); vertical-align: middle; animation: blink 1s step-end infinite; }
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+        /* ── POWER LIST ── */
+        .power-list { list-style: none; display: flex; flex-direction: column; gap: 1rem; margin-top: 2rem; }
+        .power-list li {
+            display: flex; align-items: flex-start; gap: 0.85rem;
+            font-size: 0.95rem; color: var(--text-mid);
+        }
+        .power-list li::before {
+            content: '✦'; color: var(--cyan); font-size: 0.7rem; margin-top: 0.35rem; flex-shrink: 0;
+        }
+        .power-list li strong { color: var(--text); }
+
+        /* ── PRICING ── */
+        .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+        .price-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 16px; padding: 2.5rem 2rem; position: relative;
+            transition: all 0.3s;
+        }
+        .price-card.featured {
+            border-color: var(--cyan); background: linear-gradient(180deg, rgba(56,189,248,0.06) 0%, var(--bg-card) 100%);
+            transform: scale(1.04);
+            box-shadow: 0 0 60px rgba(56,189,248,0.12);
+        }
+        .price-badge {
+            position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+            background: var(--cyan); color: #000; font-size: 0.7rem; font-weight: 800;
+            padding: 0.3rem 1rem; border-radius: 100px; text-transform: uppercase; letter-spacing: 0.08em;
+        }
+        .price-tier { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 1rem; }
+        .price-main { font-size: 3rem; font-weight: 900; font-family: 'JetBrains Mono', monospace; color: var(--text); line-height: 1; }
+        .price-main span { font-size: 1.2rem; color: var(--text-dim); }
+        .price-per { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 2rem; }
+        .price-features { list-style: none; display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 2rem; }
+        .price-features li { font-size: 0.875rem; color: var(--text-mid); display: flex; align-items: center; gap: 0.6rem; }
+        .price-features li::before { content: '✓'; color: var(--green); font-weight: 700; }
+        .price-features li.off { color: var(--text-dim); opacity: 0.5; }
+        .price-features li.off::before { content: '–'; color: var(--text-dim); }
+        .btn-price {
+            display: block; text-align: center; text-decoration: none;
+            padding: 0.85rem; border-radius: 8px; font-weight: 700; font-size: 0.9rem;
+            transition: all 0.2s; border: 1px solid var(--border-hot);
+            color: var(--text);
+        }
+        .btn-price:hover { background: var(--cyan-dim); border-color: var(--cyan); color: var(--cyan); }
+        .btn-price.featured { background: var(--cyan); color: #000; border-color: var(--cyan); }
+        .btn-price.featured:hover { background: #fff; box-shadow: 0 0 30px rgba(56,189,248,0.4); }
+
+        /* ── TESTIMONIALS ── */
+        .testimonials-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+        .testimonial-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 14px; padding: 2rem;
+            transition: all 0.3s;
+        }
+        .testimonial-card:hover { border-color: var(--border-hot); transform: translateY(-3px); }
+        .testimonial-stars { color: var(--gold); font-size: 0.85rem; margin-bottom: 1rem; }
+        .testimonial-text { font-size: 0.9rem; color: var(--text-mid); line-height: 1.7; margin-bottom: 1.5rem; font-style: italic; }
+        .testimonial-author { display: flex; align-items: center; gap: 0.75rem; }
+        .author-avatar {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: var(--cyan-dim); border: 1px solid var(--border-hot);
+            display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+        }
+        .author-name { font-weight: 700; font-size: 0.875rem; }
+        .author-handle { font-size: 0.75rem; color: var(--text-dim); }
+
+        /* ── CTA SECTION ── */
+        .cta-section {
+            text-align: center; padding: 8rem 2rem;
+            background: radial-gradient(ellipse at center, rgba(56,189,248,0.07) 0%, transparent 70%);
+            border-top: 1px solid var(--border);
+        }
+        .cta-title { font-size: clamp(2rem, 4vw, 3.5rem); font-weight: 900; margin-bottom: 1.25rem; }
+        .cta-sub { font-size: 1.05rem; color: var(--text-mid); max-width: 520px; margin: 0 auto 3rem; }
+        .cta-btns { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+        /* ── FOOTER ── */
+        footer {
+            border-top: 1px solid var(--border); padding: 3rem 4rem;
+            display: flex; align-items: center; justify-content: space-between;
+            background: #040810;
+        }
+        footer .footer-logo { font-size: 1rem; font-weight: 900; color: var(--cyan); }
+        footer .footer-logo span { color: var(--text-dim); }
+        footer .footer-copy { font-size: 0.8rem; color: var(--text-dim); }
+        footer .footer-links { display: flex; gap: 2rem; }
+        footer .footer-links a { font-size: 0.8rem; color: var(--text-dim); text-decoration: none; transition: color 0.2s; }
+        footer .footer-links a:hover { color: var(--cyan); }
+
+        /* ── DIVIDER ── */
+        .divider {
+            height: 1px; background: linear-gradient(90deg, transparent, var(--border-hot), transparent);
+            margin: 0 auto; max-width: 1200px;
+        }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 900px) {
+            nav { padding: 1rem 1.5rem; }
+            .nav-links { display: none; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .features-grid { grid-template-columns: 1fr; }
+            .steps { grid-template-columns: 1fr; }
+            .signal-layout { grid-template-columns: 1fr; }
+            .pricing-grid { grid-template-columns: 1fr; }
+            .price-card.featured { transform: scale(1); }
+            .testimonials-grid { grid-template-columns: 1fr; }
+            footer { flex-direction: column; gap: 1.5rem; text-align: center; }
+            .fc-top-left, .fc-top-right, .fc-bot-left { display: none; }
+        }
+
+        /* Scroll animations */
+        .reveal { opacity: 0; transform: translateY(30px); transition: all 0.7s ease; }
+        .reveal.visible { opacity: 1; transform: translateY(0); }
+    </style>
+</head>
+<body>
+
+<!-- ── NAVBAR ── -->
+<nav>
+    <div class="nav-logo">B.I.A.S<span> ELITE</span></div>
+    <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how">How It Works</a>
+        <a href="#signals">Signals</a>
+        <a href="#pricing">Pricing</a>
+    </div>
+    <a href="/index.html" class="btn-nav">Launch Dashboard →</a>
+</nav>
+
+<!-- ── HERO ── -->
+<section class="hero" id="home">
+    <div class="hero-bg"></div>
+    <div class="hero-grid"></div>
+    <div class="hero-glow"></div>
+
+    <div class="hero-content reveal">
+        <div class="hero-badge">⚡ Institutional Grade · Real-Time Engine</div>
+        <h1>
+            Trade Like<br>
+            <span class="accent">The Institutions</span><br>
+            Not Against Them
+        </h1>
+        <p class="hero-sub">
+            B.I.A.S Elite decodes institutional order flow, liquidity sweeps, and dark pool signals in real time — giving retail traders the same edge as Wall Street desks.
+        </p>
+        <div class="hero-cta">
+            <a href="/index.html" class="btn-primary">⚡ Open Dashboard</a>
+            <a href="#features" class="btn-secondary">Explore Features</a>
+        </div>
+    </div>
+
+    <div class="hero-chart reveal" style="transition-delay:0.3s">
+        <div class="float-card fc-top-left">
+            <div class="float-card-label">SPY Signal</div>
+            <div class="float-card-val fc-green">👑 BUY CALL</div>
+        </div>
+        <div class="float-card fc-top-right">
+            <div class="float-card-label">Confluence Score</div>
+            <div class="float-card-val fc-gold">94%</div>
+        </div>
+        <div class="float-card fc-bot-left">
+            <div class="float-card-label">Whale Block</div>
+            <div class="float-card-val fc-cyan">🐋 $4.2M</div>
+        </div>
+        <img src="hero-chart.png" alt="BIAS Elite Institutional Dashboard showing candle chart with VWAP, order blocks and liquidity levels">
+        <div class="hero-chart-overlay"></div>
+    </div>
+</section>
+
+<!-- ── TICKER TAPE ── -->
+<div class="ticker-tape">
+    <div class="ticker-inner">
+        <span class="ticker-item"><span class="t-sym">SPY</span><span class="t-up">$582.13 +0.84%</span></span>
+        <span class="ticker-item"><span class="t-sym">QQQ</span><span class="t-up">$495.60 +1.12%</span></span>
+        <span class="ticker-item"><span class="t-sym">NVDA</span><span class="t-up">$875.20 +2.31%</span></span>
+        <span class="ticker-item"><span class="t-sym">AAPL</span><span class="t-dn">$212.50 -0.44%</span></span>
+        <span class="ticker-item"><span class="t-sym">MSFT</span><span class="t-up">$415.80 +0.76%</span></span>
+        <span class="ticker-item"><span class="t-sym">TSLA</span><span class="t-dn">$248.90 -1.23%</span></span>
+        <span class="ticker-item"><span class="t-sym">AMD</span><span class="t-up">$168.45 +1.88%</span></span>
+        <span class="ticker-item"><span class="t-sym">META</span><span class="t-up">$511.22 +0.93%</span></span>
+        <span class="ticker-item"><span class="t-sym">VIX</span><span class="t-dn">18.32 -3.2%</span></span>
+        <span class="ticker-item"><span class="t-sym">DXY</span><span class="t-dn">104.20 -0.15%</span></span>
+        <!-- Duplicate for seamless loop -->
+        <span class="ticker-item"><span class="t-sym">SPY</span><span class="t-up">$582.13 +0.84%</span></span>
+        <span class="ticker-item"><span class="t-sym">QQQ</span><span class="t-up">$495.60 +1.12%</span></span>
+        <span class="ticker-item"><span class="t-sym">NVDA</span><span class="t-up">$875.20 +2.31%</span></span>
+        <span class="ticker-item"><span class="t-sym">AAPL</span><span class="t-dn">$212.50 -0.44%</span></span>
+        <span class="ticker-item"><span class="t-sym">MSFT</span><span class="t-up">$415.80 +0.76%</span></span>
+        <span class="ticker-item"><span class="t-sym">TSLA</span><span class="t-dn">$248.90 -1.23%</span></span>
+        <span class="ticker-item"><span class="t-sym">AMD</span><span class="t-up">$168.45 +1.88%</span></span>
+        <span class="ticker-item"><span class="t-sym">META</span><span class="t-up">$511.22 +0.93%</span></span>
+        <span class="ticker-item"><span class="t-sym">VIX</span><span class="t-dn">18.32 -3.2%</span></span>
+        <span class="ticker-item"><span class="t-sym">DXY</span><span class="t-dn">104.20 -0.15%</span></span>
+    </div>
+</div>
+
+<!-- ── STATS ── -->
+<section style="padding: 5rem 2rem;">
+    <div class="section-inner">
+        <div class="stats-row reveal">
+            <div class="stat-card">
+                <div class="stat-num">19+</div>
+                <div class="stat-label">Live Symbols Tracked</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num">5</div>
+                <div class="stat-label">Timeframes · 1m to 1D</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num">94%</div>
+                <div class="stat-label">Peak Confluence Score</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num">24/5</div>
+                <div class="stat-label">Institutional Monitoring</div>
+            </div>
+        </div>
+    </div>
+</section>
+<div class="divider"></div>
+
+<!-- ── FEATURES ── -->
+<section id="features" style="padding: 6rem 2rem;">
+    <div class="section-inner">
+        <div class="reveal">
+            <div class="section-tag">Core Features</div>
+            <h2 class="section-title">The Institutional<br>Advantage Stack</h2>
+            <p class="section-sub">Every tool institutional desks rely on — engineered into a single real-time engine for retail traders.</p>
+        </div>
+        <div class="features-grid reveal">
+            <div class="feature-card">
+                <div class="feature-icon">🔵</div>
+                <div class="feature-title">Liquidity Sweep Detection</div>
+                <div class="feature-desc">Automatically identifies when institutional players sweep Buy-Side or Sell-Side Liquidity levels — the most powerful reversal setup in existence.</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <div class="feature-title">Real-Time Order Flow</div>
+                <div class="feature-desc">Live CVD (Cumulative Volume Delta), dark pool block trades, and institutional absorption detection synchronized with Finnhub WebSocket data.</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🐋</div>
+                <div class="feature-title">Whale Block Tape</div>
+                <div class="feature-desc">Live feed of institutional block trades sized $100K+ with directional bias scoring. Elite blocks over $1M trigger immediate alerts.</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <div class="feature-title">SMT Divergence (ICT)</div>
+                <div class="feature-desc">Smart Money Technique divergence between correlated pairs (SPY/QQQ, EUR/GBP) — detects when institutions are loading positions against retail.</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <div class="feature-title">Gold Standard Signals</div>
+                <div class="feature-desc">Triple-filtered signals: Stable 40s+ convergence + 80%+ confidence + Macro alignment. Only the highest-probability setups reach your Telegram.</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🌐</div>
+                <div class="feature-title">Health Matrix Engine</div>
+                <div class="feature-desc">19-symbol Institutional Health Matrix tracks sector ETFs (XLK, XLF, SMH) and macro drivers (VIX, DXY, TNX) for full-market confluence.</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🕛</div>
+                <div class="feature-title">Midnight Open Strategy</div>
+                <div class="feature-desc">Anchors every session to the 00:00 EST candle — the true algorithmic open used by HFT firms. Judas Swings and AMD phase detection built-in.</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📡</div>
+                <div class="feature-title">Telegram Signal Alerts</div>
+                <div class="feature-desc">Automated alerts with exact strike, target, stop-loss, R:R ratio, and session context delivered to your channel the moment a Gold Standard setup fires.</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">💹</div>
+                <div class="feature-title">FVG & Order Block Mapping</div>
+                <div class="feature-desc">Fair Value Gaps, Order Blocks, Market Structure Shifts (MSS), and Funding Candles plotted directly on the institutional chart in real time.</div>
+            </div>
+        </div>
+    </div>
+</section>
+<div class="divider"></div>
+
+<!-- ── HOW IT WORKS ── -->
+<section class="how-section" id="how" style="padding: 6rem 2rem;">
+    <div class="section-inner">
+        <div class="reveal" style="text-align:center; margin-bottom: 4rem;">
+            <div class="section-tag">How It Works</div>
+            <h2 class="section-title">From Market Open to Trade Alert<br>in Seconds</h2>
+        </div>
+        <div class="steps reveal">
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-title">Market Data Ingestion</div>
+                <div class="step-desc">Finnhub WebSocket streams live tick data for 19+ symbols. Yahoo Finance supplies historical candles for all 5 timeframes (1m → 1D).</div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-title">Institutional Analysis</div>
+                <div class="step-desc">The Liquidity Engine calculates bias score, confluence matrix, FVG/OB zones, sweep detection, and macro alignment — every 5 seconds.</div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-title">Gold Signal & Alert</div>
+                <div class="step-desc">When all 6 filters align (stable + trend + confidence + macro + matrix + R:R ≥ 1.5:1), the signal fires to Telegram and lights up the dashboard.</div>
+            </div>
+        </div>
+    </div>
+</section>
+<div class="divider"></div>
+
+<!-- ── LIVE SIGNAL TERMINAL ── -->
+<section id="signals" style="padding: 6rem 2rem;">
+    <div class="section-inner">
+        <div class="signal-layout">
+            <div class="signal-text reveal">
+                <div class="section-tag">Live Signal Engine</div>
+                <h2 class="section-title">Signals That Only<br>Fire When It Counts</h2>
+                <p class="section-sub">The Gold Standard Filter requires simultaneous agreement from 6 independent systems. Most sessions produce 0–2 alerts — by design.</p>
+                <ul class="power-list">
+                    <li><strong>Stable Signal</strong> — 40+ seconds of consistent confluence before triggering</li>
+                    <li><strong>Trend Alignment</strong> — 1m, 5m, 15m and 1H must agree on direction</li>
+                    <li><strong>Confidence ≥ 80%</strong> — Proprietary scoring across 12 inputs</li>
+                    <li><strong>Macro Filter</strong> — VIX and DXY conditions must align with the trade</li>
+                    <li><strong>Matrix Agreement</strong> — Underlying sector ETFs must confirm direction</li>
+                    <li><strong>R:R ≥ 1.5:1</strong> — Reward must justify the risk. No exceptions.</li>
+                </ul>
+            </div>
+            <div class="reveal" style="transition-delay:0.2s">
+                <div class="signal-terminal">
+                    <div class="terminal-header">
+                        <div class="dot d-red"></div>
+                        <div class="dot d-gold"></div>
+                        <div class="dot d-green"></div>
+                        <span class="terminal-title">BIAS_SIGNAL_ENGINE v2.4 — LIVE</span>
+                    </div>
+                    <div class="terminal-body" id="terminal-body">
+                        <div class="t-line-dim">[08:31:02] System initialized. Monitoring 19 symbols...</div>
+                        <div class="t-line-dim">[09:30:00] NY OPEN. Kill Zone active.</div>
+                        <div class="t-line-cyan">[09:31:15] SPY — Liquidity sweep SSL detected @ 579.80</div>
+                        <div class="t-line-dim">[09:31:55] SPY — Stable count: 2/10...</div>
+                        <div class="t-line-gold">[09:33:00] 🐋 BLOCK TRADE: SPY $1.4M @ 580.30 — BULLISH</div>
+                        <div class="t-line-dim">[09:33:44] SPY — CVD surging: +1842 | VWAP reclaim confirmed</div>
+                        <div class="t-line-green">[09:34:10] ✅ GOLD STANDARD FILTER: ALL 6 CRITERIA MET</div>
+                        <div class="t-line-white">[09:34:10] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+                        <div class="t-line-green">[09:34:10] 👑 SIGNAL: SPY — BUY CALL</div>
+                        <div class="t-line-green">[09:34:10]    Strike: $580.50 | Target: $584.20</div>
+                        <div class="t-line-green">[09:34:10]    Stop: $578.60 | R:R: 2.1:1</div>
+                        <div class="t-line-gold">[09:34:10]    Confidence: 88% | Session: NY_OPEN</div>
+                        <div class="t-line-white">[09:34:10] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+                        <div class="t-line-cyan">[09:34:11] 📡 Telegram alert dispatched.</div>
+                        <span class="cursor"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+<div class="divider"></div>
+
+<!-- ── PRICING ── -->
+<section id="pricing" style="padding: 6rem 2rem; background: rgba(56,189,248,0.015);">
+    <div class="section-inner">
+        <div class="reveal" style="text-align:center; margin-bottom: 4rem;">
+            <div class="section-tag">Pricing</div>
+            <h2 class="section-title">Choose Your Edge</h2>
+            <p class="section-sub" style="margin: 0 auto;">Full access to the B.I.A.S engine at every level. Upgrade anytime.</p>
+        </div>
+        <div class="pricing-grid reveal">
+            <div class="price-card">
+                <div class="price-tier">Starter</div>
+                <div class="price-main"><span>$</span>0</div>
+                <div class="price-per">Free · Self-hosted</div>
+                <ul class="price-features">
+                    <li>Live Dashboard (SPY only)</li>
+                    <li>5 Timeframes</li>
+                    <li>Order Flow Basics</li>
+                    <li>Institutional Levels</li>
+                    <li class="off">Telegram Alerts</li>
+                    <li class="off">Full Watchlist (19 symbols)</li>
+                    <li class="off">Priority Signal Filter</li>
+                </ul>
+                <a href="/index.html" class="btn-price">Get Started</a>
+            </div>
+            <div class="price-card featured">
+                <div class="price-badge">MOST POPULAR</div>
+                <div class="price-tier">Elite</div>
+                <div class="price-main"><span>$</span>97</div>
+                <div class="price-per">per month</div>
+                <ul class="price-features">
+                    <li>Full Dashboard (19 symbols)</li>
+                    <li>5 Timeframes + 1D</li>
+                    <li>Full Order Flow Suite</li>
+                    <li>All Institutional Levels</li>
+                    <li>Telegram Signal Alerts</li>
+                    <li>Gold Standard Filter</li>
+                    <li>Health Matrix Engine</li>
+                </ul>
+                <a href="/index.html" class="btn-price featured">Start Elite Access</a>
+            </div>
+            <div class="price-card">
+                <div class="price-tier">Institutional</div>
+                <div class="price-main"><span>$</span>247</div>
+                <div class="price-per">per month</div>
+                <ul class="price-features">
+                    <li>Everything in Elite</li>
+                    <li>Unlimited Symbols</li>
+                    <li>Multi-Chart Layouts</li>
+                    <li>Custom Signal Parameters</li>
+                    <li>Priority Support</li>
+                    <li>Exclusive Strategy Calls</li>
+                    <li>Early Feature Access</li>
+                </ul>
+                <a href="/index.html" class="btn-price">Go Institutional</a>
+            </div>
+        </div>
+    </div>
+</section>
+<div class="divider"></div>
+
+<!-- ── TESTIMONIALS ── -->
+<section style="padding: 6rem 2rem;">
+    <div class="section-inner">
+        <div class="reveal" style="text-align:center; margin-bottom: 3rem;">
+            <div class="section-tag">Trader Reviews</div>
+            <h2 class="section-title">What Members Are Saying</h2>
+        </div>
+        <div class="testimonials-grid reveal">
+            <div class="testimonial-card">
+                <div class="testimonial-stars">★★★★★</div>
+                <div class="testimonial-text">"The Midnight Open strategy and whale tape changed the way I trade. I used to chase price — now I wait for the sweep and let the institution show me the hand."</div>
+                <div class="testimonial-author">
+                    <div class="author-avatar">🦁</div>
+                    <div>
+                        <div class="author-name">Marcus T.</div>
+                        <div class="author-handle">Options Trader · Chicago</div>
+                    </div>
+                </div>
+            </div>
+            <div class="testimonial-card">
+                <div class="testimonial-stars">★★★★★</div>
+                <div class="testimonial-text">"The Gold Standard Filter is the real deal. Two signals a week, both winners, clean R:R. I've ditched every other scanner I had. BIAS is the only tool that matters now."</div>
+                <div class="testimonial-author">
+                    <div class="author-avatar">🔱</div>
+                    <div>
+                        <div class="author-name">Diana R.</div>
+                        <div class="author-handle">Swing Trader · Miami</div>
+                    </div>
+                </div>
+            </div>
+            <div class="testimonial-card">
+                <div class="testimonial-stars">★★★★★</div>
+                <div class="testimonial-text">"As someone who came from the institutional side, BIAS Elite genuinely replicates the internal analysis we ran on the desk. The SMT divergence alone is worth 10x the price."</div>
+                <div class="testimonial-author">
+                    <div class="author-avatar">🏛️</div>
+                    <div>
+                        <div class="author-name">Alex M.</div>
+                        <div class="author-handle">Ex-HFT Analyst · New York</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── FINAL CTA ── -->
+<section class="cta-section">
+    <div class="section-tag">Ready to Trade Institutional?</div>
+    <h2 class="cta-title">Stop Fighting the <span style="color:var(--cyan)">Smart Money.</span><br>Start Following It.</h2>
+    <p class="cta-sub">Launch the B.I.A.S Elite dashboard and let the Institutional Liquidation Engine do the heavy lifting.</p>
+    <div class="cta-btns">
+        <a href="/index.html" class="btn-primary">⚡ Open Dashboard Now</a>
+        <a href="#features" class="btn-secondary">View All Features</a>
+    </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+    <div class="footer-logo">B.I.A.S<span> ELITE © 2026</span></div>
+    <div class="footer-copy">Not financial advice. For educational purposes only.</div>
+    <div class="footer-links">
+        <a href="/index.html">Dashboard</a>
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+    </div>
+</footer>
+
+<script>
+    // ── SCROLL REVEAL ──
+    const reveals = document.querySelectorAll('.reveal');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+            }
+        });
+    }, { threshold: 0.12 });
+    reveals.forEach(el => observer.observe(el));
+
+    // ── TERMINAL TYPING ANIMATION ──
+    const terminalLines = [
+        { cls: 'dim',   text: '[10:15:30] Monitoring SPY — scanning for confluence...' },
+        { cls: 'cyan',  text: '[10:17:02] NVDA — FVG detected. Price entering bullish zone.' },
+        { cls: 'dim',   text: '[10:17:45] NVDA — TrendAlign: ✓ Macro: ✓ Confidence: 77%...' },
+        { cls: 'gold',  text: '[10:18:12] 🐋 BLOCK: NVDA $2.1M @ 874.50 — BULLISH ELITE' },
+        { cls: 'green', text: '[10:18:50] ✅ GOLD STANDARD: NVDA — ALL CRITERIA MET (88%)' },
+        { cls: 'white', text: '[10:18:50] 👑 SIGNAL: NVDA BUY CALL' },
+        { cls: 'green', text: '[10:18:50]    Strike: $875 | Target: $895 | SL: $865' },
+        { cls: 'cyan',  text: '[10:18:51] 📡 Telegram dispatched to 1,247 members.' },
+    ];
+
+    let lineIndex = 0;
+    const body = document.getElementById('terminal-body');
+
+    function addLine() {
+        if (lineIndex >= terminalLines.length) {
+            lineIndex = 0;
+            setTimeout(() => {
+                // Clear and restart
+                const cursor = body.querySelector('.cursor');
+                const staticLines = body.children.length - 1 - terminalLines.length;
+                while (body.children.length > staticLines + 1) {
+                    body.removeChild(body.children[staticLines]);
+                }
+                setTimeout(addLine, 1500);
+            }, 5000);
+            return;
+        }
+        const line = terminalLines[lineIndex];
+        const div = document.createElement('div');
+        div.className = `t-line-${line.cls === 'dim' ? 'dim' : line.cls === 'gold' ? 'gold' : line.cls === 'green' ? 'green' : line.cls === 'cyan' ? 'cyan' : 'white'}`;
+        div.textContent = line.text;
+        const cursor = body.querySelector('.cursor');
+        body.insertBefore(div, cursor);
+        body.scrollTop = body.scrollHeight;
+        lineIndex++;
+        setTimeout(addLine, 1800 + Math.random() * 600);
+    }
+    setTimeout(addLine, 3000);
+
+    // ── SMOOTH NAV SCROLL ──
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+        a.addEventListener('click', e => {
+            const target = document.querySelector(a.getAttribute('href'));
+            if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
+        });
+    });
+</script>
+</body>
+</html>

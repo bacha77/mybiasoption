@@ -4,23 +4,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BIAS | Elite Liquidation Dashboard</title>
+    <meta name="description"
+        content="BIAS Elite | Advanced Institutional Liquidation & Algorithmic Trading Dashboard. Track Power-of-3, MSS, and Macro Narratives in real-time.">
+    <meta name="keywords"
+        content="trading, institutional, liquidation, algorithmic, forex, stocks, crypto, bias, elite">
+    <title>BIAS | Elite Institutional Liquidation Engine</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
         rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 </head>
 
 <body>
     <div class="app-container">
+        <!-- System Status Ribbon -->
+        <div class="status-ribbon">
+            <div class="status-item">
+                <span class="status-dot green"></span>
+                <span>SYSTEM: LIVE</span>
+            </div>
+            <div class="status-item" data-tooltip="Dollar Strength. Falling Dollar = Tailwind for Stocks.">
+                <span class="m-label">DXY:</span>
+                <span id="dxy-val-hud" class="gold-text">104.20</span>
+            </div>
+            <div class="status-item" data-tooltip="10Y Treasury Yield. Rising yields pressure technology stocks.">
+                <span class="m-label">10Y:</span>
+                <span id="tnx-val-hud" class="gold-text">4.25%</span>
+            </div>
+            <div class="status-item">
+                <span id="next-event-tag" class="badge gold-text" style="border-color: var(--gold);">NEXT NEWS: <span
+                        id="event-timer">--:--</span></span>
+            </div>
+            <div class="status-spacer"></div>
+            <div class="status-item clock" id="ny-clock">00:00:00 EST</div>
+        </div>
+
         <!-- Dashboard Header -->
         <header>
             <div class="logo-section">
-                <span class="logo-main">B.I.A.S</span>
+                <span class="logo-main shimmer">B.I.A.S</span>
                 <span class="logo-sub">INSTITUTIONAL LIQUIDATION ENGINE</span>
+            </div>
+
+            <div class="header-center">
+                <div class="search-container">
+                    <input type="text" id="global-search" placeholder="Search Symbol (e.g. SPY, BTCUSD)..."
+                        autocomplete="off">
+                    <span class="search-icon">🔍</span>
+                </div>
             </div>
 
             <div class="header-stats">
@@ -34,10 +69,14 @@
             </div>
         </header>
 
-        <!-- News Ticker -->
+        <!-- Macro Pulse Ticker (Replaced the static wait message) -->
         <div class="ticker-wrap">
             <div id="ticker-content" class="ticker-content">
-                Waiting for Bloomberg Data... • Detecting Institutional Blocks... • Monitoring Liquidity Sweeps...
+                <span class="RS-label">MARKET BREADTH:</span> <span id="breadth-val-ticker"
+                    class="bullish-text">72%</span> •
+                <span class="RS-label">VIX PULSE:</span> <span id="vix-val-ticker" class="bullish-text">14.20</span> •
+                <span class="RS-label">CONFLUENCE:</span> <span id="confluence-val-ticker"
+                    class="bullish-text">90%</span>
             </div>
         </div>
 
@@ -45,67 +84,196 @@
             <!-- Left Column -->
             <div class="main-content">
                 <!-- Primary Chart Card -->
-                <section class="card">
+                <section class="card reveal-1">
                     <div class="chart-header">
                         <div>
                             <span id="symbol-display" class="chart-symbol">SPY</span>
-                            <div class="tf-selector" style="display:inline-flex; margin-left:15px;">
+                            <div class="tf-selector">
                                 <button class="tf-btn active" data-tf="1m">1m</button>
                                 <button class="tf-btn" data-tf="5m">5m</button>
                                 <button class="tf-btn" data-tf="15m">15m</button>
+                                <button class="tf-btn" data-tf="1h">1h</button>
+                                <button class="tf-btn" data-tf="1d">1d</button>
                             </div>
                         </div>
                         <div class="chart-price-info">
+                            <div id="amd-hud" class="amd-hud" title="Power of 3 Phase">ACCUMULATION</div>
+                            <div class="confluence-score-container" title="Global Market Alignment Score">
+                                <span class="score-label">ALIGNMENT</span>
+                                <span id="master-confluence-score" class="score-val">0%</span>
+                            </div>
                             <div id="current-price" class="main-price">000.00</div>
                             <div id="price-change" class="main-change">+0.00%</div>
+                            <div id="mss-badge" class="mss-badge" style="display:none;">MSS SHIFT</div>
+                            <div id="trap-badge" class="trap-badge" style="display:none;">⚠️ TRAP DETECTED</div>
+                            <div id="smt-badge" class="smt-badge" style="display:none;">SMT DIVERGENCE</div>
+                            <div id="absorption-badge" class="absorption-badge" style="display:none;">ABSORPTION
+                                DETECTED</div>
+                            <div id="fvg-badge" class="fvg-badge" style="display:none;">FVG DISPLACEMENT</div>
+                            <div id="bloomberg-sentiment-badge" class="bloomberg-badge" style="display:none;">BLOOMBERG
+                                SENTIMENT</div>
+                            <div id="intermarket-badge" class="intermarket-badge" style="display:none;">CORR: 0%</div>
                         </div>
                     </div>
                     <div class="chart-canvas-container">
-                        <canvas id="priceChart"></canvas>
+                        <div id="priceChart"></div>
                     </div>
                 </section>
 
                 <!-- Institutional Metrics Grid -->
-                <section class="card accent-border">
+                <section class="card accent-border reveal-2">
                     <div class="card-title">Institutional Markers & Data Points</div>
                     <div class="metrics-grid">
-                        <div class="metric-item">
+                        <div class="metric-item"
+                            data-tooltip="Institutional 'True North'. Price above Midnight Open = Daily Bullish Bias.">
                             <span class="m-label">Midnight Open</span>
                             <span id="midnight-open-val" class="m-value accent-text">0.00</span>
                         </div>
-                        <div class="metric-item">
+                        <div class="metric-item"
+                            data-tooltip="Previous Day High. Key liquidity level where institutions look to sweep 'trapped' buyers.">
                             <span class="m-label">Prev Day High</span>
                             <span id="pdh-val" class="m-value">0.00</span>
                         </div>
-                        <div class="metric-item">
+                        <div class="metric-item"
+                            data-tooltip="Previous Day Low. Key liquidity level where institutions look to sweep 'trapped' sellers.">
                             <span class="m-label">Prev Day Low</span>
                             <span id="pdl-val" class="m-value">0.00</span>
                         </div>
-                        <div class="metric-item">
+                        <div class="metric-item"
+                            data-tooltip="The 'Institutional Average' price for the day. Price above VWAP = Bullish momentum.">
                             <span class="m-label">VWAP</span>
                             <span id="vwap-val" class="m-value">0.00</span>
                         </div>
-                        <div class="metric-item">
+                        <div class="metric-item"
+                            data-tooltip="Average Daily Range. Used to identify when a market is 'extended' and due for a reversal.">
                             <span class="m-label">ADR (5-Day)</span>
                             <span id="adr-val" class="m-value gold-text">0.00</span>
                         </div>
-                        <div class="metric-item">
+                        <div class="metric-item"
+                            data-tooltip="Point of Control. The price level with the most institutional volume today. Acts as a magnet.">
                             <span class="m-label">POC</span>
                             <span id="poc-val" class="m-value">0.00</span>
                         </div>
-                        <div class="metric-item">
+                        <div class="metric-item"
+                            data-tooltip="Cumulative Volume Delta. Measures aggressive buying vs selling. Green CVD = Institutions are buying at the market.">
                             <span class="m-label">CVD</span>
                             <span id="cvd-val" class="m-value">0</span>
                         </div>
-                        <div class="metric-item">
-                            <span class="m-label">VIX</span>
-                            <span id="vix-status" class="m-value">0.00</span>
+                        <div class="metric-item"
+                            data-tooltip="Market Breadth. Percentage of watchlist tickers trending up. High breadth confirms a healthy trend.">
+                            <span class="m-label">MARKET BREADTH</span>
+                            <span id="breadth-val" class="m-value gold-text">50%</span>
+                        </div>
+                        <div class="metric-item"
+                            data-tooltip="Net Institutional Value. Difference between total Bullish and Bearish $1M+ whale blocks today.">
+                            <span class="m-label">NET WHALE FLOW</span>
+                            <span id="net-whale-val" class="m-value gold-text">$0.00M</span>
+                        </div>
+                        <div class="metric-item full-width"
+                            data-tooltip="Institutional Order-Flow Imbalance. Shows the percentage of aggressive buying vs selling from large blocks.">
+                            <span class="m-label">Whale Order-Flow Imbalance</span>
+                            <div class="imbalance-container">
+                                <div id="imbalance-bar" class="imbalance-bar"></div>
+                                <div id="imbalance-text" class="imbalance-text">50% BULL / 50% BEAR</div>
+                            </div>
+                        </div>
+                        <div class="metric-item full-width"
+                            data-tooltip="Volatility Regime. Stable = Safe for trends. Crisis = Expect binary moves and liquidation sweeps.">
+                            <span class="m-label">VIX REGIME</span>
+                            <div class="vix-container">
+                                <div id="vix-regime-badge" class="regime-badge">STABLE</div>
+                                <div class="vix-gauge-wrapper">
+                                    <div class="vix-gauge"></div>
+                                    <div id="vix-needle" class="vix-needle"></div>
+                                </div>
+                                <span id="vix-val-regime" class="m-value gold-text">0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Macro Correlation Pulse -->
+                <section class="card reveal-3">
+                    <div class="card-title">Macro Correlation Pulse (Risk-On/Off)</div>
+                    <div class="macro-grid">
+                        <div class="macro-item"
+                            data-tooltip="U.S. Dollar Strength. Inversely correlated to stocks. If DXY drops, SPY usually rallies.">
+                            <div class="macro-label">DXY (Dollar Index)</div>
+                            <div class="macro-bar-wrap">
+                                <div id="dxy-bar" class="macro-bar"></div>
+                            </div>
+                            <div class="macro-footer">
+                                <span id="dxy-val" class="m-value">0.00</span>
+                                <span id="dxy-corr" class="corr-tag">INVERSE</span>
+                            </div>
+                        </div>
+                        <div class="macro-item"
+                            data-tooltip="Fear Gauge. Measures option flow. Low VIX = Bullish trend. Spiking VIX = Market crash likely.">
+                            <div class="macro-label">VIX (Volatility)</div>
+                            <div class="macro-bar-wrap">
+                                <div id="vix-bar" class="macro-bar"></div>
+                            </div>
+                            <div class="macro-footer">
+                                <span id="vix-val-macro" class="m-value">0.00</span>
+                                <span id="vix-corr" class="corr-tag">INVERSE</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Sector Health Matrix -->
+                <section class="card reveal-4" style="padding-bottom: 1.5rem;">
+                    <div class="card-title">Institutional Health Matrix</div>
+
+                    <!-- SPY Pipeline -->
+                    <div style="margin-bottom: 1.25rem;">
+                        <div
+                            style="font-size: 0.6rem; font-weight: 800; color: var(--accent); margin-bottom: 0.5rem; letter-spacing: 1.5px; display: flex; align-items: center; gap: 8px; opacity: 0.8;">
+                            <span style="width: 15px; height: 1.5px; background: var(--accent);"></span> SPY CONFLUENCE
+                            ENGINE
+                        </div>
+                        <div id="spy-sector-grid" class="sector-grid">
+                            <!-- XLK, XLY, XLF -->
+                        </div>
+                    </div>
+
+                    <!-- QQQ Pipeline -->
+                    <div>
+                        <div
+                            style="font-size: 0.6rem; font-weight: 800; color: #a855f7; margin-bottom: 0.5rem; letter-spacing: 1.5px; display: flex; align-items: center; gap: 8px; opacity: 0.8;">
+                            <span style="width: 15px; height: 1.5px; background: #a855f7;"></span> QQQ CONFLUENCE ENGINE
+                        </div>
+                        <div id="qqq-sector-grid" class="sector-grid">
+                            <!-- XLK, XLC, SMH -->
+                        </div>
+                    </div>
+
+                    <!-- IWM Pipeline -->
+                    <div>
+                        <div
+                            style="font-size: 0.6rem; font-weight: 800; color: #22c55e; margin-bottom: 0.5rem; letter-spacing: 1.5px; display: flex; align-items: center; gap: 8px; opacity: 0.8;">
+                            <span style="width: 15px; height: 1.5px; background: #22c55e;"></span> IWM (SMALL CAP)
+                            CONFLUENCE ENGINE
+                        </div>
+                        <div id="iwm-sector-grid" class="sector-grid">
+                            <!-- KRE, XBI, IYT -->
+                        </div>
+                    </div>
+
+                    <!-- FX Pipeline -->
+                    <div>
+                        <div
+                            style="font-size: 0.6rem; font-weight: 800; color: #f59e0b; margin-bottom: 0.5rem; letter-spacing: 1.5px; display: flex; align-items: center; gap: 8px; opacity: 0.8;">
+                            <span style="width: 15px; height: 1.5px; background: #f59e0b;"></span> FX CONFLUENCE ENGINE
+                        </div>
+                        <div id="fx-sector-grid" class="sector-grid">
+                            <!-- DXY, EUR, GBP, JPY -->
                         </div>
                     </div>
                 </section>
 
                 <!-- Heatmap / Order Flow -->
-                <section class="card">
+                <section class="card reveal-5">
                     <div class="card-title">Institutional Order Flow Heatmap</div>
                     <div id="heatmap" class="heatmap-viz" style="min-height: 200px;">
                         <!-- JS Loaded Levels -->
@@ -116,7 +284,7 @@
             <!-- Right Column (Sidebar) -->
             <aside class="sidebar">
                 <!-- Gauge Card -->
-                <section class="card">
+                <section class="card reveal-4">
                     <div class="card-title">Daily Bias Confidence</div>
                     <div class="bias-gauge-container">
                         <div id="bias-label" class="bias-large">NEUTRAL</div>
@@ -131,6 +299,22 @@
                         </div>
                     </div>
 
+                    <!-- NEW: INSTITUTIONAL MACRO NARRATIVE (AMD) -->
+                    <div class="macro-narrative-container">
+                        <div class="section-header">
+                            <span class="section-title">INSTITUTIONAL MACRO NARRATIVE</span>
+                            <span id="current-amd-status" class="status-dot">●</span>
+                        </div>
+                        <div class="narrative-content">
+                            <div id="narrative-phase" class="narrative-phase">WAITING FOR MIDNIGHT</div>
+                            <p id="narrative-text" class="narrative-description">The algorithmic cycle resets at
+                                midnight. Searching for the next liquidity pool.</p>
+                            <div class="narrative-next-move">
+                                <span class="next-label">EXPECTED NEXT:</span>
+                                <span id="next-phase-forecast" class="next-val">ACCUMULATION</span>
+                            </div>
+                        </div>
+                    </div>
                     <div class="checklist" style="margin-top:1.5rem;">
                         <div class="check-item" id="check-tf-alignment">
                             <div class="check-circle"></div> 15m/5m Trend Alignment
@@ -144,11 +328,31 @@
                         <div class="check-item" id="check-relative-strength">
                             <div class="check-circle"></div> Relative Strength High
                         </div>
+                        <div class="check-item" id="check-gamma-wall">
+                            <div class="check-circle"></div> Gamma Level Confluence
+                        </div>
+                    </div>
+                </section>
+
+                <!-- StrikeZone Magnets (The Next Liquidity Draw) -->
+                <section class="card accent-border reveal-4">
+                    <div class="card-title">Institutional StrikeZones</div>
+                    <div id="magnet-zones-container" class="magnet-grid">
+                        <div class="magnet-item">
+                            <span class="magnet-label">BSL DRAW</span>
+                            <span id="magnet-bsl-price" class="magnet-price">--</span>
+                            <span id="magnet-bsl-dist" class="magnet-dist">--%</span>
+                        </div>
+                        <div class="magnet-item">
+                            <span class="magnet-label">SSL DRAW</span>
+                            <span id="magnet-ssl-price" class="magnet-price">--</span>
+                            <span id="magnet-ssl-dist" class="magnet-dist">--%</span>
+                        </div>
                     </div>
                 </section>
 
                 <!-- Recommendation Card -->
-                <section class="card accent-border">
+                <section class="card accent-border reveal-5">
                     <div class="card-title">Option Recommendation (Gold Standard)</div>
                     <div id="rec-box" class="rec-box">
                         <div class="rec-action-row">
@@ -160,6 +364,7 @@
                             <span>Target: <b id="rec-target">-</b></span>
                             <span>Trim: <b id="rec-trim">-</b></span>
                             <span>Stop: <b id="rec-sl">-</b></span>
+                            <span>R/R: <b id="rec-rr" class="bullish-text">1:0.0</b></span>
                             <span>Size: <b id="rec-size">-</b> Ctr.</span>
                             <span>Time: <b id="rec-duration">-</b></span>
                         </div>
@@ -167,38 +372,118 @@
                             style="margin-top:1rem; font-size:0.75rem; color: var(--text-dim); line-height:1.4;">
                             Monitoring institutional levels for high-probability trap...
                         </div>
+                        <button id="btn-unlock-signal" class="btn-primary"
+                            style="display:none; width:100%; margin-top:1rem; font-weight:900;">🔓 UNLOCK GOLD
+                            SIGNAL</button>
+                    </div>
+                </section>
+
+                <!-- Active Positions -->
+                <section class="card reveal-6">
+                    <div class="card-title">Active Paper Trades</div>
+                    <div id="active-trades-container" style="font-size: 0.8rem;">
+                        <p style="color:var(--text-dim); text-align:center;">No active positions.</p>
+                    </div>
+                </section>
+
+                <!-- Institutional Block Trades -->
+                <section class="card reveal-7">
+                    <div class="card-title">Institutional Block Feed</div>
+                    <div id="block-trades-feed" style="max-height: 150px; overflow-y: auto; font-size: 0.7rem;">
+                        <p style="color:var(--text-dim); text-align:center;">Listening for whales...</p>
                     </div>
                 </section>
 
                 <!-- Portfolio / Sim Stats -->
-                <section class="card">
-                    <div class="card-title">Active Paper Trades (Simulation)</div>
-                    <div id="active-trades" style="min-height: 50px;">
-                        <p style="font-size:0.8rem; color:var(--text-dim); text-align:center;">No active positions.</p>
+                <section class="card reveal-8">
+                    <div class="card-title">Simulation Trade History</div>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        <table class="watchlist-table" style="font-size: 0.75rem;">
+                            <tbody id="trade-history-body">
+                                <tr>
+                                    <td colspan="3" style="text-align:center;">Fetching history...</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </section>
 
-                <!-- Watchlist -->
-                <section class="card">
-                    <div class="card-title">Watchlist <button id="btn-add-symbol"
-                            style="background:none; border:none; color:var(--accent); cursor:pointer;">[+]</button>
+                <!-- Premium Watchlist Card -->
+                <section class="card reveal-9"
+                    style="flex: 1; display: flex; flex-direction: column; min-height: 400px; padding: 0;">
+                    <div class="card-header"
+                        style="padding: 1rem; border-bottom: 2px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2);">
+                        <span style="font-weight: 800; font-size: 0.9rem; letter-spacing: 1px;">MY WATCHLIST</span>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <span id="watchlist-count" style="font-size: 0.7rem; color: var(--text-dim);">0
+                                Tickers</span>
+                            <button id="btn-add-symbol"
+                                style="background: var(--accent); border: none; color: #000; padding: 2px 8px; border-radius: 4px; font-weight: 900; cursor: pointer; font-size: 0.8rem;">+</button>
+                        </div>
                     </div>
-                    <table class="watchlist-table">
-                        <thead>
-                            <tr>
-                                <th>Symbol</th>
-                                <th>Price</th>
-                                <th>Bias</th>
-                                <th>Signal</th>
-                            </tr>
-                        </thead>
-                        <tbody id="watchlist-body">
-                            <!-- JS Generated -->
-                        </tbody>
-                    </table>
+
+                    <div id="watchlist-list" class="watchlist-grid" style="flex: 1; overflow-y: auto; padding: 0.5rem;">
+                        <!-- JS Generated Watchlist Cards -->
+                        <div style="text-align: center; padding: 2rem; color: var(--text-dim); font-size: 0.8rem;">
+                            Initializing Premium Feed...
+                        </div>
+                    </div>
                 </section>
             </aside>
         </main>
+
+        <!-- Institutional Whale Tape -->
+        <div class="whale-tape-wrapper">
+            <div class="whale-label">🐋 WHALE TAPE</div>
+            <div id="whale-ticker" class="whale-ticker">
+                <div class="ticker-scroll">
+                    Detecting Institutional Block Trades... Monitoring Whale Momentum... Tracking Dark Pool Sweeps...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Institutional Trigger Checklist Modal -->
+    <div id="checklist-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="gold-text">⚠️ INSTITUTIONAL TRIGGER PROTOCOL</span>
+                <button id="btn-close-checklist" class="close-btn">&times;</button>
+            </div>
+            <div class="checklist-body">
+                <p style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 1.5rem;">Audit the following
+                    institutional drivers before pulling the trigger. One 'No' means stay out.</p>
+
+                <div class="check-row">
+                    <input type="checkbox" id="check-bias" class="trigger-check">
+                    <label for="check-bias"><b>Primary Bias Gauge Aligned?</b> (Gauge must match Action)</label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="check-confidence" class="trigger-check">
+                    <label for="check-confidence"><b>Confidence Score > 75%?</b> (Avoid low-conv chop)</label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="check-macro" class="trigger-check">
+                    <label for="check-macro"><b>Macro Tailwinds (DXY/10Y) Stable?</b> (Check HUD for headwinds)</label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="check-strikezone" class="trigger-check">
+                    <label for="check-strikezone"><b>Magnet Zone Clearance?</b> (Price is not about to hit BSL/SSL
+                        sweep)</label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="check-breadth" class="trigger-check">
+                    <label for="check-breadth"><b>Market Breadth > 60%?</b> (Broad market participation is high)</label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="check-blocks" class="trigger-check">
+                    <label for="check-blocks"><b>Whale Tape Sync?</b> ($1M+ block detected in your direction)</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-confirm-trade" class="btn-confirm" disabled>PULL THE TRIGGER</button>
+            </div>
+        </div>
     </div>
 
     <div id="toast-container" style="position:fixed; bottom:20px; right:20px; z-index:999;"></div>

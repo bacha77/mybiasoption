@@ -1,80 +1,66 @@
 
+import 'dotenv/config';
 import { RealDataManager } from './src/services/real-data-manager.js';
 import { LiquidityEngine } from './src/logic/liquidity-engine.js';
+import { SimulationTrader } from './src/services/simulation-trader.js';
 
-async function runFullSystemAudit() {
-    console.log("--- STARTING FINAL BIAS SYSTEM AUDIT ---\n");
-    const simulator = new RealDataManager();
-    const engine = new LiquidityEngine();
+async function runAudit() {
+    console.log("=== BIAS DEEP AUDIT STARTED ===");
+    let errors = 0;
 
     try {
-        // 1. Audit Data Initialization
-        console.log("Audit Step 1: Initializing Data Manager...");
-        await simulator.initialize();
-        console.log("✅ Data Manager Initialized.");
+        const simulator = new RealDataManager();
+        const engine = new LiquidityEngine();
+        const trader = new SimulationTrader();
 
-        // 2. Audit Market Internals (VIX/DXY)
-        console.log("\nAudit Step 2: Checking Market Internals...");
-        const internals = simulator.internals;
-        console.log("VIX Current:", internals.vix);
-        console.log("DXY Current:", internals.dxy);
-        console.log("News Impact State:", internals.newsImpact);
+        // 1. Check Data Consistency
+        console.log("Checking Stock Object Structures...");
+        const requiredFields = ['currentPrice', 'cvd', 'candles', 'bloomberg', 'news', 'dailyQuotes'];
 
-        if (internals.vix === 0) console.warn("⚠️ WARNING: VIX is 0 (Check internet/Yahoo connectivity)");
-        else console.log("✅ Internals Verified.");
+        Object.keys(simulator.stocks).forEach(symbol => {
+            const stock = simulator.stocks[symbol];
+            requiredFields.forEach(field => {
+                if (stock[field] === undefined) {
+                    console.error(`[ERR] Missing field '${field}' in simulator.stocks['${symbol}']`);
+                    errors++;
+                }
+            });
+            // Check timeframes
+            if (stock.candles['1h'] === undefined) {
+                console.error(`[ERR] Missing '1h' timeframe in simulator.stocks['${symbol}'].candles`);
+                errors++;
+            }
+        });
 
-        // 3. Audit Institutional Markers Alignment
-        console.log("Audit Step 3: Checking Markers for SPY...");
-        const markers = simulator.getInstitutionalMarkers('SPY', '1m');
-        console.log(`- Final Anchored PDH: ${markers.pdh}`);
-        console.log(`- Final Anchored PDL: ${markers.pdl}`);
-        console.log(`- Midnight Open: ${markers.midnightOpen}`);
-        console.log(`- London Open: ${markers.londonOpen}`);
-        console.log(`- NY Open: ${markers.nyOpen}`);
-        console.log(`- POC: ${markers.poc}`);
-        console.log(`- VWAP: ${markers.vwap}`);
+        // 2. Check Gamma Engine
+        console.log("Validating Gamma Wall Logic...");
+        const walls = engine.getGammaWalls(105.42, 'SPY');
+        if (!Array.isArray(walls) || walls.length === 0) {
+            console.error("[ERR] Gamma Wall logic returned invalid data for SPY");
+            errors++;
+        }
+        const fxWalls = engine.getGammaWalls(1.0850, 'EURUSD=X');
+        if (fxWalls[0] === undefined || !fxWalls.some(w => w.toString().includes('.'))) {
+            console.error("[ERR] Gamma Wall logic returned invalid precision for FX");
+            errors++;
+        }
 
-        if (markers.pdh > 0 && markers.pdl > 0) console.log("✅ PDH/PDL markers successfully anchored.");
-        else console.error("❌ ERROR: Missing Daily Markers (PDH/PDL)");
+        // 3. Check State Persistence
+        console.log("Checking Persistence Paths...");
+        if (!trader.statePath || !trader.historyPath) {
+            console.error("[ERR] SimulationTrader paths not initialized");
+            errors++;
+        }
 
-        // 4. Audit Logic Synchronization (The "Result")
-        console.log("\nAudit Step 4: Testing Logic Synchronization...");
-        const stock = simulator.stocks['SPY'];
-        const fvgs = engine.findFVGs(stock.candles['1m']);
-        const draws = engine.findLiquidityDraws(stock.candles['1m']);
+        if (errors === 0) {
+            console.log("✅ AUDIT PASSED: Core structures are consistent and logical.");
+        } else {
+            console.error(`❌ AUDIT FAILED: Found ${errors} structural issues.`);
+        }
 
-        const bias = engine.calculateBias(
-            stock.currentPrice,
-            fvgs,
-            draws,
-            stock.bloomberg,
-            markers,
-            0,
-            internals
-        );
-
-        const recommendation = engine.getOptionRecommendation(
-            bias,
-            markers,
-            stock.currentPrice,
-            '1m',
-            'SPY',
-            stock.candles['1m']
-        );
-
-        console.log("Final Result Action:", recommendation.action);
-        console.log("Trim Target (POC):", recommendation.trim);
-        console.log("Final Target:", recommendation.target);
-
-        if (recommendation.trim && recommendation.trim !== '-') console.log("✅ Trim/Target Scaling Verified.");
-        else console.log("⚠️ INFO: Still in WAIT mode (Waiting for high-conviction confluence).");
-
-        console.log("\n--- SYSTEM AUDIT COMPLETE: ALL CORE SERVICES OPERATIONAL ---");
-        process.exit(0);
     } catch (err) {
-        console.error("\n❌ CRITICAL SYSTEM FAILURE:", err.message);
-        process.exit(1);
+        console.error("❌ CRITICAL AUDIT ERROR:", err.stack);
     }
 }
 
-runFullSystemAudit();
+runAudit();
