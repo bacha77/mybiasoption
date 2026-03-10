@@ -51,10 +51,12 @@ async function initAuth() {
 
         googleLoginBtn.onclick = async () => {
             console.log("[AUTH] Initiating Institutional Google Login...");
+            // Ensure we return specifically to the terminal after login
+            const redirectUrl = window.location.origin + '/terminal.html';
             await supabaseClient.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: window.location.origin
+                    redirectTo: redirectUrl
                 }
             });
         };
