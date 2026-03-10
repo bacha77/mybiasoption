@@ -20,14 +20,15 @@ async function initAuth() {
 
         const { data: { session } } = await supabaseClient.auth.getSession();
         
-        if (!session) {
+        // If no session and not on landing page, show login
+        if (!session && !window.location.pathname.includes('landing')) {
             loginOverlay.style.display = 'flex';
-            logoutBtn.style.display = 'none';
+            if (logoutBtn) logoutBtn.style.display = 'none';
             document.body.style.overflow = 'hidden';
-        } else {
+        } else if (session) {
             console.log("[AUTH] Verified Identity:", session.user.email);
             loginOverlay.style.display = 'none';
-            logoutBtn.style.display = 'block';
+            if (logoutBtn) logoutBtn.style.display = 'block';
             document.body.style.overflow = 'auto';
         }
 
