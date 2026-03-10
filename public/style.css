@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --bg-dark: #020617;
     --card-bg: rgba(15, 23, 42, 0.45);
     --accent: #38bdf8;
@@ -2070,3 +2070,126 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     filter: drop-shadow(0 0 8px #ff3366) !important;
     animation: warn-flicker 1s infinite;
 }
+
+/* --- Premium Login Overlay --- */
+.login-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(2, 6, 23, 0.98);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    backdrop-filter: blur(20px);
+}
+
+.login-modal {
+    background: rgba(15, 23, 42, 0.8) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 3.5rem 3rem;
+    border-radius: 24px;
+    width: min(450px, 90vw);
+    text-align: center;
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
+    animation: modalSlide 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+@keyframes modalSlide {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.premium-shimmer {
+    font-size: 0.75rem;
+    letter-spacing: 0.4rem;
+    color: var(--gold);
+    background: linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s linear infinite;
+    font-weight: 800;
+}
+
+.login-header h2 {
+    margin: 1.5rem 0 1rem;
+    font-weight: 900;
+    font-size: 1.8rem;
+    color: var(--text-main);
+    letter-spacing: -0.02em;
+}
+
+.login-header p {
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    margin-bottom: 2.5rem;
+    line-height: 1.6;
+}
+
+.login-btn {
+    width: 100%;
+    padding: 1.1rem;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+    font-size: 0.8rem;
+}
+
+.login-btn.google img {
+    width: 20px !important;
+    height: 20px !important;
+    object-fit: contain !important;
+}
+
+.login-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+}
+
+.login-footer {
+    margin-top: 2.5rem;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    opacity: 0.5;
+    line-height: 1.4;
+}
+
+@keyframes shimmer {
+    to { background-position: 200% center; }
+}
+
+.logout-btn {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--bearish);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    margin-left: 10px;
+}
+
+.logout-btn:hover {
+    background: var(--bearish);
+    color: white;
+}
