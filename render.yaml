@@ -21,6 +21,10 @@ services:
         required: true
       - key: SIM_BALANCE
         value: "10000"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
         required: false
