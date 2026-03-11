@@ -27,6 +27,19 @@ async function initAuth() {
             document.body.style.overflow = 'hidden';
         } else if (session) {
             console.log("[AUTH] Verified Identity:", session.user.email);
+            
+            // Verify Subscription Tier (DISABLED TEMPORARILY)
+            /*
+            if (!window.location.pathname.includes('index')) {
+                const { data: profile } = await supabaseClient.from('profiles').select('tier, subscription_status').eq('id', session.user.id).single();
+                if(!profile || profile.subscription_status !== 'active') {
+                    alert('You do not have an active institutional subscription. Please select a plan.');
+                    window.location.href = '/index.html#pricing';
+                    return;
+                }
+            }
+            */
+
             loginOverlay.style.display = 'none';
             if (logoutBtn) logoutBtn.style.display = 'block';
             document.body.style.overflow = 'auto';

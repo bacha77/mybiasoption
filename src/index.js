@@ -89,6 +89,36 @@ async function startServer() {
         });
     });
 
+    // PayPal Webhook Receiver
+    app.post('/api/paypal/webhook', async (req, res) => {
+        try {
+            const event = req.body;
+            console.log("[PAYPAL WEBHOOK] Received event:", event.event_type);
+            
+            // Example logic for updating the user profile when subscription is active
+            if (event.event_type === 'BILLING.SUBSCRIPTION.ACTIVATED') {
+                const sub = event.resource;
+                const custom_id = sub.custom_id; // In PayPal button, pass custom_id: session.user.id
+                
+                if (custom_id) {
+                    const { createClient } = await import('@supabase/supabase-js');
+                    const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY); // Or Service Role Key
+                    
+                    await supabaseAdmin.from('profiles').update({
+                        subscription_status: 'active',
+                        tier: 'elite', // Map this based on plan_id
+                        paypal_sub_id: sub.id
+                    }).eq('id', custom_id);
+                    console.log(`[PAYPAL] Subscription active for User ${custom_id}`);
+                }
+            }
+            res.status(200).send('Webhook handled');
+        } catch (err) {
+            console.error("[PAYPAL ERROR] Error processing webhook:", err);
+            res.status(500).send('Webhook error');
+        }
+    });
+
     app.get('/debug-state', (req, res) => {
         res.json({
             internals: simulator.internals,

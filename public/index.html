@@ -7,6 +7,7 @@
     <meta name="description" content="B.I.A.S Elite gives retail traders institutional-grade tools: real-time liquidity sweeps, darkpool order flow, SMT divergence, and precision options signals — all in one engine.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://www.paypal.com/sdk/js?client-id=test&vault=true&intent=subscription"></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -696,7 +697,8 @@
                     <li>Gold Standard Filter</li>
                     <li>Health Matrix Engine</li>
                 </ul>
-                <a href="/terminal.html" class="btn-price featured">Start Elite Access</a>
+                <a href="/terminal.html" class="btn-price featured" id="btn-elite" style="display:none;">Start Elite Access</a>
+                <div id="paypal-button-container-elite" style="margin-top: 1rem;"></div>
             </div>
             <div class="price-card">
                 <div class="price-tier">Institutional</div>
@@ -711,7 +713,8 @@
                     <li>Exclusive Strategy Calls</li>
                     <li>Early Feature Access</li>
                 </ul>
-                <a href="/terminal.html" class="btn-price">Go Institutional</a>
+                <a href="/terminal.html" class="btn-price" id="btn-inst" style="display:none;">Go Institutional</a>
+                <div id="paypal-button-container-inst" style="margin-top: 1rem;"></div>
             </div>
         </div>
     </div>
@@ -845,6 +848,42 @@
             if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
         });
     });
+    // ── PAYPAL INTEGRATION ──
+    paypal.Buttons({
+        style: {
+            shape: 'rect',
+            color: 'gold',
+            layout: 'vertical',
+            label: 'subscribe'
+        },
+        createSubscription: function(data, actions) {
+            return actions.subscription.create({
+                'plan_id': 'ARbSeETEfYRwnsWnieAS6MivfaW3BiJi7DFEpS2404TuHmyAEX9vPCQpIjoRi0gllzljBszo51dh3moL'
+            });
+        },
+        onApprove: function(data, actions) {
+            alert('Elite Subscription successful! Subscription ID: ' + data.subscriptionID);
+            window.location.href = '/terminal.html';
+        }
+    }).render('#paypal-button-container-elite');
+
+    paypal.Buttons({
+        style: {
+            shape: 'rect',
+            color: 'blue',
+            layout: 'vertical',
+            label: 'subscribe'
+        },
+        createSubscription: function(data, actions) {
+            return actions.subscription.create({
+                'plan_id': 'Abniw00-d8XcKEW6nWJcVtvepAtl_hJDmAH8SyqtTlwAeVtWzd_euE4jU5tu11sLH3sIxZoXsMHjuNa6'
+            });
+        },
+        onApprove: function(data, actions) {
+            alert('Institutional Subscription successful! Subscription ID: ' + data.subscriptionID);
+            window.location.href = '/terminal.html';
+        }
+    }).render('#paypal-button-container-inst');
 </script>
 </body>
 </html>
