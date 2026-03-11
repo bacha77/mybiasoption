@@ -177,9 +177,20 @@ export class RealDataManager {
                                 close: q.close,
                                 volume: q.volume
                             }));
-                        if (candles.length > 0) {
-                            stock.candles[tf] = candles;
-                        }
+                            let cleanedCandles = [];
+                            for (let i = 0; i < candles.length; i++) {
+                                let c = candles[i];
+                                // Clean up massive anomalous wicks (common with Yahoo Finance pre/post market data)
+                                const bodyMax = Math.max(c.open, c.close);
+                                const bodyMin = Math.min(c.open, c.close);
+                                const bodySize = Math.max(bodyMax - bodyMin, c.open * 0.0005);
+                                
+                                if (c.high - bodyMax > bodySize * 4) c.high = bodyMax + bodySize;
+                                if (bodyMin - c.low > bodySize * 4) c.low = bodyMin - bodySize;
+                                
+                                cleanedCandles.push(c);
+                            }
+                            stock.candles[tf] = cleanedCandles;
                     }
                 } catch (err) { }
             }
@@ -228,10 +239,12 @@ export class RealDataManager {
             // Check for session reset (e.g., first trade after 9:30 AM NY)
             this.checkSessionReset(symbol);
 
-            // SAFETY FILTER: Ignore trade prices that deviate more than 25% from current known price
+            // SAFETY FILTER: Tighter deviation to prevent massive fake wicks on the chart
             if (stock.currentPrice > 0) {
                 const deviation = Math.abs(price - stock.currentPrice) / stock.currentPrice;
-                if (deviation > 0.25) return;
+                // Allow 2% max deviation for Crypto/FX in a single tick, 0.5% for Stocks
+                const maxDeviation = (symbol.includes('=X') || symbol === 'BTC-USD') ? 0.02 : 0.005;
+                if (deviation > maxDeviation) return; // Drop bad ticks
             }
 
             // --- CVD & Aggression Logic (Tick Rule) ---

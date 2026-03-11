@@ -626,6 +626,28 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     height: 100%;
 }
 
+.chart-controls {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    gap: 10px;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.control-btn {
+    font-size: 0.70rem;
+}
+.control-btn#zoom-in-btn { color: var(--bullish); }
+.control-btn#zoom-out-btn { color: var(--bearish); }
+
 /* --- Metrics Grid --- */
 .metrics-grid {
     display: grid;

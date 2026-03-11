@@ -140,6 +140,10 @@
                         </div>
                     </div>
                     <div class="chart-canvas-container">
+                        <div class="chart-controls">
+                            <button class="tf-btn control-btn" id="zoom-in-btn">Zoom In (+)</button>
+                            <button class="tf-btn control-btn" id="zoom-out-btn">Zoom Out (-)</button>
+                        </div>
                         <div id="priceChart"></div>
                     </div>
                 </section>
@@ -177,6 +181,16 @@
                             data-tooltip="Point of Control. The price level with the most institutional volume today. Acts as a magnet.">
                             <span class="m-label">POC</span>
                             <span id="poc-val" class="m-value">0.00</span>
+                        </div>
+                        <div class="metric-item"
+                            data-tooltip="New York Open (09:30 EST). Key anchor point for the US session.">
+                            <span class="m-label">NY Open</span>
+                            <span id="ny-open-val" class="m-value">0.00</span>
+                        </div>
+                        <div class="metric-item"
+                            data-tooltip="London Open (03:00 EST). Often creates the high or low of the day.">
+                            <span class="m-label">London Open</span>
+                            <span id="london-open-val" class="m-value">0.00</span>
                         </div>
                         <div class="metric-item"
                             data-tooltip="Cumulative Volume Delta. Measures aggressive buying vs selling. Green CVD = Institutions are buying at the market.">

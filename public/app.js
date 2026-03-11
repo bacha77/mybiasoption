@@ -20,11 +20,18 @@ async function initAuth() {
 
         const { data: { session } } = await supabaseClient.auth.getSession();
         
-        // If no session and not on landing page, show login
-        if (!session && !window.location.pathname.includes('landing')) {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+        // If no session and not on landing page, show login (bypass for localhost)
+        if (!session && !window.location.pathname.includes('landing') && !isLocalhost) {
             loginOverlay.style.display = 'flex';
             if (logoutBtn) logoutBtn.style.display = 'none';
             document.body.style.overflow = 'hidden';
+        } else if (isLocalhost && !session) {
+            console.log("[AUTH] Running locally, bypassing login screen.");
+            loginOverlay.style.display = 'none';
+            if (logoutBtn) logoutBtn.style.display = 'none';
+            document.body.style.overflow = 'auto';
         } else if (session) {
             console.log("[AUTH] Verified Identity:", session.user.email);
             
@@ -50,7 +57,7 @@ async function initAuth() {
                 loginOverlay.style.display = 'none';
                 logoutBtn.style.display = 'block';
                 document.body.style.overflow = 'auto';
-            } else if (session === null) {
+            } else if (session === null && !isLocalhost) {
                 loginOverlay.style.display = 'flex';
                 logoutBtn.style.display = 'none';
                 document.body.style.overflow = 'hidden';
@@ -102,6 +109,8 @@ const adrEl = document.getElementById('adr-val');
 const pdhEl = document.getElementById('pdh-val');
 const pdlEl = document.getElementById('pdl-val');
 const midnightEl = document.getElementById('midnight-open-val');
+const nyOpenEl = document.getElementById('ny-open-val');
+const londonOpenEl = document.getElementById('london-open-val');
 const vixEl = document.getElementById('vix-val-regime');
 const vixValEl = document.getElementById('vix-val-macro');
 const vixNeedle = document.getElementById('vix-needle');
@@ -271,6 +280,32 @@ function initChartInstance() {
 }
 initChartInstance();
 
+// Zoom Controls
+document.getElementById('zoom-in-btn')?.addEventListener('click', () => {
+    if (!tvChart) return;
+    const timeScale = tvChart.timeScale();
+    const range = timeScale.getVisibleLogicalRange();
+    if (range) {
+        const span = range.to - range.from;
+        timeScale.setVisibleLogicalRange({
+            from: range.from + span * 0.1,
+            to: range.to - span * 0.1
+        });
+    }
+});
+
+document.getElementById('zoom-out-btn')?.addEventListener('click', () => {
+    if (!tvChart) return;
+    const timeScale = tvChart.timeScale();
+    const range = timeScale.getVisibleLogicalRange();
+    if (range) {
+        const span = range.to - range.from;
+        timeScale.setVisibleLogicalRange({
+            from: range.from - span * 0.1,
+            to: range.to + span * 0.1
+        });
+    }
+});
 function setChartData(candles) {
     if (!candleSeries || !candles) return;
     try {
@@ -621,6 +656,8 @@ function updateUI(data) {
             if (pdhEl) pdhEl.innerText = (data.markers.pdh || 0).toFixed(precision);
             if (pdlEl) pdlEl.innerText = (data.markers.pdl || 0).toFixed(precision);
             if (midnightEl) midnightEl.innerText = (data.markers.midnightOpen || 0).toFixed(precision);
+            if (nyOpenEl) nyOpenEl.innerText = (data.markers.nyOpen || 0).toFixed(precision);
+            if (londonOpenEl) londonOpenEl.innerText = (data.markers.londonOpen || 0).toFixed(precision);
             if (vwapEl) vwapEl.innerText = (data.markers.vwap || 0).toFixed(precision);
             if (pocEl) pocEl.innerText = (data.markers.poc || 0).toFixed(precision);
             if (adrEl) adrEl.innerText = (data.markers.adr || 0).toFixed(precision);
