@@ -463,6 +463,14 @@ export class LiquidityEngine {
             if (eLiquidity.eql && currentPrice > eLiquidity.eql.price) bearishScore += 2; // Draws price DOWN
         }
 
+        // --- NEW: CBDR PROJECTIONS ---
+        const cbdr = this.calculateCBDR(candles);
+        if (cbdr) {
+            // Price at SD2 (Standard Deviation 2) of CBDR is an extreme reversal zone
+            if (currentPrice > cbdr.sd2_high) bearishScore += 3;
+            if (currentPrice < cbdr.sd2_low) bullishScore += 3;
+        }
+
         const finalMultiplier = (internals && internals.newsImpact === 'HIGH') ? 0.5 : 1;
         const totalScore = (bullishScore * finalMultiplier) - (bearishScore * finalMultiplier);
 
@@ -514,6 +522,7 @@ export class LiquidityEngine {
             orderBlock: this.detectOrderBlocks(candles),
             whaleImbalance: markers.whaleImbalance,
             asiaRange: asiaRange,
+            cbdr: cbdr,
             restingLiquidity: eLiquidity,
             bloombergSentiment: this.getBloombergSentiment(markers, internals),
             intermarketCorrelation: this.getIntermarketCorrelation(symbol, markers)
@@ -710,6 +719,38 @@ export class LiquidityEngine {
         }
         
         return { eqh: bestEQH, eql: bestEQL };
+    }
+
+    /**
+     * Central Bank Dealers Range (CBDR) (2 PM - 8 PM NY Time)
+     * Used for daily projection targets and volatility anchors.
+     */
+    calculateCBDR(candles) {
+        if (!candles || candles.length === 0) return null;
+
+        const cbdrCandles = candles.filter(c => {
+            const date = new Date(c.timestamp);
+            const nyTime = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            const h = nyTime.getHours();
+            return h >= 14 && h < 20; 
+        });
+
+        if (cbdrCandles.length < 5) return null;
+
+        const high = Math.max(...cbdrCandles.map(c => c.high));
+        const low = Math.min(...cbdrCandles.map(c => c.low));
+        const range = high - low;
+        
+        return { 
+            high, 
+            low, 
+            range,
+            sd1_high: high + range,
+            sd1_low: low - range,
+            sd2_high: high + (range * 2),
+            sd2_low: low - (range * 2),
+            isAnchored: true
+        };
     }
 
     /**

@@ -149,6 +149,8 @@ const sslMagnetPrice = document.getElementById('magnet-ssl-price');
 const sslMagnetDist = document.getElementById('magnet-ssl-dist');
 const asiaHighEl = document.getElementById('magnet-asia-high');
 const asiaLowEl = document.getElementById('magnet-asia-low');
+const cbdrSd1El = document.getElementById('magnet-cbdr-sd1');
+const cbdrSd2El = document.getElementById('magnet-cbdr-sd2');
 const whaleTickerScroll = document.querySelector('.ticker-scroll');
 const smtBadge = document.getElementById('smt-badge');
 const absorptionBadge = document.getElementById('absorption-badge');
@@ -430,6 +432,14 @@ function updateChartOverlays(data) {
         const rl = data.bias.restingLiquidity;
         if (rl.eqh) addLevel(rl.eqh.price, 'rgba(245, 158, 11, 0.6)', 1, 'EQH DRAW', 15);
         if (rl.eql) addLevel(rl.eql.price, 'rgba(245, 158, 11, 0.6)', 1, 'EQL DRAW', 15);
+    }
+
+    if (data.bias && data.bias.cbdr) {
+        const c = data.bias.cbdr;
+        addLevel(c.sd1_high, 'rgba(139, 92, 246, 0.5)', 2, 'CBDR SD1 (TGT)', 10);
+        addLevel(c.sd1_low, 'rgba(139, 92, 246, 0.5)', 2, 'CBDR SD1 (TGT)', 10);
+        addLevel(c.sd2_high, 'rgba(244, 63, 94, 0.6)', 1, 'CBDR SD2 (MAX)', 14);
+        addLevel(c.sd2_low, 'rgba(244, 63, 94, 0.6)', 1, 'CBDR SD2 (MAX)', 14);
     }
 
     // Sort and allocate labels
@@ -1159,6 +1169,14 @@ function updateUI(data) {
                     const ar = data.bias.asiaRange;
                     if (asiaHighEl) asiaHighEl.innerText = ar.high.toFixed(precision);
                     if (asiaLowEl) asiaLowEl.innerText = ar.low.toFixed(precision);
+                }
+
+                if (data.bias && data.bias.cbdr) {
+                    const c = data.bias.cbdr;
+                    const bias = data.bias.bias;
+                    // Projections depend on Bias
+                    if (cbdrSd1El) cbdrSd1El.innerText = (bias === 'BULLISH' || bias === 'STRONG BULLISH') ? c.sd1_high.toFixed(precision) : c.sd1_low.toFixed(precision);
+                    if (cbdrSd2El) cbdrSd2El.innerText = (bias === 'BULLISH' || bias === 'STRONG BULLISH') ? c.sd2_high.toFixed(precision) : c.sd2_low.toFixed(precision);
                 }
             }
         }
