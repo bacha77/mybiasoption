@@ -1,18 +1,19 @@
-:root {
-    --bg-dark: #020617;
-    --card-bg: rgba(15, 23, 42, 0.45);
-    --accent: #38bdf8;
-    --accent-glow: rgba(56, 189, 248, 0.25);
-    --bullish: #22c55e;
-    --bullish-glow: rgba(34, 197, 94, 0.2);
-    --bearish: #ef4444;
-    --bearish-glow: rgba(239, 68, 68, 0.2);
-    --gold: #f59e0b;
-    --text-main: #f8fafc;
-    --text-dim: #94a3b8;
-    --border: rgba(255, 255, 255, 0.05);
-    --glass: blur(20px);
-    --shadow: 0 12px 40px rgba(0, 0, 0, 0.9);
+﻿:root {
+    --bg-dark: #000000;
+    --card-bg: #050505;
+    --accent: #00d4ff; /* Terminal Cyan */
+    --accent-glow: rgba(0, 212, 255, 0.15);
+    --bullish: #00ff88;
+    --bullish-glow: rgba(0, 255, 136, 0.1);
+    --bearish: #ff3e3e;
+    --bearish-glow: rgba(255, 62, 62, 0.1);
+    --gold: #ff9d00; /* Bloomberg Amber */
+    --text-main: #ffffff;
+    --text-dim: #71717a;
+    --border: #1a1a1a;
+    --glass: none;
+    --shadow: none;
+    --font-data: 'JetBrains Mono', monospace;
 }
 
 /* Institutional Scrollbar */
@@ -53,11 +54,10 @@ body {
 
 body {
     background-color: var(--bg-dark);
-    background-image:
-        radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
-        radial-gradient(circle at 100% 100%, rgba(34, 197, 94, 0.05) 0%, transparent 50%);
+    background-image: none;
     color: var(--text-main);
-    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'JetBrains Mono', -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.02em;
 }
 
 /* --- Layout --- */
@@ -71,17 +71,18 @@ body {
 
 /* --- Status Ribbon --- */
 .status-ribbon {
-    height: 30px;
+    height: 24px;
     background: #000;
     display: flex;
     align-items: center;
-    padding: 0 2rem;
-    gap: 1.5rem;
-    font-size: 0.65rem;
+    padding: 0 1rem;
+    gap: 1.2rem;
+    font-size: 0.6rem;
     font-weight: 700;
     color: var(--text-dim);
     border-bottom: 1px solid var(--border);
     z-index: 101;
+    font-family: var(--font-data);
 }
 
 .status-item {
@@ -127,7 +128,7 @@ body {
 .badge {
     background: rgba(255, 255, 255, 0.05);
     padding: 2px 8px;
-    border-radius: 4px;
+    border-radius: 0;
     border: 1px solid var(--border);
     color: var(--text-main);
 }
@@ -138,7 +139,7 @@ body {
     font-size: 0.55rem;
     font-weight: 900;
     padding: 1px 4px;
-    border-radius: 3px;
+    border-radius: 0;
     margin-left: 4px;
     vertical-align: middle;
     box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
@@ -155,15 +156,30 @@ body {
 }
 
 header {
-    height: 80px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 2rem;
+    padding: 0 1.5rem;
     border-bottom: 1px solid var(--border);
-    background: rgba(2, 6, 23, 0.8);
-    backdrop-filter: var(--glass);
+    background: #000;
     z-index: 100;
+}
+
+.logo-main {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 2px;
+}
+
+.logo-sub {
+    font-size: 0.5rem;
+    color: var(--accent);
+    font-weight: 800;
+    letter-spacing: 1px;
+    display: block;
+    margin-top: -2px;
 }
 
 .header-center {
@@ -181,21 +197,21 @@ header {
 
 .search-container input {
     width: 100%;
-    background: rgba(255, 255, 255, 0.03);
+    background: #0a0a0a;
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px 15px 10px 40px;
-    color: var(--text-main);
-    font-family: inherit;
-    font-size: 0.85rem;
-    transition: all 0.3s ease;
+    border-radius: 0;
+    padding: 8px 15px 8px 40px;
+    color: var(--accent);
+    font-family: var(--font-data);
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
 }
 
 .search-container input:focus {
     outline: none;
     border-color: var(--accent);
-    background: rgba(255, 255, 255, 0.06);
-    box-shadow: 0 0 15px var(--accent-glow);
+    background: #0f0f0f;
+    box-shadow: none;
 }
 
 .search-icon {
@@ -225,15 +241,15 @@ header {
 
 .card {
     background: var(--card-bg);
-    backdrop-filter: var(--glass);
+    backdrop-filter: none;
     border: 1px solid var(--border);
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 0;
+    transition: none;
 }
 
 .card:hover {
-    border-color: rgba(56, 189, 248, 0.3);
-    box-shadow: 0 0 30px rgba(0, 0, 0, 0.3);
-    transform: translateY(-2px);
+    border-color: var(--accent);
+    transform: none;
 }
 
 /* --- VIX Gauge --- */
@@ -326,7 +342,7 @@ header {
     background: linear-gradient(135deg, #a855f7, #6366f1);
     color: #fff;
     padding: 2px 10px;
-    border-radius: 4px;
+    border-radius: 0;
     font-size: 0.65rem;
     font-weight: 800;
     letter-spacing: 0.5px;
@@ -522,31 +538,24 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 .card {
     background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: 20px;
-    backdrop-filter: var(--glass);
-    padding: 1.5rem;
-    box-shadow: var(--shadow);
-    transition: transform 0.2s ease, border-color 0.2s ease;
-}
-
-.card:hover {
-    border-color: rgba(255, 255, 255, 0.15);
+    border-radius: 0;
+    padding: 1rem;
+    box-shadow: none;
 }
 
 .card-title {
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-size: 0.65rem;
+    font-weight: 800;
     text-transform: uppercase;
-    color: var(--text-dim);
-    letter-spacing: 1px;
-    margin-bottom: 1rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    color: var(--accent);
+    background: #0f0f0f;
+    padding: 4px 8px;
+    margin: -1rem -1rem 1rem -1rem;
+    border-bottom: 1px solid var(--border);
 }
 
 .accent-border {
-    border-top: 2px solid var(--accent);
+    border-top: 1px solid var(--accent);
 }
 
 /* --- Chart Section --- */
@@ -563,7 +572,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     align-items: center;
     background: rgba(255, 255, 255, 0.03);
     padding: 10px 20px;
-    border-radius: 15px;
+    border-radius: 0;
     border: 1px solid var(--border);
     margin-right: 2rem;
 }
@@ -588,23 +597,21 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     gap: 6px;
     background: rgba(255, 255, 255, 0.03);
     padding: 4px;
-    border-radius: 12px;
+    border-radius: 0;
     border: 1px solid var(--border);
     backdrop-filter: var(--glass);
 }
 
 .tf-btn {
-    background: transparent;
-    border: none;
+    background: #111;
+    border: 1px solid var(--border);
     color: var(--text-dim);
-    font-family: inherit;
-    font-size: 0.75rem;
+    font-family: var(--font-data);
+    font-size: 0.65rem;
     font-weight: 700;
-    padding: 6px 12px;
-    border-radius: 8px;
+    padding: 2px 10px;
+    border-radius: 0;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid transparent;
 }
 
 .tf-btn:hover {
@@ -629,14 +636,16 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 }
 
 .main-price {
-    font-size: 2.2rem;
-    font-weight: 800;
-    font-family: 'JetBrains Mono', monospace;
+    font-size: 2.5rem;
+    font-weight: 700;
+    font-family: var(--font-data);
+    color: var(--gold);
 }
 
 .main-change {
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 700;
+    font-family: var(--font-data);
 }
 
 .chart-canvas-container {
@@ -661,7 +670,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     backdrop-filter: blur(10px);
     border: 1px solid var(--border);
     padding: 6px 12px;
-    border-radius: 12px;
+    border-radius: 0;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
@@ -679,25 +688,26 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 }
 
 .metric-item {
-    background: rgba(255, 255, 255, 0.03);
-    padding: 1rem;
-    border-radius: 12px;
+    background: #080808;
+    padding: 0.5rem 0.8rem;
+    border-radius: 0;
     border: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
 }
 
 .m-label {
-    font-size: 0.6rem;
-    color: var(--text-dim);
-    text-transform: uppercase;
+    font-size: 0.55rem;
+    color: var(--accent);
+    font-weight: 800;
 }
 
 .m-value {
-    font-size: 1rem;
-    font-weight: 800;
-    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    font-family: var(--font-data);
+    color: #fff;
 }
 
 /* --- Kill Zone / Session Indicator --- */
@@ -705,12 +715,13 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     font-weight: 700;
-    background: rgba(0, 0, 0, 0.4);
-    padding: 6px 12px;
-    border-radius: 8px;
+    background: #0f0f0f;
+    padding: 4px 10px;
+    border-radius: 0;
     border: 1px solid var(--border);
+    color: var(--accent);
 }
 
 .session-dot {
@@ -773,7 +784,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 /* --- Recommendation --- */
 .rec-box {
     border: 1px solid var(--border);
-    border-radius: 16px;
+    border-radius: 0;
     padding: 1.5rem;
     background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.05), transparent);
 }
@@ -819,10 +830,18 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 
 .watchlist-table th {
     text-align: left;
-    font-size: 0.65rem;
-    color: var(--text-dim);
+    font-size: 0.55rem;
+    color: var(--accent);
     text-transform: uppercase;
-    padding-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.watchlist-table td {
+    padding: 6px 0;
+    font-size: 0.7rem;
+    font-family: var(--font-data);
+    border-bottom: 1px solid rgba(255,255,255,0.02);
 }
 
 .watchlist-table td {
@@ -971,7 +990,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 .macro-item {
     background: rgba(255, 255, 255, 0.03);
     padding: 1rem;
-    border-radius: 12px;
+    border-radius: 0;
     border: 1px solid var(--border);
 }
 
@@ -1009,7 +1028,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     font-size: 0.55rem;
     font-weight: 900;
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: 0;
     background: rgba(239, 68, 68, 0.1);
     color: var(--bearish);
     border: 1px solid var(--bearish-glow);
@@ -1034,7 +1053,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 .sector-item {
     background: rgba(255, 255, 255, 0.03);
     padding: 1.2rem;
-    border-radius: 12px;
+    border-radius: 0;
     border: 1px solid var(--border);
     display: flex;
     flex-direction: column;
@@ -1094,7 +1113,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     background: #fbbf24;
     color: #000;
     padding: 1px 4px;
-    border-radius: 4px;
+    border-radius: 0;
     font-weight: 900;
 }
 
@@ -1122,7 +1141,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     /* Cyan */
     color: #22d3ee;
     border: 1px solid rgba(6, 182, 212, 0.5);
-    border-radius: 4px;
+    border-radius: 0;
     font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -1153,7 +1172,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     font-weight: 900;
     letter-spacing: 2px;
     padding: 2px 8px;
-    border-radius: 4px;
+    border-radius: 0;
     background: rgba(15, 23, 42, 0.8);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: var(--text-dim);
@@ -1168,7 +1187,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     background: rgba(168, 85, 247, 0.2);
     color: #c084fc;
     border: 1px solid #a855f7;
-    border-radius: 4px;
+    border-radius: 0;
     font-size: 0.7rem;
     font-weight: 800;
     animation: neon-flicker 2s infinite;
@@ -1193,7 +1212,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     background: rgba(245, 158, 11, 0.15);
     color: #f59e0b;
     border: 1px solid rgba(245, 158, 11, 0.5);
-    border-radius: 4px;
+    border-radius: 0;
     font-size: 0.7rem;
     font-weight: 800;
 }
@@ -1204,7 +1223,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     /* Deep Blue */
     color: #60a5fa;
     border: 1px solid rgba(34, 211, 238, 0.5);
-    border-radius: 4px;
+    border-radius: 0;
     font-size: 0.7rem;
     font-weight: 800;
     text-transform: uppercase;
@@ -1245,27 +1264,28 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     color: var(--text-dim);
     font-size: 10px;
     padding: 2px 4px;
-    border-radius: 2px;
+    border-radius: 0;
 }
 
 /* --- News Ticker --- */
 .ticker-wrap {
     width: 100%;
-    height: 40px;
-    background: #000;
+    height: 30px;
+    background: #0d1117;
     overflow: hidden;
     white-space: nowrap;
     display: flex;
     align-items: center;
     border-bottom: 1px solid var(--border);
+    font-family: var(--font-data);
 }
 
 .ticker-content {
     display: inline-block;
     padding-left: 100%;
-    animation: ticker 40s linear infinite;
-    font-size: 0.7rem;
-    color: var(--accent);
+    animation: ticker 60s linear infinite;
+    font-size: 0.65rem;
+    color: var(--gold);
     text-transform: uppercase;
     font-weight: 700;
     letter-spacing: 1px;
@@ -1285,7 +1305,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 .ticker-card {
     background: rgba(15, 23, 42, 0.4);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 0;
     padding: 10px 12px;
     margin-bottom: 8px;
     display: flex;
@@ -1480,7 +1500,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
         padding: 4px 10px;
     }
 
-    /* Hide "⚡ SIM BALANCE:" text using a small trick or just keeping it compact */
+    /* Hide "âš¡ SIM BALANCE:" text using a small trick or just keeping it compact */
     #sim-balance-display {
         display: flex;
         align-items: center;
@@ -1489,7 +1509,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 
     .card {
         padding: 1rem;
-        border-radius: 15px;
+        border-radius: 0;
     }
 }
 
@@ -1515,7 +1535,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 .sector-item {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 0;
     padding: 12px;
     display: flex;
     flex-direction: column;
@@ -1665,7 +1685,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     border: 1px solid var(--accent);
     color: var(--text-main);
     padding: 10px 14px;
-    border-radius: 8px;
+    border-radius: 0;
     font-size: 0.65rem;
     font-weight: 500;
     line-height: 1.4;
@@ -1714,7 +1734,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     color: #000;
     border: none;
     padding: 10px 20px;
-    border-radius: 8px;
+    border-radius: 0;
     font-weight: 900;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -1739,7 +1759,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 .magnet-item {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 0;
     padding: 10px 15px;
     display: flex;
     justify-content: space-between;
@@ -1769,7 +1789,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     font-size: 0.75rem;
     font-weight: 800;
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: 0;
     background: rgba(255, 255, 255, 0.05);
 }
 
@@ -1833,7 +1853,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     width: 90%;
     max-width: 500px;
     border: 1px solid var(--gold);
-    border-radius: 16px;
+    border-radius: 0;
     box-shadow: 0 0 40px rgba(245, 158, 11, 0.2);
     overflow: hidden;
 }
@@ -1849,7 +1869,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     font-size: 0.65rem;
     font-weight: 900;
     padding: 4px 10px;
-    border-radius: 4px;
+    border-radius: 0;
     margin-top: 5px;
     animation: pulse-red 1.5s infinite;
     letter-spacing: 1px;
@@ -1923,7 +1943,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     padding: 12px;
     background: var(--gold);
     border: none;
-    border-radius: 8px;
+    border-radius: 0;
     color: #000;
     font-weight: 900;
     font-size: 1rem;
@@ -1949,7 +1969,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 .smt-badge,
 .absorption-badge {
     padding: 3px 10px;
-    border-radius: 4px;
+    border-radius: 0;
     font-size: 0.65rem;
     font-weight: 800;
     margin-left: 10px;
@@ -1973,7 +1993,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     width: 100%;
     height: 14px;
     background: #111;
-    border-radius: 4px;
+    border-radius: 0;
     position: relative;
     overflow: hidden;
     margin-top: 8px;
@@ -2029,7 +2049,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 .macro-narrative-container {
     background: rgba(15, 23, 42, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
+    border-radius: 0;
     padding: 1.25rem;
     margin-top: 1.5rem;
     margin-bottom: 1.5rem;
@@ -2086,7 +2106,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     font-weight: 700;
     background: rgba(0, 242, 255, 0.1);
     padding: 2px 8px;
-    border-radius: 4px;
+    border-radius: 0;
     border: 1px solid rgba(0, 242, 255, 0.2);
 }
 
@@ -2135,7 +2155,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     background: rgba(15, 23, 42, 0.8) !important;
     border: 1px solid rgba(255, 255, 255, 0.08);
     padding: 3.5rem 3rem;
-    border-radius: 24px;
+    border-radius: 0;
     width: min(450px, 90vw);
     text-align: center;
     box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
@@ -2181,7 +2201,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 .login-btn {
     width: 100%;
     padding: 1.1rem;
-    border-radius: 12px;
+    border-radius: 0;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(255, 255, 255, 0.05);
     color: white;
@@ -2226,7 +2246,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     color: var(--bearish);
     border: 1px solid rgba(239, 68, 68, 0.2);
     padding: 0.4rem 0.8rem;
-    border-radius: 8px;
+    border-radius: 0;
     font-size: 0.65rem;
     font-weight: 700;
     cursor: pointer;
@@ -2238,4 +2258,4 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 .logout-btn:hover {
     background: var(--bearish);
     color: white;
-}
+}
