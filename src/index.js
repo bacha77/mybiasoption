@@ -278,6 +278,35 @@ async function startServer() {
                     }
                 }
 
+                // --- WALL & STDEV PROXIMITY ALERTS ---
+                if (stockData && stockData.markers && stockData.currentPrice) {
+                    const price = stockData.currentPrice;
+                    const m = stockData.markers;
+                    const isFX = symbol.includes('=X') || symbol.includes('USD');
+                    const thresh = isFX ? 0.0003 : (price > 100 ? 0.20 : 0.05); // 20 cents for large equities, 5 for small, 3 pips for FX
+                    
+                    const triggers = [];
+                    if (m.callWall && Math.abs(price - m.callWall) <= thresh) triggers.push({ name: 'Current CALL WALL (Ceiling)', val: m.callWall, type: 'BEARISH' });
+                    if (m.putWall && Math.abs(price - m.putWall) <= thresh) triggers.push({ name: 'Current PUT WALL (Floor)', val: m.putWall, type: 'BULLISH' });
+                    if (m.vwapStdev > 0) {
+                        const upStdev = m.vwap + (m.vwapStdev * 2);
+                        const dnStdev = m.vwap - (m.vwapStdev * 2);
+                        if (Math.abs(price - upStdev) <= thresh) triggers.push({ name: '+2 VWAP STDEV (Overbought)', val: upStdev, type: 'BEARISH' });
+                        if (Math.abs(price - dnStdev) <= thresh) triggers.push({ name: '-2 VWAP STDEV (Oversold)', val: dnStdev, type: 'BULLISH' });
+                    }
+
+                    triggers.forEach(t => {
+                        const alertKey = `${symbol}_WALL_${t.name}`;
+                        const lastTime = lastAlerts.get(alertKey);
+                        // 30 minute cooldown for the same wall
+                        if (!lastTime || (Date.now() - lastTime > 1800000)) {
+                            console.log(`[TAG] ${symbol} hit ${t.name} at ${price}`);
+                            telegram.sendWallAlert(symbol, price, t.name, t.val, t.type).catch(() => {});
+                            lastAlerts.set(alertKey, Date.now());
+                        }
+                    });
+                }
+
                 // --- TELEGRAM ALERT LOGIC (GOLD STANDARD FILTER) ---
                 // Requirement for Sellable Signals:
                 // 1. Stable Signal (40+ seconds of consistent confluence)

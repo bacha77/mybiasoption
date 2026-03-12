@@ -523,7 +523,7 @@ export class RealDataManager {
     calculateVWAP(symbol, tf = '1m') {
         const stock = this.stocks[symbol];
         const candles = stock.candles[tf];
-        if (!candles || candles.length === 0) return 0;
+        if (!candles || candles.length === 0) return { vwap: 0, stdev: 0 };
 
         // Session-anchored VWAP (approximate using current candle history for the day)
         const nyNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
@@ -532,15 +532,23 @@ export class RealDataManager {
 
         let tpv = 0;
         let totalVol = 0;
+        let sumSqrPriceVol = 0;
         candles.forEach(c => {
             if (c.timestamp >= sessionStart) {
                 const typicalPrice = (c.high + c.low + c.close) / 3;
                 tpv += typicalPrice * c.volume;
                 totalVol += c.volume;
+                sumSqrPriceVol += typicalPrice * typicalPrice * c.volume;
             }
         });
 
-        return totalVol > 0 ? tpv / totalVol : candles[candles.length - 1].close;
+        if (totalVol === 0) return { vwap: candles[candles.length - 1].close, stdev: 0 };
+        
+        const vwap = tpv / totalVol;
+        const variance = Math.max(0, (sumSqrPriceVol / totalVol) - (vwap * vwap));
+        const stdev = Math.sqrt(variance);
+
+        return { vwap, stdev };
     }
 
     get currentPrice() { return this.stocks[this.currentSymbol]?.currentPrice || 0; }
@@ -617,6 +625,14 @@ export class RealDataManager {
         const todayHigh = sessionCandles.length > 0 ? Math.max(...sessionCandles.map(c => c.high)) : candles[candles.length - 1].high;
         const todayLow = sessionCandles.length > 0 ? Math.min(...sessionCandles.map(c => c.low)) : candles[candles.length - 1].low;
 
+        const vwapMetrics = this.calculateVWAP(symbol, tf);
+        
+        // Proxy GEX Option Walls (Finding nearest heavy strike levels based on current price)
+        const isForex = symbol.includes('=X') || symbol.includes('USD');
+        const interval = isForex ? 0.01 : (stock.currentPrice > 100 ? 5 : 1); 
+        const callWall = Math.ceil(stock.currentPrice / interval) * interval + interval;
+        const putWall = Math.floor(stock.currentPrice / interval) * interval - interval;
+
         return {
             pdh: stock.pdh || 0,
             pdl: stock.pdl || 0,
@@ -626,7 +642,10 @@ export class RealDataManager {
             midnightOpen,
             nyOpen: findCandleAt(nyOpenTs).open,
             londonOpen: findCandleAt(lonOpenTs).open,
-            vwap: this.calculateVWAP(symbol, tf),
+            vwap: vwapMetrics.vwap,
+            vwapStdev: vwapMetrics.stdev,
+            callWall,
+            putWall,
             poc: poc || candles[0].close,
             cvd: stock.cvd,
             netWhaleFlow: stock.netWhaleFlow || 0,

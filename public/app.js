@@ -111,6 +111,8 @@ const pdlEl = document.getElementById('pdl-val');
 const midnightEl = document.getElementById('midnight-open-val');
 const nyOpenEl = document.getElementById('ny-open-val');
 const londonOpenEl = document.getElementById('london-open-val');
+const callWallEl = document.getElementById('call-wall-val');
+const putWallEl = document.getElementById('put-wall-val');
 const vixEl = document.getElementById('vix-val-regime');
 const vixValEl = document.getElementById('vix-val-macro');
 const vixNeedle = document.getElementById('vix-needle');
@@ -361,6 +363,19 @@ function updateChartOverlays(data) {
     addLevel(m.pdh, 'rgba(255, 255, 255, 0.7)', 1, 'PDH', 8);
     addLevel(m.pdl, 'rgba(255, 255, 255, 0.7)', 1, 'PDL', 8);
     addLevel(m.vwap, '#f59e0b', 0, 'VWAP', 7);
+
+    // Call / Put Walls (GEX Proxies)
+    if (m.callWall > 0) addLevel(m.callWall, 'rgba(239, 68, 68, 0.8)', 2, 'CALL WALL', 11);
+    if (m.putWall > 0) addLevel(m.putWall, 'rgba(34, 197, 94, 0.8)', 2, 'PUT WALL', 11);
+
+    // VWAP Bands
+    if (m.vwapStdev > 0) {
+        addLevel(m.vwap + m.vwapStdev, 'rgba(245, 158, 11, 0.3)', 2, '+1 STDEV', 6);
+        addLevel(m.vwap - m.vwapStdev, 'rgba(245, 158, 11, 0.3)', 2, '-1 STDEV', 6);
+        addLevel(m.vwap + (m.vwapStdev * 2), 'rgba(245, 158, 11, 0.5)', 2, '+2 STDEV (REV)', 6);
+        addLevel(m.vwap - (m.vwapStdev * 2), 'rgba(245, 158, 11, 0.5)', 2, '-2 STDEV (REV)', 6);
+    }
+    
     addLevel(m.poc, '#8b5cf6', 1, 'POC', 6);
 
     // Equilibrium / Range
@@ -658,6 +673,8 @@ function updateUI(data) {
             if (midnightEl) midnightEl.innerText = (data.markers.midnightOpen || 0).toFixed(precision);
             if (nyOpenEl) nyOpenEl.innerText = (data.markers.nyOpen || 0).toFixed(precision);
             if (londonOpenEl) londonOpenEl.innerText = (data.markers.londonOpen || 0).toFixed(precision);
+            if (callWallEl) callWallEl.innerText = (data.markers.callWall || 0).toFixed(precision);
+            if (putWallEl) putWallEl.innerText = (data.markers.putWall || 0).toFixed(precision);
             if (vwapEl) vwapEl.innerText = (data.markers.vwap || 0).toFixed(precision);
             if (pocEl) pocEl.innerText = (data.markers.poc || 0).toFixed(precision);
             if (adrEl) adrEl.innerText = (data.markers.adr || 0).toFixed(precision);
