@@ -140,6 +140,60 @@ _Institutional block order detected. Watch for liquidity support/resistance at t
 
         await this.sendMessage(message);
     }
+
+    async sendWallAlert(symbol, price, wallName, wallValue, type) {
+        const emoji = type === 'BULLISH' ? '🧱🟢' : '🧱🔴';
+        const isFX = symbol.includes('=X') || symbol.includes('USD');
+        const prec = isFX ? 4 : 2;
+        
+        const message = `
+${emoji} *INSTITUTIONAL LEVEL CONTACT: ${symbol}*
+----------------------------
+*Level:* ${wallName}
+*Value:* $${wallValue.toFixed(prec)}
+*Current Price:* $${price.toFixed(prec)}
+*Sentiment:* ${type === 'BULLISH' ? 'SUPPORT / MAGNET' : 'RESISTANCE / CEILING'}
+
+_Price is currently interacting with a major institutional level. Watch for rejection or breakout with high volume._
+
+[View Dashboard](http://localhost:3000)
+        `.trim();
+
+        await this.sendMessage(message);
+    }
+
+    async sendMacroAlert(title, message, impact = 'HIGH') {
+        const emoji = impact === 'HIGH' ? '🚨' : '⚠️';
+        const content = `
+${emoji} *MACRO RISK ALERT*
+----------------------------
+*Event:* ${title}
+*Status:* ${impact} IMPACT
+
+_${message}_
+
+[View Macro HUD](http://localhost:3000)
+        `.trim();
+
+        await this.sendMessage(content);
+    }
+
+    async sendSmtAlert(symbol, otherSymbol, type, message) {
+        const emoji = type === 'BULLISH' ? '💎🔥' : '🥀🛑';
+        const content = `
+${emoji} *SMT DIVERGENCE DETECTED: ${symbol}*
+----------------------------
+*Correlation Partner:* ${otherSymbol}
+*Type:* ${type} DIVERGENCE
+*Status:* INSTITUTIONAL UNFAIRNESS
+
+_${message}_
+
+_One asset made a new extreme while the other failed, indicating hidden institutional strength/weakness._
+        `.trim();
+
+        await this.sendMessage(content);
+    }
 }
 
 export const telegram = new TelegramService();

@@ -365,15 +365,15 @@ function updateChartOverlays(data) {
     addLevel(m.vwap, '#f59e0b', 0, 'VWAP', 7);
 
     // Call / Put Walls (GEX Proxies)
-    if (m.callWall > 0) addLevel(m.callWall, 'rgba(239, 68, 68, 0.8)', 2, 'CALL WALL', 11);
-    if (m.putWall > 0) addLevel(m.putWall, 'rgba(34, 197, 94, 0.8)', 2, 'PUT WALL', 11);
+    if (m.callWall > 0) addLevel(m.callWall, '#f43f5e', 0, 'CALL WALL', 15);
+    if (m.putWall > 0) addLevel(m.putWall, '#10b981', 0, 'PUT WALL', 15);
 
     // VWAP Bands
     if (m.vwapStdev > 0) {
-        addLevel(m.vwap + m.vwapStdev, 'rgba(245, 158, 11, 0.3)', 2, '+1 STDEV', 6);
-        addLevel(m.vwap - m.vwapStdev, 'rgba(245, 158, 11, 0.3)', 2, '-1 STDEV', 6);
-        addLevel(m.vwap + (m.vwapStdev * 2), 'rgba(245, 158, 11, 0.5)', 2, '+2 STDEV (REV)', 6);
-        addLevel(m.vwap - (m.vwapStdev * 2), 'rgba(245, 158, 11, 0.5)', 2, '-2 STDEV (REV)', 6);
+        addLevel(m.vwap + m.vwapStdev, 'rgba(245, 158, 11, 0.4)', 2, '+1 STDEV', 12);
+        addLevel(m.vwap - m.vwapStdev, 'rgba(245, 158, 11, 0.4)', 2, '-1 STDEV', 12);
+        addLevel(m.vwap + (m.vwapStdev * 2), 'rgba(245, 158, 11, 0.6)', 1, '+2 STDEV (REV)', 14);
+        addLevel(m.vwap - (m.vwapStdev * 2), 'rgba(245, 158, 11, 0.6)', 1, '-2 STDEV (REV)', 14);
     }
     
     addLevel(m.poc, '#8b5cf6', 1, 'POC', 6);

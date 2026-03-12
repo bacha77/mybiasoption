@@ -298,13 +298,24 @@ async function startServer() {
                     triggers.forEach(t => {
                         const alertKey = `${symbol}_WALL_${t.name}`;
                         const lastTime = lastAlerts.get(alertKey);
-                        // 30 minute cooldown for the same wall
-                        if (!lastTime || (Date.now() - lastTime > 1800000)) {
+                        // 60 minute cooldown for the same wall
+                        if (!lastTime || (Date.now() - lastTime > 3600000)) {
                             console.log(`[TAG] ${symbol} hit ${t.name} at ${price}`);
                             telegram.sendWallAlert(symbol, price, t.name, t.val, t.type).catch(() => {});
                             lastAlerts.set(alertKey, Date.now());
                         }
                     });
+                }
+
+                // --- SMT DIVERGENCE ALERTS ---
+                if (stockData && stockData.markers && stockData.markers.smt) {
+                    const smt = stockData.markers.smt;
+                    const smtKey = `${symbol}_SMT_${smt.type}_${new Date().getHours()}`;
+                    if (!lastAlerts.has(smtKey)) {
+                        console.log(`[SMT] ${symbol} vs ${smt.symbol} | ${smt.type} Divergence!`);
+                        telegram.sendSmtAlert(symbol, smt.symbol, smt.type, smt.message).catch(() => {});
+                        lastAlerts.set(smtKey, Date.now());
+                    }
                 }
 
                 // --- TELEGRAM ALERT LOGIC (GOLD STANDARD FILTER) ---
@@ -453,6 +464,20 @@ async function startServer() {
 
             // Update all sim positions based on newest prices
             await simTrader.updatePositions(simulator.stocks).catch(() => { });
+
+            // --- MACRO PULSE MONITORING (VIX Velocity) ---
+            const vix = simulator.internals.vix;
+            const vixPrev = simulator.internals.vixPrev;
+            if (vix > 0 && vixPrev > 0) {
+                const velocity = (vix - vixPrev) / vixPrev;
+                if (velocity > 0.03) { // 3% spike in a single pulse
+                    const alertKey = `VIX_SPIKE_${Math.floor(Date.now() / 3600000)}`;
+                    if (!lastAlerts.has(alertKey)) {
+                        telegram.sendMacroAlert('VIX VOLATILITY SPIKE', `VIX jumped ${(velocity * 100).toFixed(1)}% rapidly. Institutional risk-off in effect.`, 'HIGH').catch(() => {});
+                        lastAlerts.set(alertKey, Date.now());
+                    }
+                }
+            }
 
             // --- MIDNIGHT OPEN REPORT (DAILY AT 00:00 EST) ---
             const now = new Date();
