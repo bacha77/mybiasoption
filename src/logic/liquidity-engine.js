@@ -444,6 +444,25 @@ export class LiquidityEngine {
         if (isBullishDiv) bullishScore += 15;
         if (isBearishDiv) bearishScore += 15;
 
+        // --- NEW: ASIA RANGE & LIQUIDITY MAGNETS ---
+        const asiaRange = this.calculateAsiaRange(candles);
+        if (asiaRange) {
+            // Judas Swing Detection: Sweep high then dive
+            if (currentPrice > asiaRange.high) bearishScore += 2; // Potential fakeout high
+            if (currentPrice < asiaRange.low) bullishScore += 2;  // Potential fakeout low
+            
+            // Above Asia Mid = Bullish Control
+            if (currentPrice > asiaRange.mid) bullishScore += 1.5;
+            else bearishScore += 1.5;
+        }
+
+        const eLiquidity = this.detectEqualHighsLows(candles);
+        if (eLiquidity) {
+            // Magnets draw price
+            if (eLiquidity.eqh && currentPrice < eLiquidity.eqh.price) bullishScore += 2; // Draws price UP
+            if (eLiquidity.eql && currentPrice > eLiquidity.eql.price) bearishScore += 2; // Draws price DOWN
+        }
+
         const finalMultiplier = (internals && internals.newsImpact === 'HIGH') ? 0.5 : 1;
         const totalScore = (bullishScore * finalMultiplier) - (bearishScore * finalMultiplier);
 
@@ -494,20 +513,52 @@ export class LiquidityEngine {
             roro: this.calculateRORO(internals, symbol),
             orderBlock: this.detectOrderBlocks(candles),
             whaleImbalance: markers.whaleImbalance,
+            asiaRange: asiaRange,
+            restingLiquidity: eLiquidity,
             bloombergSentiment: this.getBloombergSentiment(markers, internals),
             intermarketCorrelation: this.getIntermarketCorrelation(symbol, markers)
         };
     }
 
     getAMDPhase() {
-        // Power of 3: Accumulation, Manipulation, Distribution
+        // Power of 3 (PO3): Accumulation, Manipulation, Distribution
         const nyTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
         const hour = nyTime.getHours();
 
-        if (hour >= 0 && hour < 3) return { label: 'ACCUMULATION', color: '#38bdf8', desc: 'Institutions building size', narrative: 'Price is consolidating within a tight range. Big players are quietly building positions before the fakeout.', next: 'MANIPULATION' };
-        if (hour >= 3 && hour < 10) return { label: 'MANIPULATION', color: '#f59e0b', desc: 'The Judas Swing / Fakeout Phase', narrative: 'The "Judas Swing" is in effect. Price is moving AGAINST the true trend to trap retail and hit stops before the real run.', next: 'DISTRIBUTION' };
-        if (hour >= 10 && hour < 16) return { label: 'DISTRIBUTION', color: '#10b981', desc: 'Large players exiting near trend high/low', narrative: 'The real expansion is happening. Institutions are distributing orders to the late-comers. Look for the expansion run.', next: 'OFF-SESSION' };
-        return { label: 'OFF-SESSION', color: '#64748b', desc: 'Waiting for Midnight liquidity', narrative: 'The algorithmic cycle has ended. Searching for the next liquidity pool for the Midnight restart.', next: 'ACCUMULATION' };
+        if (hour >= 20 || hour < 3) {
+            return {
+                label: 'ACCUMULATION (ASIA)',
+                color: '#38bdf8',
+                desc: 'Setting the Liquidity Anchor',
+                narrative: 'The Asia session is establishing the structural range. Smart Money is quietly positioning. Watch the High/Low boundaries.',
+                next: 'MANIPULATION (LONDON)'
+            };
+        }
+        if (hour >= 3 && hour < 9) {
+            return {
+                label: 'MANIPULATION (LONDON)',
+                color: '#f59e0b',
+                desc: 'Judas Swing / Liquidity Hunt',
+                narrative: 'London opens with a stop-run. Price often moves against the true daily intent to engineer liquidity.',
+                next: 'DISTRIBUTION (NY)'
+            };
+        }
+        if (hour >= 9 && hour < 16) {
+            return {
+                label: 'DISTRIBUTION (NY)',
+                color: '#10b981',
+                desc: 'Institutional Trend Expansion',
+                narrative: 'New York is driving price toward major liquidity pools. Expect real expansion and distribution of size.',
+                next: 'REVERSAL/RETRACEMENT'
+            };
+        }
+        return {
+            label: 'OFF-SESSION / RESET',
+            color: '#64748b',
+            desc: 'Monitoring CBDR Range',
+            narrative: 'The standard day is over. Smart Money is dormant until the Midnight reset. Analyzing CBDR for tomorrow.',
+            next: 'ACCUMULATION'
+        };
     }
 
     getIntermarketCorrelation(symbol, markers) {
@@ -601,6 +652,64 @@ export class LiquidityEngine {
             }
         }
         return null;
+    }
+
+    /**
+     * Asia Range Liquidity Anchor (8 PM - Midnight NY Time)
+     * Defines the initial liquidity boundaries for the day.
+     */
+    calculateAsiaRange(candles) {
+        if (!candles || candles.length === 0) return null;
+
+        const asiaCandles = candles.filter(c => {
+            const date = new Date(c.timestamp);
+            const nyTime = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            const h = nyTime.getHours();
+            return h >= 20 || h < 0; 
+        });
+
+        if (asiaCandles.length < 5) return null;
+
+        const high = Math.max(...asiaCandles.map(c => c.high));
+        const low = Math.min(...asiaCandles.map(c => c.low));
+        
+        return { 
+            high, 
+            low, 
+            mid: (high + low) / 2,
+            isAnchored: true
+        };
+    }
+
+    /**
+     * Detect Relatively Equal Highs/Lows (Retail Resistance/Support)
+     * These are high-probability liquidity draws.
+     */
+    detectEqualHighsLows(candles, threshold = 0.0003) {
+        if (!candles || candles.length < 40) return null;
+        
+        const lastCandles = candles.slice(-40);
+        let bestEQH = null;
+        let bestEQL = null;
+
+        for (let i = 0; i < lastCandles.length - 10; i++) {
+            const h1 = lastCandles[i].high;
+            const l1 = lastCandles[i].low;
+
+            for (let j = i + 5; j < lastCandles.length; j++) {
+                const h2 = lastCandles[j].high;
+                const l2 = lastCandles[j].low;
+
+                if (Math.abs(h1 - h2) / h1 < threshold) {
+                    bestEQH = { price: (h1 + h2) / 2, type: 'EQH' };
+                }
+                if (Math.abs(l1 - l2) / l1 < threshold) {
+                    bestEQL = { price: (l1 + l2) / 2, type: 'EQL' };
+                }
+            }
+        }
+        
+        return { eqh: bestEQH, eql: bestEQL };
     }
 
     /**

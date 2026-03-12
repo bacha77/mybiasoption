@@ -147,6 +147,8 @@ const bslMagnetPrice = document.getElementById('magnet-bsl-price');
 const bslMagnetDist = document.getElementById('magnet-bsl-dist');
 const sslMagnetPrice = document.getElementById('magnet-ssl-price');
 const sslMagnetDist = document.getElementById('magnet-ssl-dist');
+const asiaHighEl = document.getElementById('magnet-asia-high');
+const asiaLowEl = document.getElementById('magnet-asia-low');
 const whaleTickerScroll = document.querySelector('.ticker-scroll');
 const smtBadge = document.getElementById('smt-badge');
 const absorptionBadge = document.getElementById('absorption-badge');
@@ -414,6 +416,20 @@ function updateChartOverlays(data) {
         const viColor = vi.type.includes('BULLISH') ? 'rgba(245, 158, 11, 0.25)' : 'rgba(244, 63, 94, 0.25)';
         levels.push({ price: vi.top, color: viColor, style: 2, title: 'IMBALANCE', weight: 2 });
         levels.push({ price: vi.bottom, color: viColor, style: 2, title: '', weight: 1 });
+    }
+
+    // --- NEW: ASIA RANGE & LIQUIDITY MAGNETS ---
+    if (data.bias && data.bias.asiaRange) {
+        const ar = data.bias.asiaRange;
+        addLevel(ar.high, 'rgba(56, 189, 248, 0.4)', 1, 'ASIA HIGH', 12);
+        addLevel(ar.low, 'rgba(56, 189, 248, 0.4)', 1, 'ASIA LOW', 12);
+        addLevel(ar.mid, 'rgba(56, 189, 248, 0.2)', 2, 'ASIA MID', 5);
+    }
+
+    if (data.bias && data.bias.restingLiquidity) {
+        const rl = data.bias.restingLiquidity;
+        if (rl.eqh) addLevel(rl.eqh.price, 'rgba(245, 158, 11, 0.6)', 1, 'EQH DRAW', 15);
+        if (rl.eql) addLevel(rl.eql.price, 'rgba(245, 158, 11, 0.6)', 1, 'EQL DRAW', 15);
     }
 
     // Sort and allocate labels
@@ -1136,6 +1152,13 @@ function updateUI(data) {
                     const distLine = ((pdl - price) / price) * 100;
                     sslMagnetDist.innerText = `${distLine > 0 ? '+' : ''}${distLine.toFixed(2)}%`;
                     sslMagnetDist.className = Math.abs(distLine) < 0.2 ? 'magnet-dist sweep-ready' : 'magnet-dist';
+                }
+
+                // Asia Range Display
+                if (data.bias && data.bias.asiaRange) {
+                    const ar = data.bias.asiaRange;
+                    if (asiaHighEl) asiaHighEl.innerText = ar.high.toFixed(precision);
+                    if (asiaLowEl) asiaLowEl.innerText = ar.low.toFixed(precision);
                 }
             }
         }
