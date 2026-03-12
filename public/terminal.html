@@ -415,32 +415,30 @@
                     <div id="rec-box" class="rec-box">
                         <div class="rec-action-row">
                             <span id="rec-action" class="rec-action-text">WAITING</span>
-                            <span id="rec-confidence" class="h-stat-value accent-text">0%</span>
+                            <span id="rec-confidence" class="m-value gold-text" style="font-size: 0.8rem;">0%</span>
                         </div>
                         <div class="rec-meta">
-                            <span>Strike: <b id="rec-strike">-</b></span>
-                            <span>Target: <b id="rec-target">-</b></span>
-                            <span>Trim: <b id="rec-trim">-</b></span>
-                            <span>Stop: <b id="rec-sl">-</b></span>
+                            <span>STRIKE: <b id="rec-strike">-</b></span>
+                            <span>TARGET: <b id="rec-target">-</b></span>
+                            <span>TRIM: <b id="rec-trim">-</b></span>
+                            <span>STOP: <b id="rec-sl">-</b></span>
                             <span>R/R: <b id="rec-rr" class="bullish-text">1:0.0</b></span>
-                            <span>Size: <b id="rec-size">-</b> Ctr.</span>
-                            <span>Time: <b id="rec-duration">-</b></span>
+                            <span>QTY: <b id="rec-size">-</b></span>
                         </div>
                         <div id="rec-rationale"
-                            style="margin-top:1rem; font-size:0.75rem; color: var(--text-dim); line-height:1.4;">
-                            Monitoring institutional levels for high-probability trap...
+                            style="margin-top:0.8rem; font-size:0.6rem; color: var(--text-dim); line-height:1.2; text-transform: uppercase;">
+                            SCANNING INSTITUTIONAL LIQUIDITY...
                         </div>
                         <button id="btn-unlock-signal" class="btn-primary"
-                            style="display:none; width:100%; margin-top:1rem; font-weight:900;">🔓 UNLOCK GOLD
-                            SIGNAL</button>
+                            style="display:none; width:100%; margin-top:1rem;">UNLOCK GOLD SIGNAL</button>
                     </div>
                 </section>
 
                 <!-- Active Positions -->
                 <section class="card reveal-6">
                     <div class="card-title">Active Paper Trades</div>
-                    <div id="active-trades-container" style="font-size: 0.8rem;">
-                        <p style="color:var(--text-dim); text-align:center;">No active positions.</p>
+                    <div id="active-trades-container" style="font-size: 0.65rem;">
+                        <p style="color:var(--text-dim); text-align:center; padding: 1rem;">NO OPEN POSITIONS</p>
                     </div>
                 </section>
 
@@ -456,10 +454,10 @@
                 <section class="card reveal-8">
                     <div class="card-title">Simulation Trade History</div>
                     <div style="max-height: 200px; overflow-y: auto;">
-                        <table class="watchlist-table" style="font-size: 0.75rem;">
-                            <tbody id="trade-history-body">
+                        <table class="watchlist-table">
+                            <tbody id="trade-history-body" style="font-family: var(--font-data); font-size: 0.65rem;">
                                 <tr>
-                                    <td colspan="3" style="text-align:center;">Fetching history...</td>
+                                    <td colspan="3" style="text-align:center; padding: 1rem; color: var(--text-dim);">FETCHING HISTORICAL DATA...</td>
                                 </tr>
                             </tbody>
                         </table>

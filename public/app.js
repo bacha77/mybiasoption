@@ -573,11 +573,13 @@ async function updateHistory() {
         const trades = await res.json();
         tradeHistoryBody.innerHTML = trades.map(t => `
             <tr>
-                <td class="w-sym">${t.symbol}</td>
-                <td class="${t.profit > 0 ? 'bullish-text' : 'bearish-text'}">$${t.profit.toFixed(0)}</td>
-                <td style="font-size: 0.65rem; color: var(--text-dim); text-align:right;">${t.reason}</td>
+                <td class="w-sym" style="font-family: var(--font-data); font-weight:700;">${t.symbol}</td>
+                <td class="${t.profit > 0 ? 'bullish-text' : 'bearish-text'}" style="font-family: var(--font-data); font-weight:700;">
+                    ${t.profit > 0 ? '+' : ''}$${t.profit.toFixed(0)}
+                </td>
+                <td style="font-size: 0.55rem; color: var(--text-dim); text-align:right; text-transform:uppercase;">${t.reason}</td>
             </tr>
-        `).join('') || '<tr><td colspan="3" style="text-align:center;">No history yet.</td></tr>';
+        `).join('') || '<tr><td colspan="3" style="text-align:center; font-size:0.75rem; padding: 2rem;">No history yet.</td></tr>';
     } catch (e) { }
 }
 setInterval(updateHistory, 30000);
@@ -604,17 +606,15 @@ function updateUI(data) {
             activeTradesContainer.innerHTML = '<p style="color:var(--text-dim); text-align:center;">No active positions.</p>';
         } else {
             activeTradesContainer.innerHTML = data.activeTrades.map(trade => `
-                <div style="padding: 10px; border-bottom: 1px solid var(--border); margin-bottom: 5px;">
-                    <div style="display:flex; justify-content:space-between; font-weight:800;">
+                <div class="trade-row">
+                    <div class="trade-main">
                         <span class="${trade.type.includes('CALL') ? 'bullish-text' : 'bearish-text'}">${trade.symbol}</span>
                         <span>$${trade.entryPrice.toFixed(trade.symbol.includes('=X') ? 4 : 2)}</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-dim); margin-top:5px;">
-                        <span>Cost: $${trade.cost.toFixed(2)}</span>
-                        <span>Contracts: ${trade.size}</span>
-                    </div>
-                    <div style="font-size:0.7rem; color: #fbbf24; margin-top:5px;">
-                        TP: $${trade.tp.toFixed(trade.symbol.includes('=X') ? 4 : 2)} | SL: $${trade.sl.toFixed(trade.symbol.includes('=X') ? 4 : 2)}
+                    <div class="trade-sub">
+                        <span>PRICE: $${trade.cost.toFixed(2)}</span>
+                        <span>QTY: ${trade.size}</span>
+                        <span style="color:var(--gold);">TP: ${trade.tp.toFixed(trade.symbol.includes('=X') ? 4 : 2)}</span>
                     </div>
                 </div>
             `).join('');
