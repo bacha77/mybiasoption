@@ -442,6 +442,19 @@ function updateChartOverlays(data) {
         addLevel(c.sd2_low, 'rgba(244, 63, 94, 0.6)', 1, 'CBDR SD2 (MAX)', 14);
     }
 
+    if (data.bias && data.bias.ote) {
+        const ote = data.bias.ote;
+        const oteColor = ote.type.includes('BULLISH') ? 'rgba(245, 158, 11, 0.25)' : 'rgba(244, 63, 94, 0.25)';
+        addLevel(ote.fib62, oteColor, 2, 'OTE 62%', 9);
+        addLevel(ote.fib70, oteColor, 0, 'OTE SWEET SPOT', 15);
+        addLevel(ote.fib79, oteColor, 2, 'OTE 79%', 9);
+    }
+
+    if (data.bias && data.bias.flout) {
+        const f = data.bias.flout;
+        addLevel(f.mid, 'rgba(148, 163, 184, 0.4)', 2, 'FLOUT MID', 3);
+    }
+
     // Sort and allocate labels
     levels.sort((a, b) => b.weight - a.weight);
     const shownLabels = [];

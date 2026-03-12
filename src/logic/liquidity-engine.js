@@ -471,6 +471,18 @@ export class LiquidityEngine {
             if (currentPrice < cbdr.sd2_low) bullishScore += 3;
         }
 
+        // --- NEW: OPTIMAL TRADE ENTRY (OTE) ---
+        const ote = this.calculateOTE(candles);
+        if (ote) {
+            if (ote.type === 'BULLISH_OTE' && currentPrice >= ote.fib79 && currentPrice <= ote.fib62) {
+                bullishScore += 4; // High conviction entry zone
+            } else if (ote.type === 'BEARISH_OTE' && currentPrice <= ote.fib79 && currentPrice >= ote.fib62) {
+                bearishScore += 4;
+            }
+        }
+
+        const flout = this.calculateCBDRFlout(candles);
+
         const finalMultiplier = (internals && internals.newsImpact === 'HIGH') ? 0.5 : 1;
         const totalScore = (bullishScore * finalMultiplier) - (bearishScore * finalMultiplier);
 
@@ -523,6 +535,8 @@ export class LiquidityEngine {
             whaleImbalance: markers.whaleImbalance,
             asiaRange: asiaRange,
             cbdr: cbdr,
+            flout: flout,
+            ote: ote,
             restingLiquidity: eLiquidity,
             bloombergSentiment: this.getBloombergSentiment(markers, internals),
             intermarketCorrelation: this.getIntermarketCorrelation(symbol, markers)
@@ -749,6 +763,70 @@ export class LiquidityEngine {
             sd1_low: low - range,
             sd2_high: high + (range * 2),
             sd2_low: low - (range * 2),
+            isAnchored: true
+        };
+    }
+
+    /**
+     * Optimal Trade Entry (OTE) - Institutional Fibonacci (62% - 79%)
+     * Identifies the sweet spot for trend continuation entries.
+     */
+    calculateOTE(candles) {
+        if (!candles || candles.length < 50) return null;
+        
+        // Find the current daily leg (High/Low of current day)
+        const dayCandles = candles.slice(-50); // Proxy for intraday leg
+        const high = Math.max(...dayCandles.map(c => c.high));
+        const low = Math.min(...dayCandles.map(c => c.low));
+        const range = high - low;
+        
+        if (range <= 0) return null;
+
+        const currentPrice = candles[candles.length - 1].close;
+        const trend = currentPrice > (high + low) / 2 ? 'BULLISH' : 'BEARISH';
+
+        if (trend === 'BULLISH') {
+            return {
+                type: 'BULLISH_OTE',
+                fib62: high - (range * 0.62),
+                fib70: high - (range * 0.705), // Sweet Spot
+                fib79: high - (range * 0.79),
+                range: [high - (range * 0.79), high - (range * 0.62)]
+            };
+        } else {
+            return {
+                type: 'BEARISH_OTE',
+                fib62: low + (range * 0.62),
+                fib70: low + (range * 0.705),
+                fib79: low + (range * 0.79),
+                range: [low + (range * 0.62), low + (range * 0.79)]
+            };
+        }
+    }
+
+    /**
+     * CBDR Flout (10 PM - Midnight NY Time)
+     * Analyzing the final liquidity repositioning for the daily reset.
+     */
+    calculateCBDRFlout(candles) {
+        if (!candles || candles.length === 0) return null;
+
+        const floutCandles = candles.filter(c => {
+            const date = new Date(c.timestamp);
+            const nyTime = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            const h = nyTime.getHours();
+            return h >= 22 && h < 24; 
+        });
+
+        if (floutCandles.length < 5) return null;
+
+        const high = Math.max(...floutCandles.map(c => c.high));
+        const low = Math.min(...floutCandles.map(c => c.low));
+        
+        return { 
+            high, 
+            low, 
+            mid: (high + low) / 2,
             isAnchored: true
         };
     }
