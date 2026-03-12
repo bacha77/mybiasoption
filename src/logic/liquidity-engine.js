@@ -230,6 +230,7 @@ export class LiquidityEngine {
         if (isWeekend) return { session: 'WEEKEND', status: 'MARKET CLOSED', color: '#ff3366', isMarketOpen: false };
 
         if (!isForex) {
+            if (totalMinutes >= 600 && totalMinutes <= 660) return { session: 'SILVER_BULLET', status: 'ALGO EXPANSION', color: '#f59e0b', isMarketOpen: true };
             if (totalMinutes >= 570 && totalMinutes <= 660) return { session: 'NY_OPEN', status: 'HIGH VOLATILITY', color: '#00f2ff', isMarketOpen: true };
             if (totalMinutes > 660 && totalMinutes < 780) return { session: 'NY_AM', status: 'TRENDING', color: '#00ff88', isMarketOpen: true };
             if (totalMinutes >= 780 && totalMinutes <= 810) return { session: 'LUNCH', status: 'CONSOLIDATION', color: '#94a3b8', isMarketOpen: true };
@@ -239,6 +240,7 @@ export class LiquidityEngine {
             return { session: 'OFF_HOURS', status: 'MARKET CLOSED', color: '#334155', isMarketOpen: false };
         } else {
             // Forex-specific session logic
+            if (hour >= 3 && hour < 4) return { session: 'LONDON_BULLET', status: 'ALGO EXPANSION', color: '#f59e0b', isMarketOpen: true };
             if (hour >= 3 && hour < 11) return { session: 'LONDON', status: 'HIGH VOLUME', color: '#00f2ff', isMarketOpen: true };
             if (hour >= 8 && hour < 17) return { session: 'NY_FX', status: 'OVERLAP/LIQUIDITY', color: '#00ff88', isMarketOpen: true };
             if (hour >= 19 || hour < 4) return { session: 'ASIA', status: 'STEADY', color: '#94a3b8', isMarketOpen: true };
@@ -486,6 +488,9 @@ export class LiquidityEngine {
             fundingCandle: this.detectFundingCandle(candles, markers),
             absorption: this.detectAbsorption(candles, markers),
             fvg: this.detectFVG(candles),
+            volumeImbalance: this.detectVolumeImbalance(candles),
+            squeeze: this.detectSqueeze(candles),
+            roro: this.calculateRORO(internals, symbol),
             orderBlock: this.detectOrderBlocks(candles),
             whaleImbalance: markers.whaleImbalance,
             bloombergSentiment: this.getBloombergSentiment(markers, internals),
@@ -595,6 +600,89 @@ export class LiquidityEngine {
             }
         }
         return null;
+    }
+
+    /**
+     * Detect Volume Imbalances (Gaps between bodies)
+     */
+    detectVolumeImbalance(candles) {
+        if (!candles || candles.length < 2) return null;
+        const c1 = candles[candles.length - 2];
+        const c2 = candles[candles.length - 1];
+
+        const c1BodyMax = Math.max(c1.open, c1.close);
+        const c1BodyMin = Math.min(c1.open, c1.close);
+        const c2BodyMax = Math.max(c2.open, c2.close);
+        const c2BodyMin = Math.min(c2.open, c2.close);
+
+        // Bullish VI: C2 body bottom > C1 body top
+        if (c2BodyMin > c1BodyMax) {
+            return { type: 'BULLISH_VI', top: c2BodyMin, bottom: c1BodyMax, status: 'UNFILLED' };
+        }
+        // Bearish VI: C2 body top < C1 body bottom
+        if (c2BodyMax < c1BodyMin) {
+            return { type: 'BEARISH_VI', top: c1BodyMin, bottom: c2BodyMax, status: 'UNFILLED' };
+        }
+        return null;
+    }
+
+    /**
+     * Institutional Volatility Squeeze (Bollinger Bands inside Keltner Channels)
+     */
+    detectSqueeze(candles, period = 20) {
+        if (!candles || candles.length < period + 1) return null;
+        const prices = candles.slice(-period).map(c => c.close);
+        const avg = prices.reduce((a, b) => a + b, 0) / period;
+        
+        // Bollinger Bands (2 SD)
+        const variance = prices.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / period;
+        const sd = Math.sqrt(variance);
+        const bbUpper = avg + (2 * sd);
+        const bbLower = avg - (2 * sd);
+
+        // Keltner Channels (using ATR fallback if not precise)
+        const atr = this.calculateATR(candles, period);
+        const kcUpper = avg + (1.5 * atr);
+        const kcLower = avg - (1.5 * atr);
+
+        const isSqueezing = (bbUpper < kcUpper && bbLower > kcLower);
+        if (isSqueezing) {
+            return { status: 'SQUEEZING', intensity: (kcUpper - bbUpper) / (kcUpper - avg) };
+        }
+        return null;
+    }
+
+    /**
+     * Risk-On / Risk-Off (RORO) Index Calculation
+     */
+    calculateRORO(internals, symbol) {
+        let score = 50; // Neutral start
+
+        // VIX Impact (Risk Gauge)
+        if (internals.vix < 15) score += 15;
+        else if (internals.vix > 22) score -= 15;
+        else if (internals.vix > 30) score -= 30;
+
+        // DXY Impact (Inverse to Stocks)
+        if (internals.dxy < 103) score += 10;
+        else if (internals.dxy > 105) score -= 10;
+
+        // Yields Impact
+        if (internals.tnx < 4.0) score += 5;
+        else if (internals.tnx > 4.3) score -= 10;
+
+        // Market Breadth Impact
+        if (internals.breadth > 70) score += 15;
+        else if (internals.breadth < 30) score -= 15;
+
+        const finalScore = Math.max(0, Math.min(100, score));
+        let label = 'NEUTRAL';
+        if (finalScore >= 75) label = 'HEAVY RISK-ON';
+        else if (finalScore >= 60) label = 'RISK-ON';
+        else if (finalScore <= 25) label = 'HEAVY RISK-OFF';
+        else if (finalScore <= 40) label = 'RISK-OFF';
+
+        return { score: finalScore, label, color: finalScore > 50 ? '#10b981' : '#f43f5e' };
     }
 
     getOptionRecommendation(bias, markers, currentPrice, timeframe = '1m', symbol = 'SPY', candles = []) {

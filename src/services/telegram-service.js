@@ -194,6 +194,38 @@ _One asset made a new extreme while the other failed, indicating hidden institut
 
         await this.sendMessage(content);
     }
+
+    async sendSqueezeAlert(symbol, intensity) {
+        const emoji = '🌀🔥';
+        const content = `
+${emoji} *VOLATILITY SQUEEZE DETECTED: ${symbol}*
+----------------------------
+*Intensity:* ${(intensity * 100).toFixed(1)}%
+*Status:* INSTITUTIONAL COILING
+
+_Bollinger Bands are inside Keltner Channels. A massive explosive move is imminent. Watch for the breakout direction with high volume._
+
+[View Matrix](http://localhost:3000)
+        `.trim();
+
+        await this.sendMessage(content);
+    }
+
+    async sendRoroAlert(roro) {
+        const emoji = roro.score > 50 ? '📈🧪' : '📉⚗️';
+        const content = `
+${emoji} *MACRO SENTIMENT SHIFT: ${roro.label}*
+----------------------------
+*RORO Index:* ${roro.score}/100
+*Status:* INSTITUTIONAL ${roro.score > 50 ? 'RISK-ON' : 'RISK-OFF'}
+
+_The internal macro metrics (VIX, DXY, TNX, Breadth) have shifted to ${roro.label}. Adjust your institutional bias accordingly._
+
+[View Macro HUD](http://localhost:3000)
+        `.trim();
+
+        await this.sendMessage(content);
+    }
 }
 
 export const telegram = new TelegramService();

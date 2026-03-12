@@ -158,6 +158,10 @@ const biasGaugeWrapper = document.querySelector('.bias-gauge-container');
 const amdHud = document.getElementById('amd-hud');
 const mssBadge = document.getElementById('mss-badge');
 const intermarketBadge = document.getElementById('intermarket-badge');
+const squeezeBadge = document.getElementById('squeeze-badge');
+const roroLabel = document.getElementById('roro-label');
+const roroBar = document.getElementById('roro-bar');
+const roroVal = document.getElementById('roro-val');
 
 // Trigger Checklist Elements
 const btnUnlockSignal = document.getElementById('btn-unlock-signal');
@@ -402,6 +406,14 @@ function updateChartOverlays(data) {
         const fvgColor = fvg.type.includes('BULLISH') ? 'rgba(6, 182, 212, 0.15)' : 'rgba(244, 63, 94, 0.15)';
         levels.push({ price: fvg.top, color: fvgColor, style: 2, title: 'FVG Target', weight: 2 });
         levels.push({ price: fvg.bottom, color: fvgColor, style: 2, title: '', weight: 1 });
+    }
+
+    // 3. Volume Imbalance (VI)
+    if (data.bias && data.bias.volumeImbalance) {
+        const vi = data.bias.volumeImbalance;
+        const viColor = vi.type.includes('BULLISH') ? 'rgba(245, 158, 11, 0.25)' : 'rgba(244, 63, 94, 0.25)';
+        levels.push({ price: vi.top, color: viColor, style: 2, title: 'IMBALANCE', weight: 2 });
+        levels.push({ price: vi.bottom, color: viColor, style: 2, title: '', weight: 1 });
     }
 
     // Sort and allocate labels
@@ -791,6 +803,30 @@ function updateUI(data) {
             } else {
                 fvgBadge.style.display = 'none';
             }
+        }
+
+        // --- NEW: VOLATILITY SQUEEZE ---
+        if (squeezeBadge) {
+            if (data.bias && data.bias.squeeze && data.bias.squeeze.status === 'SQUEEZING') {
+                squeezeBadge.style.display = 'block';
+                squeezeBadge.title = `Squeeze Intensity: ${(data.bias.squeeze.intensity * 100).toFixed(0)}%`;
+            } else {
+                squeezeBadge.style.display = 'none';
+            }
+        }
+
+        // --- NEW: RORO INDEX ---
+        if (data.bias && data.bias.roro) {
+            const roro = data.bias.roro;
+            if (roroLabel) {
+                roroLabel.innerText = roro.label;
+                roroLabel.style.color = roro.color;
+            }
+            if (roroBar) {
+                roroBar.style.width = `${roro.score}%`;
+                roroBar.style.background = roro.color;
+            }
+            if (roroVal) roroVal.innerText = `RORO: ${roro.score.toFixed(0)}`;
         }
 
         // --- 🦄 UNICORN DETECTOR UI UPDATES ---

@@ -133,6 +133,7 @@
                             <div id="smt-badge" class="smt-badge" style="display:none;">SMT DIVERGENCE</div>
                             <div id="absorption-badge" class="absorption-badge" style="display:none;">ABSORPTION
                                 DETECTED</div>
+                            <div id="squeeze-badge" class="squeeze-badge" style="display:none;">VOLATILITY SQUEEZE</div>
                             <div id="fvg-badge" class="fvg-badge" style="display:none;">FVG DISPLACEMENT</div>
                             <div id="bloomberg-sentiment-badge" class="bloomberg-badge" style="display:none;">BLOOMBERG
                                 SENTIMENT</div>
@@ -264,6 +265,15 @@
                             <div class="macro-footer">
                                 <span id="vix-val-macro" class="m-value">0.00</span>
                                 <span id="vix-corr" class="corr-tag">INVERSE</span>
+                            </div>
+                        <div class="macro-item" data-tooltip="Risk-On / Risk-Off Index. Consolidated macro sentiment from DXY, VIX, Yields, and Breadth.">
+                            <div class="macro-label">RORO SENTIMENT INDEX</div>
+                            <div class="roro-container" style="display:flex; flex-direction:column; align-items:center; gap:5px; margin-top:10px;">
+                                <div id="roro-label" class="roro-label" style="font-weight:900; font-size:0.8rem; color:var(--gold);">NEUTRAL</div>
+                                <div style="width:100%; height:8px; background:rgba(255,255,255,0.05); border-radius:4px; overflow:hidden;">
+                                    <div id="roro-bar" style="width:50%; height:100%; background:var(--gold); transition: all 0.5s ease;"></div>
+                                </div>
+                                <div id="roro-val" class="roro-val" style="font-size:0.7rem; color:var(--text-dim);">RORO: 50</div>
                             </div>
                         </div>
                     </div>

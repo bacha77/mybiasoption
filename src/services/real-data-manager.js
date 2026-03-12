@@ -630,8 +630,8 @@ export class RealDataManager {
         // Proxy GEX Option Walls (Finding nearest heavy strike levels based on current price)
         const isForex = symbol.includes('=X') || symbol.includes('USD');
         const interval = isForex ? 0.01 : (stock.currentPrice > 100 ? 5 : 1); 
-        const callWall = Math.ceil(stock.currentPrice / interval) * interval + interval;
-        const putWall = Math.floor(stock.currentPrice / interval) * interval - interval;
+        const callWall = Math.ceil(stock.currentPrice / interval) * interval;
+        const putWall = Math.floor(stock.currentPrice / interval) * interval;
 
         return {
             pdh: stock.pdh || 0,

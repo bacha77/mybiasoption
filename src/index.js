@@ -307,6 +307,30 @@ async function startServer() {
                     });
                 }
 
+                // --- SILVER BULLET SESSION ALERT ---
+                if (stockData.session && (stockData.session.session === 'SILVER_BULLET' || stockData.session.session === 'LONDON_BULLET')) {
+                    const sbKey = `SB_ALERT_${symbol}_${new Date().getHours()}`;
+                    if (!lastAlerts.has(sbKey)) {
+                        const isCall = rec && rec.action.includes('CALL');
+                        const isPut = rec && rec.action.includes('PUT');
+                        if (isCall || isPut) {
+                            console.log(`[SB] ${symbol} Silver Bullet Entry Detected!`);
+                            telegram.sendSignalAlert(symbol, stockData.bias.bias, stockData.currentPrice, rec.action, "🚀 SILVER BULLET ALGO ENTRY: Expansion window is active. Follow institutional volume.", rec.strike, rec.trim, rec.target, rec.sl, "1h", stockData.session.session).catch(() => {});
+                            lastAlerts.set(sbKey, Date.now());
+                        }
+                    }
+                }
+
+                // --- VOLATILITY SQUEEZE ALERT ---
+                if (stockData.bias && stockData.bias.squeeze && stockData.bias.squeeze.status === 'SQUEEZING') {
+                    const squeezeKey = `SQUEEZE_${symbol}_${new Date().getHours()}`;
+                    if (!lastAlerts.has(squeezeKey) && stockData.bias.squeeze.intensity > 0.6) {
+                        console.log(`[SQUEEZE] ${symbol} is coiling... Intensity: ${stockData.bias.squeeze.intensity}`);
+                        telegram.sendSqueezeAlert(symbol, stockData.bias.squeeze.intensity).catch(() => {});
+                        lastAlerts.set(squeezeKey, Date.now());
+                    }
+                }
+
                 // --- SMT DIVERGENCE ALERTS ---
                 if (stockData && stockData.markers && stockData.markers.smt) {
                     const smt = stockData.markers.smt;
@@ -465,9 +489,23 @@ async function startServer() {
             // Update all sim positions based on newest prices
             await simTrader.updatePositions(simulator.stocks).catch(() => { });
 
-            // --- MACRO PULSE MONITORING (VIX Velocity) ---
+            // --- MACRO PULSE MONITORING (VIX Velocity & RORO Shift) ---
             const vix = simulator.internals.vix;
             const vixPrev = simulator.internals.vixPrev;
+            const roro = engine.calculateRORO(simulator.internals, 'SPY');
+            
+            // RORO Shift Alert
+            const roroKey = `RORO_SHIFT_${roro.label}`;
+            if (!lastAlerts.has(roroKey)) {
+                console.log(`[RORO] Macro sentiment shifted to ${roro.label}`);
+                telegram.sendRoroAlert(roro).catch(() => {});
+                lastAlerts.set(roroKey, Date.now());
+                // Clear other RORO keys to allow switching back
+                ['HEAVY RISK-ON', 'RISK-ON', 'NEUTRAL', 'RISK-OFF', 'HEAVY RISK-OFF'].forEach(l => {
+                    if (l !== roro.label) lastAlerts.delete(`RORO_SHIFT_${l}`);
+                });
+            }
+
             if (vix > 0 && vixPrev > 0) {
                 const velocity = (vix - vixPrev) / vixPrev;
                 if (velocity > 0.03) { // 3% spike in a single pulse
