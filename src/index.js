@@ -265,6 +265,11 @@ async function startServer() {
             simulator.watchlist.forEach(symbol => {
                 const stockData = processData(symbol);
                 const rec = stockData.recommendation;
+                
+                const nyTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+                const nyHour = nyTime.getHours();
+                const isFX = symbol.includes('=X') || symbol.includes('USD');
+                const isAlertWindow = isFX || (nyHour >= 6 && nyHour < 20);
 
                 if (rec) {
                     if (rec.action !== 'WAIT') {
@@ -299,7 +304,7 @@ async function startServer() {
                         const alertKey = `${symbol}_WALL_${t.name}`;
                         const lastTime = lastAlerts.get(alertKey);
                         // 60 minute cooldown for the same wall
-                        if (!lastTime || (Date.now() - lastTime > 3600000)) {
+                        if (isAlertWindow && (!lastTime || (Date.now() - lastTime > 3600000))) {
                             console.log(`[TAG] ${symbol} hit ${t.name} at ${price}`);
                             telegram.sendWallAlert(symbol, price, t.name, t.val, t.type).catch(() => {});
                             lastAlerts.set(alertKey, Date.now());
@@ -310,7 +315,7 @@ async function startServer() {
                 // --- SILVER BULLET SESSION ALERT ---
                 if (stockData.session && (stockData.session.session === 'SILVER_BULLET' || stockData.session.session === 'LONDON_BULLET')) {
                     const sbKey = `SB_ALERT_${symbol}_${new Date().getHours()}`;
-                    if (!lastAlerts.has(sbKey)) {
+                    if (isAlertWindow && !lastAlerts.has(sbKey)) {
                         const isCall = rec && rec.action.includes('CALL');
                         const isPut = rec && rec.action.includes('PUT');
                         if (isCall || isPut) {
@@ -324,7 +329,7 @@ async function startServer() {
                 // --- VOLATILITY SQUEEZE ALERT ---
                 if (stockData.bias && stockData.bias.squeeze && stockData.bias.squeeze.status === 'SQUEEZING') {
                     const squeezeKey = `SQUEEZE_${symbol}_${new Date().getHours()}`;
-                    if (!lastAlerts.has(squeezeKey) && stockData.bias.squeeze.intensity > 0.6) {
+                    if (isAlertWindow && !lastAlerts.has(squeezeKey) && stockData.bias.squeeze.intensity > 0.6) {
                         console.log(`[SQUEEZE] ${symbol} is coiling... Intensity: ${stockData.bias.squeeze.intensity}`);
                         telegram.sendSqueezeAlert(symbol, stockData.bias.squeeze.intensity).catch(() => {});
                         lastAlerts.set(squeezeKey, Date.now());
@@ -335,7 +340,7 @@ async function startServer() {
                 if (stockData && stockData.markers && stockData.markers.smt) {
                     const smt = stockData.markers.smt;
                     const smtKey = `${symbol}_SMT_${smt.type}_${new Date().getHours()}`;
-                    if (!lastAlerts.has(smtKey)) {
+                    if (isAlertWindow && !lastAlerts.has(smtKey)) {
                         console.log(`[SMT] ${symbol} vs ${smt.symbol} | ${smt.type} Divergence!`);
                         telegram.sendSmtAlert(symbol, smt.symbol, smt.type, smt.message).catch(() => {});
                         lastAlerts.set(smtKey, Date.now());
@@ -419,7 +424,7 @@ async function startServer() {
                         }
                     }
 
-                    if (canSend) {
+                    if (canSend && isAlertWindow) {
                         console.log(`[${symbol}] >>> FIRING PREMIUM TELEGRAM ALERT: ${rec.action} (Acc: ${rec.confidence}%) <<<`);
                         telegram.sendSignalAlert(
                             symbol,
@@ -446,7 +451,7 @@ async function startServer() {
                 // Exit Alert Logic
                 if (rec && rec.exit) {
                     const exitKey = `${symbol}_EXIT_${rec.exit.action}_${Math.floor(Date.now() / 3600000)}`;
-                    if (!lastAlerts.has(exitKey)) {
+                    if (isAlertWindow && !lastAlerts.has(exitKey)) {
                         console.log(`--- EXIT DETECTED: ${symbol} ${rec.exit.action} ---`);
                         telegram.sendExitAlert(symbol, rec.exit).catch(() => { });
                         lastAlerts.set(exitKey, Date.now());
@@ -471,7 +476,7 @@ async function startServer() {
                     const confluenceKey = `${symbol}_CONFLUENCE_ALERT`;
                     const lastAlertTime = lastAlerts.get(confluenceKey) || 0;
 
-                    if (Date.now() - lastAlertTime > 7200000) { // 2 Hour cooldown per symbol
+                    if (isAlertWindow && (Date.now() - lastAlertTime > 7200000)) { // 2 Hour cooldown per symbol
                         console.log(`[${symbol}] >>> FIRING HIGH CONFLUENCE ALERT: ${activeCriteria.length}/5 Indicators <<<`);
                         telegram.sendConfluenceAlert(
                             symbol,
@@ -496,7 +501,7 @@ async function startServer() {
             
             // RORO Shift Alert
             const roroKey = `RORO_SHIFT_${roro.label}`;
-            if (!lastAlerts.has(roroKey)) {
+            if ((nyHour >= 6 && nyHour < 20) && !lastAlerts.has(roroKey)) {
                 console.log(`[RORO] Macro sentiment shifted to ${roro.label}`);
                 telegram.sendRoroAlert(roro).catch(() => {});
                 lastAlerts.set(roroKey, Date.now());
@@ -508,7 +513,7 @@ async function startServer() {
 
             if (vix > 0 && vixPrev > 0) {
                 const velocity = (vix - vixPrev) / vixPrev;
-                if (velocity > 0.03) { // 3% spike in a single pulse
+                if ((nyHour >= 6 && nyHour < 20) && velocity > 0.03) { // 3% spike in a single pulse
                     const alertKey = `VIX_SPIKE_${Math.floor(Date.now() / 3600000)}`;
                     if (!lastAlerts.has(alertKey)) {
                         telegram.sendMacroAlert('VIX VOLATILITY SPIKE', `VIX jumped ${(velocity * 100).toFixed(1)}% rapidly. Institutional risk-off in effect.`, 'HIGH').catch(() => {});

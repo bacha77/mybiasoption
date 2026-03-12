@@ -234,7 +234,8 @@ export class LiquidityEngine {
             if (totalMinutes >= 570 && totalMinutes <= 660) return { session: 'NY_OPEN', status: 'HIGH VOLATILITY', color: '#00f2ff', isMarketOpen: true };
             if (totalMinutes > 660 && totalMinutes < 780) return { session: 'NY_AM', status: 'TRENDING', color: '#00ff88', isMarketOpen: true };
             if (totalMinutes >= 780 && totalMinutes <= 810) return { session: 'LUNCH', status: 'CONSOLIDATION', color: '#94a3b8', isMarketOpen: true };
-            if (totalMinutes > 810 && totalMinutes < 960) return { session: 'NY_PM', status: 'EOD DRIVE', color: '#00f2ff', isMarketOpen: true };
+            if (totalMinutes > 810 && totalMinutes <= 960) return { session: 'NY_PM', status: 'EOD DRIVE', color: '#00f2ff', isMarketOpen: true };
+            if (totalMinutes > 960 && totalMinutes <= 1200) return { session: 'POST_MARKET', status: 'LOW LIQUIDITY', color: '#6366f1', isMarketOpen: true };
 
             // If it's a weekday but outside the above windows
             return { session: 'OFF_HOURS', status: 'MARKET CLOSED', color: '#334155', isMarketOpen: false };
