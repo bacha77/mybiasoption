@@ -653,6 +653,34 @@ function updateInstitutionalRadar(radar, bias) {
         radarRealityText.innerText = narrative;
         radarRealityText.style.borderLeftColor = radar.irScore > 60 ? 'var(--bullish)' : (radar.irScore < 40 ? 'var(--bearish)' : 'var(--border)');
     }
+
+    // 6. Retail Sentiment Gauge (Contrarian Indicator)
+    const retailVal = document.getElementById('retail-sentiment-val');
+    const retailFill = document.getElementById('retail-sentiment-fill');
+    const retailStrategy = document.getElementById('retail-strategy-text');
+    
+    if (bias.retailSentiment !== undefined) {
+        const sentiment = bias.retailSentiment; // 0-100
+        if (retailVal) retailVal.innerText = `${sentiment.toFixed(0)}% LONG`;
+        if (retailFill) {
+            retailFill.style.width = `${sentiment}%`;
+            // Color shift the bar based on extreme levels
+            retailFill.style.background = sentiment >= 75 ? 'var(--bearish)' : (sentiment <= 25 ? 'var(--bullish)' : 'linear-gradient(90deg, var(--bearish) 0%, var(--bullish) 100%)');
+        }
+        
+        if (retailStrategy) {
+            if (sentiment >= 75) {
+                retailStrategy.innerText = "CONTRARIAN BIAS: BEARISH (RETAIL TRAP)";
+                retailStrategy.style.color = 'var(--bearish)';
+            } else if (sentiment <= 25) {
+                retailStrategy.innerText = "CONTRARIAN BIAS: BULLISH (RETAIL SQUEEZE)";
+                retailStrategy.style.color = 'var(--bullish)';
+            } else {
+                retailStrategy.innerText = "CONTRARIAN BIAS: NEUTRAL";
+                retailStrategy.style.color = 'var(--gold)';
+            }
+        }
+    }
 }
 
 function updateProtocolStatus(data) {

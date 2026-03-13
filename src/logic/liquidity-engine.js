@@ -272,6 +272,35 @@ export class LiquidityEngine {
         };
     }
 
+    /**
+     * Estimates Retail Sentiment based on Price Action vs Key Levels.
+     * Retail typically "buys support" and "sells resistance".
+     * Institutions "engineer liquidity" at these same levels.
+     */
+    calculateRetailSentiment(price, markers, candles = []) {
+        let bullish = 50; // Neutral baseline
+        
+        // 1. Retail Trend Following (Retail loves chasing green candles)
+        if (candles.length > 5) {
+            const shortTerm = candles.slice(-10);
+            const move = ((shortTerm[shortTerm.length-1].close - shortTerm[0].open) / shortTerm[0].open) * 100;
+            bullish += (move * 30); // If price up 1%, retail +30% bullish
+        }
+
+        // 2. Retail Level Strategy (Buying Support / Selling Resistance)
+        const eq = this.detectEqualHighsLows(candles);
+        if (eq) {
+            if (eq.eqh && Math.abs(price - eq.eqh.price) / price < 0.001) bullish -= 25; // Retail selling "Double Top"
+            if (eq.eql && Math.abs(price - eq.eql.price) / price < 0.001) bullish += 25; // Retail buying "Double Bottom"
+        }
+
+        // 3. PDH/PDL bias: Retail sells breaks of PDH (thinking it's resistance)
+        if (markers.pdh && price > markers.pdh) bullish -= 15;
+        if (markers.pdl && price < markers.pdl) bullish += 15;
+
+        return Math.max(10, Math.min(90, bullish));
+    }
+
     calculateBias(currentPrice, fvgs, liquidityDraws, bloombergMetrics = {}, markers = {}, relativeStrength = 0, internals = { vix: 0, dxy: 0, newsImpact: 'LOW', sectors: [] }, symbol = 'SPY', candles = []) {
         let bullishScore = 0;
         let bearishScore = 0;
@@ -471,8 +500,13 @@ export class LiquidityEngine {
             }
         }
 
+        // --- RETAIL CONTRARIAN WEIGHTING ---
+        const retailSentiment = this.calculateRetailSentiment(currentPrice, markers, candles);
+        if (retailSentiment > 75) bearishScore += 5; // Extreme bullish retail = Institutional Sell
+        if (retailSentiment < 25) bullishScore += 5; // Extreme bearish retail = Institutional Buy
+
         // --- FOREX KILLZONE INTENSITY ---
-        const session = this.getMarketSession(symbol);
+        const session = this.getSessionInfo(symbol);
         if (isForex) {
             if (session.session.includes('LONDON') || session.session.includes('NY')) {
                 bullishScore *= 1.5;
@@ -594,7 +628,8 @@ export class LiquidityEngine {
             ote: ote,
             restingLiquidity: eLiquidity,
             bloombergSentiment: this.getBloombergSentiment(markers, internals),
-            intermarketCorrelation: this.getIntermarketCorrelation(symbol, markers)
+            intermarketCorrelation: this.getIntermarketCorrelation(symbol, markers),
+            retailSentiment: retailSentiment
         };
     }
 
