@@ -763,7 +763,13 @@ function processData(symbol = simulator.currentSymbol) {
             relativeStrength: rsCheck,
             gammaCheck,
             confluenceScore: finalConfScore
-        }
+        },
+        forexRadar: (symbol.includes('=X') || symbol.includes('USD') || symbol.includes('EUR') || symbol.includes('GBP') || symbol.includes('JPY') || symbol.includes('BTC-USD')) ? {
+            dxyCorr: engine.calculateCorrelation(candles, simulator.stocks['DX-Y.NYB']?.candles[activeTf] || []),
+            eurGbpCorr: engine.calculateCorrelation(simulator.stocks['EURUSD=X']?.candles[activeTf] || [], simulator.stocks['GBPUSD=X']?.candles[activeTf] || []),
+            isInverseDxy: (engine.calculateCorrelation(candles, simulator.stocks['DX-Y.NYB']?.candles[activeTf] || []) < -80),
+            midnightOpen: markers.midnightOpen
+        } : null
     };
 }
 

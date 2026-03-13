@@ -809,6 +809,18 @@ function updateUI(data) {
     // Refresh Institutional Chart Overlays
     updateChartOverlays(data);
 
+    // Update Chart Precision based on Asset Class
+    if (candleSeries) {
+        const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
+        candleSeries.applyOptions({
+            priceFormat: {
+                type: 'price',
+                precision: isFX ? 5 : 2,
+                minMove: isFX ? 0.00001 : 0.01,
+            }
+        });
+    }
+
     // Symbol Display
     const symbolDisplay = document.getElementById('symbol-display');
     if (symbolDisplay) symbolDisplay.innerText = data.symbol || 'SPY';
@@ -1096,6 +1108,31 @@ function updateUI(data) {
             } else {
                 bloombergBadge.style.display = 'none';
             }
+        }
+
+        // --- FOREX INTELLIGENCE RADAR ---
+        const fxRadarContainer = document.getElementById('forex-radar-container');
+        if (data.forexRadar && fxRadarContainer) {
+            fxRadarContainer.style.display = 'block';
+            const dxyCorrEl = document.getElementById('fx-dxy-corr');
+            const smtSyncEl = document.getElementById('fx-smt-sync');
+            const inverseBadge = document.getElementById('fx-inverse-dxy-badge');
+
+            if (dxyCorrEl) {
+                const corr = data.forexRadar.dxyCorr || 0;
+                dxyCorrEl.innerText = `${corr.toFixed(0)}%`;
+                dxyCorrEl.style.color = corr < -80 ? 'var(--bullish)' : (corr > 80 ? 'var(--bearish)' : 'var(--text-bright)');
+            }
+            if (smtSyncEl) {
+                const sync = data.forexRadar.eurGbpCorr || 0;
+                smtSyncEl.innerText = sync > 90 ? 'SYNC' : 'DIVERGED';
+                smtSyncEl.style.color = sync > 90 ? 'var(--bullish)' : 'var(--gold)';
+            }
+            if (inverseBadge) {
+                inverseBadge.style.display = data.forexRadar.isInverseDxy ? 'block' : 'none';
+            }
+        } else if (fxRadarContainer) {
+            fxRadarContainer.style.display = 'none';
         }
 
         // Bias Gauge

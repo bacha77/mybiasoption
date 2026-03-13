@@ -440,6 +440,12 @@ export class LiquidityEngine {
         if (markers.whaleImbalance > 70) bullishScore += 2;
         if (markers.whaleImbalance < -70) bearishScore += 2;
 
+        // --- ELITE: DOLLAR SENSITIVITY (FX WEIGHTING) ---
+        if (isForex && internals && typeof internals.dxyChange === 'number') {
+            if (internals.dxyChange > 0.05) bearishScore += 2.5;
+            if (internals.dxyChange < -0.05) bullishScore += 2.5;
+        }
+
         // --- PROFESSIONAL UPGRADE: SETUP-BASED BIAS WEIGHTING ---
         // Trap detection (Now influences Bias Score)
         const trap = this.detectDeltaTrap(currentPrice, markers.cvd || 0, candles);
@@ -555,53 +561,110 @@ export class LiquidityEngine {
     }
 
     getAMDPhase() {
-        // Power of 3 (PO3): Accumulation, Manipulation, Distribution
+        // --- ELITE CALIBRATION: Algorithmic Timing Windows (NY TIME) ---
         const nyTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
         const hour = nyTime.getHours();
+        const min = nyTime.getMinutes();
+        const timeVal = hour + (min / 60);
 
-        if (hour >= 20 || hour < 3) {
+        // 1. ASIA ACCUMULATION (20:00 - 02:00)
+        if (timeVal >= 20 || timeVal < 2) {
             return {
                 label: 'ACCUMULATION (ASIA)',
                 color: '#38bdf8',
                 desc: 'Setting the Liquidity Anchor',
-                narrative: 'The Asia session is establishing the structural range. Smart Money is quietly positioning. Watch the High/Low boundaries.',
+                narrative: 'Asia is defining the structural range. Watch 12:00 AM (Midnight) as the True Daily Open.',
+                next: 'LON PRE-OPEN (RESETS)'
+            };
+        }
+
+        // 2. LONDON PRE-OPEN / MIDNIGHT RESET (02:00 - 03:00)
+        if (timeVal >= 2 && timeVal < 3) {
+            return {
+                label: 'LON PRE-OPEN (RESET)',
+                color: '#818cf8',
+                desc: 'Institutional Re-Pricing',
+                narrative: 'Smart Money is re-calculating the CBDR range. High probability of a small fake-move before 3:00 AM.',
                 next: 'MANIPULATION (LONDON)'
             };
         }
-        if (hour >= 3 && hour < 9) {
+
+        // 3. LONDON OPEN/MANIPULATION (03:00 - 05:00)
+        if (timeVal >= 3 && timeVal < 5) {
+            const isBullet = (hour === 3);
             return {
-                label: 'MANIPULATION (LONDON)',
+                label: isBullet ? 'LON SILVER BULLET 🎯' : 'MANIPULATION (LONDON)',
                 color: '#f59e0b',
-                desc: 'Judas Swing / Liquidity Hunt',
-                narrative: 'London opens with a stop-run. Price often moves against the true daily intent to engineer liquidity.',
+                desc: isBullet ? 'High-Priority Algo Window' : 'Judas Swing in Progress',
+                narrative: isBullet ? 'The 3-4 AM window is actively hunting liquidity. Expect rapid stop-runs of Asia High/Low.' : 'Price is engineering liquidity. Do not trust the initial direction if DXY is decoupled.',
+                next: 'LONDON EXPANSION'
+            };
+        }
+
+        // 4. LONDON EXPANSION (05:00 - 08:30)
+        if (timeVal >= 5 && timeVal < 8.5) {
+            return {
+                label: 'LONDON EXPANSION',
+                color: '#10b981',
+                desc: 'Institutional Trend Realization',
+                narrative: 'London has established the daily trend. Distributing size toward major liquidity pools.',
+                next: 'NY PRE-OPEN (MACRO)'
+            };
+        }
+
+        // 5. NY PRE-OPEN / MACRO WINDOW (08:30 - 09:30)
+        if (timeVal >= 8.5 && timeVal < 9.5) {
+            return {
+                label: 'NY PRE-OPEN (MACRO)',
+                color: '#ec4899',
+                desc: 'Economic Data/Macro Pulse',
+                narrative: '8:30 AM data releases often act as the secondary manipulation for the NY session.',
                 next: 'DISTRIBUTION (NY)'
             };
         }
-        if (hour >= 9 && hour < 16) {
+
+        // 6. NY OPEN/DISTRIBUTION (09:30 - 13:30)
+        if (timeVal >= 9.5 && timeVal < 13.5) {
+            const isBullet = (hour === 10);
             return {
-                label: 'DISTRIBUTION (NY)',
+                label: isBullet ? 'NY SILVER BULLET 🎯' : 'DISTRIBUTION (NY)',
                 color: '#10b981',
-                desc: 'Institutional Trend Expansion',
-                narrative: 'New York is driving price toward major liquidity pools. Expect real expansion and distribution of size.',
-                next: 'REVERSAL/RETRACEMENT'
+                desc: isBullet ? 'High-Priority Algo Window' : 'Institutional Trend Expansion',
+                narrative: isBullet ? 'The 10-11 AM window is seeking internal range liquidity. Watch for FVG re-tests.' : 'New York is driving price toward the daily target. Institutional volume is at peak.',
+                next: 'NY PM SESSION'
             };
         }
+
+        // 7. NY PM SESSION (13:30 - 16:00)
+        if (timeVal >= 13.5 && timeVal < 16) {
+            return {
+                label: 'NY PM SESSION',
+                color: '#06b6d4',
+                desc: 'Afternoon Trend/Reversal',
+                narrative: 'Profit-taking or secondary expansion. Watch the 2:00 PM (14:00) macro for reversals.',
+                next: 'MARKET CLOSE / CBDR'
+            };
+        }
+
+        // 8. MARKET CLOSE / CBDR (16:00 - 20:00)
         return {
             label: 'OFF-SESSION / RESET',
             color: '#64748b',
             desc: 'Monitoring CBDR Range',
-            narrative: 'The standard day is over. Smart Money is dormant until the Midnight reset. Analyzing CBDR for tomorrow.',
-            next: 'ACCUMULATION'
+            narrative: 'Algorithmic day is reset. Analyzing Central Bank Dealers Range (CBDR) for the next cycle.',
+            next: 'ACCUMULATION (ASIA)'
         };
     }
 
     getIntermarketCorrelation(symbol, markers) {
         // Feature 4: SMT Pulse / Intermarket Correlation
-        // This is a proxy for divergence strength
         if (!markers.smt) return { strength: 0, status: 'STABLE' };
+        
+        const isForex = symbol.includes('=X') || symbol.includes('USD');
         return {
             strength: markers.smt.divergence || 85,
-            status: markers.smt.type === 'BULLISH' ? 'BULLISH DIVERGENCE' : 'BEARISH DIVERGENCE'
+            status: markers.smt.type === 'BULLISH' ? 'BULLISH SMT' : 'BEARISH SMT',
+            regime: isForex ? 'INV-DXY ALIGNED' : 'INDEX CONFLUENCE'
         };
     }
 
@@ -1173,5 +1236,29 @@ export class LiquidityEngine {
             rrRatio: rrRatioValue.toFixed(1),
             exit: exitSignal
         };
+    }
+
+    calculateCorrelation(candlesA, candlesB) {
+        if (!candlesA || !candlesB || candlesA.length < 10 || candlesB.length < 10) return 0;
+
+        // Match lengths and align by timestamp if possible, otherwise assume synchronized
+        const len = Math.min(candlesA.length, candlesB.length);
+        const a = candlesA.slice(-len).map(c => c.close);
+        const b = candlesB.slice(-len).map(c => c.close);
+
+        const avgA = a.reduce((sum, val) => sum + val, 0) / len;
+        const avgB = b.reduce((sum, val) => sum + val, 0) / len;
+
+        let num = 0, denA = 0, denB = 0;
+        for (let i = 0; i < len; i++) {
+            const dA = a[i] - avgA;
+            const dB = b[i] - avgB;
+            num += dA * dB;
+            denA += dA * dA;
+            denB += dB * dB;
+        }
+
+        const den = Math.sqrt(denA * denB);
+        return den === 0 ? 0 : (num / den) * 100;
     }
 }
