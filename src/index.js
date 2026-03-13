@@ -740,6 +740,7 @@ function processData(symbol = simulator.currentSymbol) {
     const absorption = engine.detectAbsorption(candles);
     const sweeps = engine.detectLiquidationSweep(candles, draws);
     const recommendation = engine.getOptionRecommendation(bias, markers, stock.currentPrice, tf, symbol, candles);
+    recommendation.tacticalNarrative = engine.getInstitutionalNarrative(symbol, stock.currentPrice, markers, bias, session);
 
     const multiTfBias = {};
     simulator.timeframes.forEach(timeframe => {
@@ -810,6 +811,7 @@ function processData(symbol = simulator.currentSymbol) {
             isInverseDxy: (engine.calculateCorrelation(candles, simulator.stocks['DX-Y.NYB']?.candles[activeTf] || []) < -80),
             smt: markers.radar?.smt,
             session: engine.getMarketSession(symbol),
+            globalSessions: engine.getGlobalForexSessions(),
             midnightOpen: markers.midnightOpen
         } : null,
         institutionalRadar: markers.radar

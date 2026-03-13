@@ -265,6 +265,15 @@ header {
     letter-spacing: 1px;
     color: var(--text-dim);
 }
+
+.p-narrative {
+    border-left: 1px solid rgba(255,255,255,0.1);
+    padding-left: 12px;
+    max-width: 600px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .protocol-status-ribbon.ready {
     border-color: var(--bullish);
     color: var(--bullish);
@@ -482,9 +491,9 @@ header {
 }
 
 .dashboard-main.protocol-standby {
-    filter: grayscale(0.8) blur(1px);
-    opacity: 0.5;
-    pointer-events: none; /* Block interaction in Standby */
+    filter: saturate(0.5);
+    opacity: 0.9;
+    /* Removed pointer-events: none to allow symbol monitoring */
 }
 
 .dashboard-main.protocol-monitoring {
@@ -493,20 +502,21 @@ header {
 }
 
 .dashboard-main.protocol-standby::after {
-    content: 'PROTOCOL: STANDBY - WAITING FOR INSTITUTIONAL ALIGNMENT';
+    content: 'TACTICAL STANDBY • MONITORING LIQUIDITY • NO GOLD SIGNAL';
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0,0,0,0.8);
+    bottom: 20px;
+    right: 30px;
+    background: rgba(15, 23, 42, 0.9);
     color: var(--gold);
-    padding: 20px 40px;
+    padding: 8px 16px;
     border: 1px solid var(--gold);
-    font-size: 0.8rem;
+    border-radius: 4px;
+    font-size: 0.6rem;
     font-weight: 900;
     z-index: 1000;
     letter-spacing: 2px;
     pointer-events: none;
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
 }
 
 .chart-canvas-container {

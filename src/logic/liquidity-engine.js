@@ -260,6 +260,18 @@ export class LiquidityEngine {
         }
     }
 
+    getGlobalForexSessions() {
+        const now = new Date();
+        const nyTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const hour = nyTime.getHours();
+        
+        return {
+            london: { status: (hour >= 3 && hour < 11) ? 'OPEN' : 'CLOSED', color: (hour >= 3 && hour < 11) ? '#00f2ff' : '#475569' },
+            ny: { status: (hour >= 8 && hour < 17) ? 'OPEN' : 'CLOSED', color: (hour >= 8 && hour < 17) ? '#00ff88' : '#475569' },
+            tokyo: { status: (hour >= 19 || hour < 4) ? 'OPEN' : 'CLOSED', color: (hour >= 19 || hour < 4) ? '#f59e0b' : '#475569' }
+        };
+    }
+
     calculateBias(currentPrice, fvgs, liquidityDraws, bloombergMetrics = {}, markers = {}, relativeStrength = 0, internals = { vix: 0, dxy: 0, newsImpact: 'LOW', sectors: [] }, symbol = 'SPY', candles = []) {
         let bullishScore = 0;
         let bearishScore = 0;
@@ -1270,6 +1282,39 @@ export class LiquidityEngine {
             rrRatio: rrRatioValue.toFixed(1),
             exit: exitSignal
         };
+    }
+
+    getInstitutionalNarrative(symbol, currentPrice, markers, bias, session) {
+        const isForex = symbol.includes('=X') || symbol.includes('USD');
+        const midnightOpen = markers.midnightOpen || currentPrice;
+        
+        let narrative = `Monitoring ${symbol} institutional liquidity flows. `;
+        
+        if (session.session === 'WEEKEND') {
+            return `Markets are archived. Institutional algorithms are offline until Sunday 5 PM EST. Analyzing week ahead liquidity.`;
+        }
+
+        if (isForex) {
+            if (session.session.includes('LONDON')) {
+                narrative = `London Fuel Cycle active. Manipulated moves often seek Daily High/Low before NYC reversal. `;
+            } else if (session.session.includes('NY')) {
+                narrative = `NYC Liquidity Injection. High ADR moves expected as US Dollar volatility peaks. `;
+            } else {
+                narrative = `Forex low-volatility corridor. Banks are building orders for the next Killzone expansion. `;
+            }
+        }
+
+        if (currentPrice > midnightOpen) {
+            narrative += `Price expanded ABOVE Midnight Open (${midnightOpen.toFixed(isForex ? 5 : 2)}). `;
+            if (bias.bias === 'BULLISH') narrative += `Institutional momentum is aligned North. Seeking PDH liquidity draws.`;
+            else narrative += `Potential Judas Swing / Distribution detected above True Open. Careful of expansion fakeouts.`;
+        } else {
+            narrative += `Price tracing BELOW Midnight Open (${midnightOpen.toFixed(isForex ? 5 : 2)}). `;
+            if (bias.bias === 'BEARISH') narrative += `Bearish institutional order flow is heavy. Seeking PDL targets.`;
+            else narrative += `Market is in a discount zone. Institutional accumulation likely near PDL.`;
+        }
+
+        return narrative;
     }
 
     calculateCorrelation(candlesA, candlesB) {

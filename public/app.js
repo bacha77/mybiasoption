@@ -667,6 +667,11 @@ function updateProtocolStatus(data) {
     // Reset classes
     main.classList.remove('protocol-standby', 'protocol-monitoring');
 
+    const narrativeEl = el.querySelector('.p-narrative');
+    if (narrativeEl && rec?.tacticalNarrative) {
+        narrativeEl.innerText = rec.tacticalNarrative;
+    }
+
     if (rec && rec.action !== 'WAIT' && score >= 80 && rec.isStable) {
         el.className = 'protocol-status-ribbon ready';
         if (text) text.innerText = `PROTOCOL: READY (${rec.action})`;
@@ -1324,6 +1329,24 @@ function updateUI(data) {
             }
             if (inverseBadge) {
                 inverseBadge.style.display = data.forexRadar.isInverseDxy ? 'block' : 'none';
+            }
+
+            // Global Session Matrix
+            if (data.forexRadar.globalSessions) {
+                const sess = data.forexRadar.globalSessions;
+                Object.keys(sess).forEach(key => {
+                    const el = document.getElementById(`gs-${key}`);
+                    if (el) {
+                        const status = el.querySelector('.gs-status');
+                        if (status) {
+                            status.innerText = sess[key].status;
+                            status.style.color = sess[key].color;
+                            el.style.borderColor = sess[key].status === 'OPEN' ? sess[key].color : 'transparent';
+                            if (sess[key].status === 'OPEN') el.style.background = `rgba(255,255,255,0.05)`;
+                            else el.style.background = `rgba(0,0,0,0.2)`;
+                        }
+                    }
+                });
             }
         } else if (fxRadarContainer) {
             fxRadarContainer.style.display = 'none';
