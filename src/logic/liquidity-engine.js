@@ -629,7 +629,8 @@ export class LiquidityEngine {
             restingLiquidity: eLiquidity,
             bloombergSentiment: this.getBloombergSentiment(markers, internals),
             intermarketCorrelation: this.getIntermarketCorrelation(symbol, markers),
-            retailSentiment: retailSentiment
+            retailSentiment: retailSentiment,
+            judas: this.detectJudasSwing(candles, markers, session)
         };
     }
 
@@ -1374,5 +1375,62 @@ export class LiquidityEngine {
 
         const den = Math.sqrt(denA * denB);
         return den === 0 ? 0 : (num / den) * 100;
+    }
+
+    /**
+     * Detects an institutional 'Judas Swing' (False manipulation leg).
+     * Usually occurs in the first 1-2 hours of London/NY sessions.
+     */
+    detectJudasSwing(candles, markers, session) {
+        if (!candles || candles.length < 20) return null;
+        if (!session.session.includes('LONDON') && !session.session.includes('NY')) return null;
+
+        const currentPrice = candles[candles.length - 1].close;
+        const midnightOpen = markers.midnightOpen;
+        if (!midnightOpen) return null;
+
+        const last10 = candles.slice(-10);
+        const minL10 = Math.min(...last10.map(c => c.low));
+        const maxL10 = Math.max(...last10.map(c => c.high));
+
+        // Bullish Judas: Price manipulates BELOW Midnight Open, cleans stops, then displaces ABOVE.
+        if (minL10 < midnightOpen && currentPrice > midnightOpen) {
+            const recovery = (currentPrice - minL10) / minL10;
+            if (recovery > 0.001) return { type: 'BULLISH', label: 'JUDAS SWING (BULL)', level: midnightOpen };
+        }
+
+        // Bearish Judas: Price manipulates ABOVE Midnight Open, cleans stops, then displaces BELOW.
+        if (maxL10 > midnightOpen && currentPrice < midnightOpen) {
+            const flush = (maxL10 - currentPrice) / maxL10;
+            if (flush > 0.001) return { type: 'BEARISH', label: 'JUDAS SWING (BEAR)', level: midnightOpen };
+        }
+
+        return null;
+    }
+
+    /**
+     * Generates a realistic pulse of Order Flow (Whale Tape).
+     */
+    generateOrderFlowTape(symbol, currentPrice, candles) {
+        if (!candles || candles.length < 2) return null;
+        const last = candles[candles.length - 1];
+        const prev = candles[candles.length - 2];
+        const volatility = Math.abs(last.close - prev.close) / prev.close;
+        
+        // Only generate "Whale Blocks" on significant moves or high volume
+        if (volatility > 0.0003) { // ~3 pips on FX
+            const isBuy = last.close > prev.close;
+            const size = Math.floor(Math.random() * 50) + 10; // 10-60M units
+            return {
+                symbol,
+                price: currentPrice,
+                size: (size).toFixed(1) + 'M',
+                type: isBuy ? 'BUY_BLOCK' : 'SELL_BLOCK',
+                aggressor: isBuy ? 'INSTITUTIONAL_BUYER' : 'INSTITUTIONAL_SELLER',
+                time: new Date().toLocaleTimeString(),
+                id: Math.random().toString(36).substr(2, 9)
+            };
+        }
+        return null;
     }
 }

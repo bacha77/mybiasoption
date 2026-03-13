@@ -681,6 +681,49 @@ function updateInstitutionalRadar(radar, bias) {
             }
         }
     }
+
+    // 7. Judas Swing Indicator
+    const judasEl = document.getElementById('judas-indicator');
+    if (judasEl) {
+        if (bias.judas) {
+            judasEl.style.display = 'block';
+            judasEl.innerText = bias.judas.label;
+            judasEl.title = `INSTITUTIONAL MANIPULATION DETECTED AT ${bias.judas.level}`;
+        } else {
+            judasEl.style.display = 'none';
+        }
+    }
+
+    // 8. Institutional Whale Tape (Rolling Feed)
+    const tapeList = document.getElementById('whale-tape-list');
+    if (tapeList && data.whaleTape) {
+        // Clear placeholder if it's the first real event
+        if (tapeList.innerHTML.includes('Monitoring dark pool')) tapeList.innerHTML = '';
+
+        const tape = data.whaleTape;
+        const color = tape.type === 'BUY_BLOCK' ? 'var(--bullish)' : 'var(--bearish)';
+        
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.padding = '2px 4px';
+        row.style.background = 'rgba(255,255,255,0.02)';
+        row.style.borderLeft = `2px solid ${color}`;
+        row.style.animation = 'slide-in-right 0.3s ease-out';
+        
+        row.innerHTML = `
+            <span style="color: ${color}; font-weight: 900;">$${tape.size} ${tape.type === 'BUY_BLOCK' ? '▲' : '▼'}</span>
+            <span style="color: var(--text-dim); opacity: 0.8; font-size: 0.45rem;">@ ${tape.price.toFixed(data.symbol.includes('=X') ? 5 : 2)}</span>
+            <span style="color: var(--gold); opacity: 0.6;">${tape.time}</span>
+        `;
+        
+        tapeList.prepend(row);
+        
+        // Keep only last 8 rows to save memory and stay in container
+        while (tapeList.children.length > 8) {
+            tapeList.removeChild(tapeList.lastChild);
+        }
+    }
 }
 
 function updateProtocolStatus(data) {

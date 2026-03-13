@@ -814,7 +814,8 @@ function processData(symbol = simulator.currentSymbol) {
             globalSessions: engine.getGlobalForexSessions(),
             midnightOpen: markers.midnightOpen
         } : null,
-        institutionalRadar: markers.radar
+        institutionalRadar: markers.radar,
+        whaleTape: engine.generateOrderFlowTape(symbol, stock.currentPrice, candles)
     };
 
     return finalData;
