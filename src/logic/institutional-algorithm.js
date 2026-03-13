@@ -106,10 +106,10 @@ export class InstitutionalAlgorithm {
      * Institutional Reality Score (IR-Score)
      * The final "Sync" metric that tells you if the move is REAL or a TRAP.
      */
-    calculateIRScore(bias, killzone, smt, gex) {
+    calculateIRScore(bias, killzone, smt, gex, retail) {
         let score = 50; // Neutral baseline
 
-        // 1. Time Alignment
+        // 1. Time Alignment (Institutional Hours)
         if (killzone.active) score += 10;
         if (killzone.name === 'SILVER_BULLET') score += 15;
 
@@ -120,9 +120,19 @@ export class InstitutionalAlgorithm {
             if (smt.type.includes('BULLISH') && bias.score < 0) score -= 30; // CONFLICT = TRAP
         }
 
-        // 3. Gamma Alignment
-        const nearestWall = gex.reduce((prev, curr) => (curr.gamma > prev.gamma ? curr : prev), gex[0]);
-        if (nearestWall.isMagnet && bias.confidence > 70) score += 5;
+        // 3. Retail Contrarian Pulse (Institutions hunt retail liquidity)
+        if (retail !== undefined) {
+            if (retail >= 80 && bias.score > 0) score -= 45; // MASSIVE SELL TRAP
+            if (retail <= 20 && bias.score < 0) score -= 45; // MASSIVE BUY TRAP
+            if (retail >= 80 && bias.score < 0) score += 20; // Institutions dumping on retail
+            if (retail <= 20 && bias.score > 0) score += 20; // Institutions buying retail fear
+        }
+
+        // 4. Gamma Alignment
+        if (gex && gex.length > 0) {
+            const nearestWall = gex.reduce((prev, curr) => (curr.gamma > prev.gamma ? curr : prev), gex[0]);
+            if (nearestWall.isMagnet && bias.confidence > 70) score += 5;
+        }
 
         return Math.max(0, Math.min(100, score));
     }

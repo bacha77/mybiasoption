@@ -1636,9 +1636,14 @@ function updateUI(data) {
                         div.setAttribute('data-tooltip', sObj.tip); // Use custom data-tooltip for CSS
                         const displaySym = sym.replace('=X', '').replace('^TNX', '10Y-YLD');
                         div.innerHTML = `
-                            <span class="sector-sym" style="font-size: ${displaySym.length > 4 ? '0.7rem' : '0.9rem'};">${displaySym}</span>
-                            <span class="sector-name" style="font-size: 0.55rem; color: var(--text-dim);">${sObj.name}</span>
-                            <span class="sector-change" style="font-size: 0.75rem;">0.00%</span>
+                            <div style="display:flex; flex-direction:column;">
+                                <span class="sector-sym" style="font-size: ${displaySym.length > 4 ? '0.7rem' : '0.9rem'};">${displaySym}</span>
+                                <span class="sector-institutional-status" style="font-size: 0.45rem; font-weight: 800; color: var(--gold); margin-top: 2px;">NEUTRAL</span>
+                            </div>
+                            <div style="text-align:right;">
+                                <div class="sector-change" style="font-size: 0.7rem;">0.00%</div>
+                                <div class="sector-name" style="font-size: 0.5rem; color: var(--text-dim); opacity: 0.7;">${sObj.name}</div>
+                            </div>
                         `;
                         grid.appendChild(div);
                     });
@@ -1646,14 +1651,44 @@ function updateUI(data) {
 
                 symbols.forEach(sym => {
                     const sData = data.sectors.find(s => s.symbol === sym) || (sym === 'UUP' ? { symbol: 'UUP', change: (data.bias?.internals?.dxyChange || 0) } : null);
-                    // Handle UUP specifically if it's missing from sectors payload but in internals
                     const el = document.getElementById(`sector-${sym}-${suffix}`);
                     if (sData && el) {
                         const changeEl = el.querySelector('.sector-change');
+                        const statusEl = el.querySelector('.sector-institutional-status');
+
                         if (changeEl) {
                             changeEl.innerText = `${sData.change >= 0 ? '+' : ''}${sData.change.toFixed(2)}%`;
                             changeEl.className = 'sector-change ' + (sData.change >= 0 ? 'bullish-text' : 'bearish-text');
                         }
+
+                        if (statusEl) {
+                            let status = "NEUTRAL";
+                            let color = 'var(--text-dim)';
+
+                            if (sData.judas) {
+                                status = "JUDAS TRAP";
+                                color = 'var(--bearish)';
+                            } else if (sData.retail >= 75) {
+                                status = "RETAIL TRAP";
+                                color = 'var(--bearish)';
+                            } else if (sData.retail <= 25 && sData.retail !== undefined) {
+                                status = "SHORT SQUEEZE";
+                                color = 'var(--bullish)';
+                            } else if (sData.irScore >= 80) {
+                                status = "SMART MONEY";
+                                color = 'var(--bullish)';
+                            } else if (sData.irScore <= 20) {
+                                status = "DISTRIBUTION";
+                                color = 'var(--bearish)';
+                            } else {
+                                status = sData.bias || "NEUTRAL";
+                                color = status.includes('BULLISH') ? 'var(--bullish)' : (status.includes('BEARISH') ? 'var(--bearish)' : 'var(--text-dim)');
+                            }
+
+                            statusEl.innerText = status;
+                            statusEl.style.color = color;
+                        }
+
                         el.classList.remove('bullish', 'bearish');
                         if (sData.bias === 'BULLISH') el.classList.add('bullish');
                         else if (sData.bias === 'BEARISH') el.classList.add('bearish');

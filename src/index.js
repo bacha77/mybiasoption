@@ -654,11 +654,22 @@ function processSectors() {
         const markers = simulator.getInstitutionalMarkers(s, tf);
         const bias = engine.calculateBias(stock.currentPrice || 0, [], [], stock.bloomberg, markers, 0, simulator.internals, s, candles);
         
+        const irScore = simulator.eliteAlgo.calculateIRScore(
+            bias,
+            markers.radar?.killzone || { active: false, name: 'OFF' },
+            markers.radar?.smt,
+            markers.radar?.gex || [],
+            bias.retailSentiment
+        );
+        
         return {
             symbol: s,
             change: stock.dailyChangePercent || 0,
             price: stock.currentPrice || 0,
-            bias: bias.bias
+            bias: bias.bias,
+            irScore: irScore,
+            judas: bias.judas,
+            retail: bias.retailSentiment
         };
     });
 }
@@ -769,7 +780,8 @@ function processData(symbol = simulator.currentSymbol) {
             bias, 
             markers.radar.killzone, 
             markers.radar.smt, 
-            markers.radar.gex
+            markers.radar.gex,
+            bias.retailSentiment
         );
         console.log(`[DEBUG] Radar for ${symbol}: Score=${markers.radar.irScore}`);
     }

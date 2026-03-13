@@ -13,7 +13,7 @@ export class RealDataManager {
         this.apiKey = process.env.FINNHUB_API_KEY;
         this.configPath = path.join(process.cwd(), 'watchlist.json');
         this.watchlist = this.loadWatchlist();
-        this.sectors = ['XLK', 'XLY', 'XLF', 'XLC', 'SMH', 'NVDA', 'AMD', 'META', 'GOOGL', 'KRE', 'XBI', 'IYT', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', '^TNX'];
+        this.sectors = ['XLK', 'XLY', 'XLF', 'XLC', 'SMH', 'NVDA', 'AMD', 'META', 'GOOGL', 'KRE', 'XBI', 'IYT', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', '^TNX', 'UUP'];
         this.symbolMap = {
             'EURUSD=X': 'OANDA:EUR_USD',
             'GBPUSD=X': 'OANDA:GBP_USD',
