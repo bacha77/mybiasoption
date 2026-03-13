@@ -592,9 +592,16 @@
                         </div>
                     </div>
 
-                    <div id="watchlist-list" class="watchlist-grid" style="flex: 1; overflow-y: auto; padding: 0.5rem;">
-                        <!-- JS Generated Watchlist Cards -->
-                        <div style="text-align: center; padding: 2rem; color: var(--text-dim); font-size: 0.8rem;">
+                    <div id="watchlist-list" class="watchlist-grid" style="flex: 1; overflow-y: auto; padding: 0.5rem; display: flex; flex-direction: column; gap: 15px;">
+                        <div id="stocks-section">
+                            <div class="watchlist-subheader">EQUITY & INDICES</div>
+                            <div id="stocks-list" class="watchlist-subgrid"></div>
+                        </div>
+                        <div id="forex-section">
+                            <div class="watchlist-subheader">FOREX & CRYPTO</div>
+                            <div id="forex-list" class="watchlist-subgrid"></div>
+                        </div>
+                        <div id="watchlist-empty" style="text-align: center; padding: 2rem; color: var(--text-dim); font-size: 0.8rem;">
                             Initializing Premium Feed...
                         </div>
                     </div>

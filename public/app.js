@@ -1695,18 +1695,24 @@ function updateUI(data) {
 
 function updateWatchlist(data) {
     const listContainer = document.getElementById('watchlist-list');
+    const stocksList = document.getElementById('stocks-list');
+    const forexList = document.getElementById('forex-list');
+    const emptyEl = document.getElementById('watchlist-empty');
     const countEl = document.getElementById('watchlist-count');
-    if (!listContainer) return;
+    
+    if (!listContainer || !stocksList || !forexList) return;
 
     const wl = data.watchlist || [];
     if (countEl) countEl.innerText = `${wl.length} Tickers`;
 
     if (wl.length === 0) {
-        if (!listContainer.innerHTML || listContainer.innerHTML.includes('Initializing')) {
-            listContainer.innerHTML = '<div style="text-align:center; padding: 2rem; color:var(--text-dim);">Initializing Watchlist Feed...</div>';
-        }
+        if (emptyEl) emptyEl.style.display = 'block';
+        stocksList.innerHTML = '';
+        forexList.innerHTML = '';
         return;
     }
+
+    if (emptyEl) emptyEl.style.display = 'none';
 
     // --- ALPHA SORTING: Rank by "GO" status, then Confluence Score ---
     wl.sort((a, b) => {
@@ -1721,11 +1727,15 @@ function updateWatchlist(data) {
         return Math.abs(b.dailyChangePercent || 0) - Math.abs(a.dailyChangePercent || 0);
     });
 
-    listContainer.innerHTML = '';
+    stocksList.innerHTML = '';
+    forexList.innerHTML = '';
 
     wl.forEach(stock => {
         try {
             if (!stock || !stock.symbol) return;
+
+            const isFX = stock.symbol.includes('=X') || stock.symbol.includes('USD') || stock.symbol.includes('BTC') || stock.symbol.includes('ETH');
+            const targetList = isFX ? forexList : stocksList;
 
             const price = typeof stock.price === 'number' ? stock.price : 0;
             const prevPrice = watchlistPrevPrices[stock.symbol];
@@ -1749,7 +1759,6 @@ function updateWatchlist(data) {
             card.className = `ticker-card ${pulseClass} ${data.symbol === stock.symbol ? 'active-symbol' : ''} ${isReady ? 'ready-signal' : ''}`;
             card.setAttribute('data-symbol', stock.symbol);
 
-            const isFX = stock.symbol.includes('=X') || stock.symbol.includes('USD');
             const precision = isFX ? 4 : 2;
             const biasText = (stock.bias && stock.bias.bias) ? stock.bias.bias : (stock.bias || 'NEUTRAL');
             const biasClass = biasText.includes('BULLISH') ? 'bullish-text' : biasText.includes('BEARISH') ? 'bearish-text' : '';
@@ -1787,7 +1796,7 @@ function updateWatchlist(data) {
                 card.classList.add('active-symbol');
             };
 
-            listContainer.appendChild(card);
+            targetList.appendChild(card);
 
             // Strip pulse class after animation finishes (0.8s) to allow re-triggering
             if (pulseClass) {

@@ -1388,6 +1388,29 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     }
 }
 
+/* --- Watchlist Subheaders --- */
+.watchlist-subheader {
+    font-size: 0.55rem;
+    font-weight: 900;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    padding: 10px 12px 5px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    margin-bottom: 8px;
+    background: rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.watchlist-subheader::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 50%;
+}
+
 /* --- Premium Ticker Cards --- */
 .ticker-card {
     background: rgba(15, 23, 42, 0.4);
