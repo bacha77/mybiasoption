@@ -1730,12 +1730,16 @@ function updateWatchlist(data) {
     stocksList.innerHTML = '';
     forexList.innerHTML = '';
 
+    let stockCount = 0;
+    let forexCount = 0;
+
     wl.forEach(stock => {
         try {
             if (!stock || !stock.symbol) return;
 
-            const isFX = stock.symbol.includes('=X') || stock.symbol.includes('USD') || stock.symbol.includes('BTC') || stock.symbol.includes('ETH');
+            const isFX = stock.symbol.includes('=X') || stock.symbol.includes('-USD') || stock.symbol.includes('/USD') || stock.symbol.includes('EUR') || stock.symbol.includes('GBP') || stock.symbol.includes('JPY');
             const targetList = isFX ? forexList : stocksList;
+            if (isFX) forexCount++; else stockCount++;
 
             const price = typeof stock.price === 'number' ? stock.price : 0;
             const prevPrice = watchlistPrevPrices[stock.symbol];
@@ -1782,23 +1786,13 @@ function updateWatchlist(data) {
             `;
 
             card.onclick = () => {
-                console.log(`[UI] Switching focus to: ${stock.symbol}`);
-                let symbolToEmit = stock.symbol;
-                if (symbolToEmit === 'BTCUSD') symbolToEmit = 'BTC-USD';
-                if (symbolToEmit === 'ETHUSD') symbolToEmit = 'ETH-USD';
-                if (symbolToEmit === 'EURUSD') symbolToEmit = 'EURUSD=X';
-                if (symbolToEmit === 'GBPUSD') symbolToEmit = 'GBPUSD=X';
-                if (symbolToEmit === 'USDJPY') symbolToEmit = 'USDJPY=X';
-                if (symbolToEmit === 'DXY' || symbolToEmit === 'DX-Y') symbolToEmit = 'DX-Y.NYB';
-                
-                socket.emit('switch_symbol', symbolToEmit);
+                socket.emit('switch_symbol', stock.symbol);
                 document.querySelectorAll('.ticker-card').forEach(c => c.classList.remove('active-symbol'));
                 card.classList.add('active-symbol');
             };
 
             targetList.appendChild(card);
 
-            // Strip pulse class after animation finishes (0.8s) to allow re-triggering
             if (pulseClass) {
                 setTimeout(() => card.classList.remove(pulseClass), 800);
             }
@@ -1806,6 +1800,21 @@ function updateWatchlist(data) {
             console.error(`[UI] Error rendering symbol ${stock?.symbol}:`, err);
         }
     });
+
+    // Update Headers with counts and hide empty sections
+    const stockSection = document.getElementById('stocks-section');
+    const forexSection = document.getElementById('forex-section');
+    
+    if (stockSection) {
+        stockSection.style.display = stockCount > 0 ? 'block' : 'none';
+        const h = stockSection.querySelector('.watchlist-subheader');
+        if (h) h.innerHTML = `<span>EQUITY & INDICES</span> <span style="opacity:0.5; font-size:0.5rem;">${stockCount}</span>`;
+    }
+    if (forexSection) {
+        forexSection.style.display = forexCount > 0 ? 'block' : 'none';
+        const h = forexSection.querySelector('.watchlist-subheader');
+        if (h) h.innerHTML = `<span>FOREX & CRYPTO</span> <span style="opacity:0.5; font-size:0.5rem;">${forexCount}</span>`;
+    }
 }
 
 function updateChecklist(data) {

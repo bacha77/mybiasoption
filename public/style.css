@@ -1390,25 +1390,27 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 
 /* --- Watchlist Subheaders --- */
 .watchlist-subheader {
-    font-size: 0.55rem;
+    position: sticky;
+    top: -8px; /* Offset for container padding */
+    z-index: 10;
+    font-size: 0.6rem;
     font-weight: 900;
-    color: var(--text-dim);
+    color: var(--accent);
     letter-spacing: 2px;
-    padding: 10px 12px 5px 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--accent);
     margin-bottom: 8px;
-    background: rgba(0,0,0,0.1);
+    background: #000;
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
 }
 
-.watchlist-subheader::before {
-    content: '';
-    width: 4px;
-    height: 4px;
-    background: var(--accent);
-    border-radius: 50%;
+.watchlist-subgrid {
+    display: flex;
+    flex-direction: column;
+    min-height: 20px;
 }
 
 /* --- Premium Ticker Cards --- */
