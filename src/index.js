@@ -9,6 +9,7 @@ import { RealDataManager } from './services/real-data-manager.js';
 import { telegram } from './services/telegram-service.js';
 import { simTrader } from './services/simulation-trader.js';
 import fs from 'fs';
+import { NewsService } from './services/news-service.js';
 
 const logFile = path.join(process.cwd(), 'system.log');
 function logToFile(msg) {
@@ -41,6 +42,11 @@ const lastAlerts = new Map();
 async function startServer() {
     console.log("Starting BIAS Strategy Server...");
     await simulator.initialize();
+    
+    // Start News Service
+    const newsService = new NewsService(io);
+    newsService.start();
+
     console.log(`[INIT] Watchlist loaded with ${simulator.watchlist.length} symbols.`);
 
     // Whale Alert Integration
@@ -228,6 +234,14 @@ async function startServer() {
             const currentUpdate = processData();
             const watchlistUpdate = processWatchlist();
 
+            // High-performance NY Time calculation
+            const nyFormatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/New_York',
+                hour: 'numeric',
+                hour12: false
+            });
+            const nyHour = parseInt(nyFormatter.format(new Date()));
+
             // Heartbeat log
             console.log(`[${new Date().toLocaleTimeString()}] Pulse: Check ${simulator.watchlist.length} symbols. SPY Price: $${simulator.stocks['SPY']?.currentPrice || 'N/A'}`);
 
@@ -266,8 +280,6 @@ async function startServer() {
                 const stockData = processData(symbol);
                 const rec = stockData.recommendation;
                 
-                const nyTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
-                const nyHour = nyTime.getHours();
                 const isFX = symbol.includes('=X') || symbol.includes('USD');
                 const isAlertWindow = isFX || (nyHour >= 6 && nyHour < 20);
 
@@ -592,8 +604,8 @@ async function startServer() {
     }, 300000);
 
     const PORT = process.env.PORT || 3000;
-    httpServer.listen(PORT, () => {
-        console.log(`BIAS Strategy Server running at http://localhost:${PORT}`);
+    httpServer.listen(PORT, '0.0.0.0', () => {
+        console.log(`BIAS Strategy Server running at http://0.0.0.0:${PORT}`);
         logToFile(`Server started on port ${PORT}`);
     }).on('error', (err) => {
         if (err.code === 'EADDRINUSE') {
@@ -641,7 +653,7 @@ function processData(symbol = simulator.currentSymbol) {
     const fvgs = engine.findFVGs(candles);
     const draws = engine.findLiquidityDraws(candles);
     const bloomberg = stock.bloomberg;
-    const markers = simulator.getInstitutionalMarkers(symbol, activeTf);
+    const markers = simulator.getInstitutionalMarkers(normalizedSymbol, activeTf);
 
     // Calculate Relative Strength vs SPY
     const spy = simulator.stocks['SPY'];
@@ -752,14 +764,23 @@ function processWatchlist() {
 
     return simulator.watchlist.map(symbol => {
         try {
-            const stock = simulator.stocks[symbol];
+            // Apply Yahoo normalization (same as in switch_symbol)
+            let normalizedSym = symbol.toUpperCase().trim();
+            if (normalizedSym === 'BTCUSD') normalizedSym = 'BTC-USD';
+            if (normalizedSym === 'ETHUSD') normalizedSym = 'ETH-USD';
+            if (normalizedSym === 'EURUSD') normalizedSym = 'EURUSD=X';
+            if (normalizedSym === 'GBPUSD') normalizedSym = 'GBPUSD=X';
+            if (normalizedSym === 'USDJPY') normalizedSym = 'USDJPY=X';
+            if (normalizedSym === 'DXY' || normalizedSym === 'DX-Y') normalizedSym = 'DX-Y.NYB';
+
+            const stock = simulator.stocks[normalizedSym];
             if (!stock) {
                 return { symbol, price: 0, bias: 'OFFLINE', recommendation: { action: 'WAIT' } };
             }
 
             const tf = simulator.currentTimeframe;
             const candles = stock.candles[tf] || [];
-            const markers = simulator.getInstitutionalMarkers(symbol, tf);
+            const markers = simulator.getInstitutionalMarkers(normalizedSym, tf);
             const internals = simulator.internals;
             const bloomberg = stock.bloomberg || { omon: 'NEUTRAL' };
             const bias = engine.calculateBias(stock.currentPrice || 0, [], { highs: [], lows: [] }, bloomberg, markers, 0, internals, symbol, candles);

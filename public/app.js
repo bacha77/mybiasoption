@@ -88,11 +88,21 @@ async function initAuth() {
 initAuth();
 
 socket.on('whale_alert', (block) => {
+    audioHooter.playWhale();
     showToast(`🐋 WHALE ALERT: ${block.symbol} | $${(block.value / 1000000).toFixed(2)}M Block!`);
     const card = document.querySelector('.sidebar section:nth-child(4)'); // Block Feed card
     if (card) {
         card.classList.add('whale-flash');
         setTimeout(() => card.classList.remove('whale-flash'), 5000);
+    }
+});
+
+// News Ticker Listener
+socket.on('news_update', (data) => {
+    const newsEl = document.getElementById('news-ticker-render');
+    if (newsEl && data.news && data.news.length > 0) {
+        const newsString = data.news.map(n => `[${n.source}] ${n.title}`).join(' • ');
+        newsEl.innerText = newsString;
     }
 });
 
@@ -174,13 +184,157 @@ const btnCloseChecklist = document.getElementById('btn-close-checklist');
 const btnConfirmTrade = document.getElementById('btn-confirm-trade');
 const triggerChecks = document.querySelectorAll('.trigger-check');
 
-const alertSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-notification-alert-2354.mp3');
+// --- Institutional Audio Hooter ---
+class InstitutionalAudio {
+    constructor() {
+        this.ctx = null;
+        this.enabled = false;
+        this.whaleFreq = 164.81; // E3 (Whale Sonar)
+        this.signalFreq = 880.00; // A5 (Signal Chime)
+    }
+
+    init() {
+        if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    play(freq, type = 'sine', duration = 0.2, volume = 0.1) {
+        if (!this.enabled) return;
+        try {
+            this.init();
+            if (this.ctx.state === 'suspended') this.ctx.resume();
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+            gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(this.ctx.currentTime + duration);
+        } catch (e) { }
+    }
+
+    playWhale() { this.play(this.whaleFreq, 'triangle', 0.6, 0.12); }
+    playSignal() { this.play(this.signalFreq, 'sine', 0.4, 0.08); }
+}
+
+const audioHooter = new InstitutionalAudio();
+const btnAudioToggle = document.getElementById('btn-audio-toggle');
+const audioIcon = document.getElementById('audio-icon');
+
+btnAudioToggle?.addEventListener('click', () => {
+    audioHooter.enabled = !audioHooter.enabled;
+    if (audioHooter.enabled) {
+        audioHooter.init();
+        audioIcon.innerText = '🔊';
+        btnAudioToggle.style.color = 'var(--gold)';
+        btnAudioToggle.style.borderColor = 'var(--gold)';
+        audioHooter.playSignal(); // Test beep
+    } else {
+        audioIcon.innerText = '🔇';
+        btnAudioToggle.style.color = 'var(--text-dim)';
+        btnAudioToggle.style.borderColor = 'var(--border)';
+    }
+});
+
 let lastSignalAction = '';
 let lastPrice = 0;
 let signalUnlocked = false;
 let pendingSignalData = null;
 
-// Add Symbol Management
+// --- Tactical Handbook Logic ---
+const handbookModal = document.getElementById('handbook-modal');
+const btnOpenHandbook = document.getElementById('btn-open-handbook');
+const btnCloseHandbook = document.getElementById('btn-close-handbook');
+const btnCloseHandbookFooter = document.getElementById('btn-close-handbook-footer');
+
+const toggleHandbook = (show) => {
+    if (handbookModal) {
+        handbookModal.style.display = show ? 'flex' : 'none';
+        document.body.style.overflow = show ? 'hidden' : 'auto';
+    }
+};
+
+btnOpenHandbook?.addEventListener('click', () => toggleHandbook(true));
+btnCloseHandbook?.addEventListener('click', () => toggleHandbook(false));
+btnCloseHandbookFooter?.addEventListener('click', () => toggleHandbook(false));
+
+// Auto-open for new sessions (can be tied to a 'first_visit' flag in DB/LocalStorage)
+if (!localStorage.getItem('handbook_viewed')) {
+    setTimeout(() => {
+        toggleHandbook(true);
+        localStorage.setItem('handbook_viewed', 'true');
+    }, 2000);
+}
+
+// --- Card Info Trigger Logic ---
+const cardInfoModal = document.getElementById('card-info-modal');
+const cardInfoTitle = document.getElementById('card-info-title');
+const cardInfoText = document.getElementById('card-info-text');
+const cardInfoMoney = document.getElementById('card-info-money');
+const btnCloseCardInfo = document.getElementById('btn-close-card-info');
+const btnCloseCardInfoFooter = document.getElementById('btn-close-card-info-footer');
+
+const cardInstructions = {
+    bias: {
+        title: "DAILY BIAS CONFIDENCE",
+        text: "The high-speed algorithmic engine that measures 15+ real-time institutional data points to determine the market's true direction.",
+        money: "Only trade in the direction of the bias. Green = Buy/Calls, Red = Sell/Puts. Never fight the system."
+    },
+    markers: {
+        title: "INSTITUTIONAL MARKERS",
+        text: "Key algorithmic anchor points like Midnight Open, PDH/PDL, and NY Open. These are the levels institutions use to set their daily range.",
+        money: "Look for price to 'bounce' or 'reject' these levels. These are high-probability zones for entry and exit."
+    },
+    macro: {
+        title: "MACRO CORRELATION PULSE",
+        text: "Tracks the Dollar (DXY) and Fear Index (VIX). These are the 'Drivers' of the market.",
+        money: "DXY falling usually means Stocks rally. Low VIX means stable trends. Use this to confirm your trade tailwinds."
+    },
+    health: {
+        title: "INSTITUTIONAL HEALTH MATRIX",
+        text: "Monitors the sectoral flows (Tech, Finance, Energy). It shows if the rally is broad or fake.",
+        money: "If the top sectors (XLK, XLF) are all green, it confirms a powerful 'Risk-On' rally. High confidence."
+    },
+    heatmap: {
+        title: "ORDER FLOW HEATMAP",
+        text: "Visualizes where the largest institutional buy (SSL) and sell (BSL) orders are 'parking'.",
+        money: "Price moves like a magnet toward these levels. Use them as your ultimate Take-Profit targets."
+    },
+    strikezones: {
+        title: "INSTITUTIONAL STRIKEZONES",
+        text: "Calculates the Asia Range and CBDR standard deviations to find the 'Mathematical' high and low of the day.",
+        money: "Set your exits at SD1 or SD2 targets. Institutions frequently reverse the trend at these precise numbers."
+    },
+    recommendation: {
+        title: "OPTION RECOMMENDATION",
+        text: "The final AI execution signal. It calculates the exact Strike, Target, and Stop Loss based on institutional liquidity.",
+        money: "Wait for a 'Gold Signal'. Follow the exact strike and exit levels. Do not deviate from the risk parameters."
+    }
+};
+
+document.querySelectorAll('.card-info-trigger').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        const type = btn.getAttribute('data-card');
+        const data = cardInstructions[type];
+        if (data) {
+            cardInfoTitle.innerText = data.title;
+            cardInfoText.innerText = data.text;
+            cardInfoMoney.innerText = data.money;
+            cardInfoModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+    });
+});
+
+const closeCardInfo = () => {
+    cardInfoModal.style.display = 'none';
+    document.body.style.overflow = 'auto';
+};
+
+btnCloseCardInfo?.addEventListener('click', closeCardInfo);
+btnCloseCardInfoFooter?.addEventListener('click', closeCardInfo);
 document.getElementById('btn-add-symbol')?.addEventListener('click', () => {
     const symbol = prompt("Enter Ticker Symbol (e.g. MSFT):");
     if (symbol) {
@@ -997,7 +1151,7 @@ function updateUI(data) {
             if (data.recommendation.isStable && data.recommendation.action !== 'WAIT') {
                 const signalKey = `${data.symbol}_${data.recommendation.action}`;
                 if (lastSignalAction !== signalKey) {
-                    alertSound.play().catch(() => { });
+                    audioHooter.playSignal();
                     lastSignalAction = signalKey;
                     showToast(`ELITE SIGNAL: ${data.recommendation.action} on ${data.symbol}`);
                 }
@@ -1194,6 +1348,27 @@ function updateUI(data) {
             }
         }
         if (data.watchlist) updateWatchlist(data);
+
+        // --- MOBILE COMMANDER HUD SYNC ---
+        const mobileSymbol = document.getElementById('mobile-hud-symbol');
+        const mobilePrice = document.getElementById('mobile-hud-price');
+        const mobileBias = document.getElementById('mobile-hud-bias');
+        const mobileRec = document.getElementById('mobile-hud-rec');
+        const mobileTrigger = document.getElementById('mobile-trigger-btn');
+
+        if (mobileSymbol) mobileSymbol.innerText = data.symbol || 'SPY';
+        if (mobilePrice && data.currentPrice) {
+            const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
+            mobilePrice.innerText = `$${data.currentPrice.toFixed(isFX ? 4 : 2)}`;
+        }
+        if (mobileBias && data.bias) {
+            mobileBias.innerText = data.bias.bias;
+            mobileBias.className = 'hud-bias ' + (data.bias.bias === 'BULLISH' ? 'bullish-text' : data.bias.bias === 'BEARISH' ? 'bearish-text' : 'gold-text');
+        }
+        if (mobileRec && data.recommendation) {
+            mobileRec.innerText = data.recommendation.action;
+            mobileRec.className = 'hud-rec ' + (data.recommendation.action.includes('CALL') ? 'bullish-text' : data.recommendation.action.includes('PUT') ? 'bearish-text' : 'gold-text');
+        }
     }
 }
 
@@ -1305,12 +1480,17 @@ function updateVixGauge(vix) {
 }
 
 // --- TRIGGER CHECKLIST LOGIC ---
-btnUnlockSignal?.addEventListener('click', () => {
+const mobileTriggerBtn = document.getElementById('mobile-trigger-btn');
+
+const openChecklist = () => {
     checklistModal.style.display = 'flex';
     // Reset checks
     triggerChecks.forEach(c => c.checked = false);
     if (btnConfirmTrade) btnConfirmTrade.disabled = true;
-});
+};
+
+btnUnlockSignal?.addEventListener('click', openChecklist);
+mobileTriggerBtn?.addEventListener('click', openChecklist);
 
 btnCloseChecklist?.addEventListener('click', () => {
     checklistModal.style.display = 'none';

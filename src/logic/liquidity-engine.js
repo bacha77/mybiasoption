@@ -4,6 +4,17 @@
  */
 
 export class LiquidityEngine {
+    // Pre-allocate formatter for high-performance date operations
+    static nyFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        hour: 'numeric',
+        hour12: false
+    });
+
+    getNYHour(timestamp) {
+        return parseInt(LiquidityEngine.nyFormatter.format(new Date(timestamp)));
+    }
+
     constructor() {
         this.liquidityZones = [];
         this.signalState = {}; // Tracks { [key]: { action, count } }
@@ -684,10 +695,10 @@ export class LiquidityEngine {
     calculateAsiaRange(candles) {
         if (!candles || candles.length === 0) return null;
 
-        const asiaCandles = candles.filter(c => {
-            const date = new Date(c.timestamp);
-            const nyTime = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
-            const h = nyTime.getHours();
+        // Optimization: Only look at recent candles
+        const recent = candles.slice(-2000);
+        const asiaCandles = recent.filter(c => {
+            const h = this.getNYHour(c.timestamp);
             return h >= 20 || h < 0; 
         });
 
@@ -742,10 +753,10 @@ export class LiquidityEngine {
     calculateCBDR(candles) {
         if (!candles || candles.length === 0) return null;
 
-        const cbdrCandles = candles.filter(c => {
-            const date = new Date(c.timestamp);
-            const nyTime = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
-            const h = nyTime.getHours();
+        // Optimization: Only look at recent candles
+        const recent = candles.slice(-2000);
+        const cbdrCandles = recent.filter(c => {
+            const h = this.getNYHour(c.timestamp);
             return h >= 14 && h < 20; 
         });
 
@@ -811,10 +822,10 @@ export class LiquidityEngine {
     calculateCBDRFlout(candles) {
         if (!candles || candles.length === 0) return null;
 
-        const floutCandles = candles.filter(c => {
-            const date = new Date(c.timestamp);
-            const nyTime = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
-            const h = nyTime.getHours();
+        // Optimization: Only look at recent candles
+        const recent = candles.slice(-2000);
+        const floutCandles = recent.filter(c => {
+            const h = this.getNYHour(c.timestamp);
             return h >= 22 && h < 24; 
         });
 

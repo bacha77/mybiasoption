@@ -2295,3 +2295,283 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     background: var(--bearish);
     color: white;
 }
+/* --- Handbook Modal --- */
+.handbook-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.handbook-content {
+    background: #050505;
+    border: 1px solid var(--gold);
+    width: 90%;
+    max-width: 500px;
+    padding: 0;
+    font-family: var(--font-data);
+}
+
+.handbook-header {
+    background: #000;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.handbook-header .premium-shimmer {
+    font-size: 0.9rem;
+    font-weight: 900;
+    color: var(--gold);
+}
+
+.handbook-body {
+    padding: 2rem;
+}
+
+.handbook-step {
+    margin-bottom: 2rem;
+}
+
+.handbook-step h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: var(--gold);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.step-num {
+    background: var(--gold);
+    color: #000;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 0.8rem;
+    font-weight: 900;
+}
+
+.handbook-step p {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+    padding-left: 36px;
+}
+
+.handbook-footer {
+    padding: 2rem;
+    text-align: center;
+    border-top: 1px solid var(--border);
+    background: #000;
+}
+
+.handbook-footer p {
+    font-size: 0.7rem;
+    color: var(--gold);
+    margin-bottom: 1rem;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.close-btn:hover {
+    color: #fff;
+}
+
+.action-btn {
+    background: var(--gold);
+    color: #000;
+    border: none;
+    padding: 10px 30px;
+    font-weight: 900;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.action-btn:hover {
+    box-shadow: 0 0 20px rgba(255, 157, 0, 0.4);
+    transform: translateY(-2px);
+}
+
+.card-header-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.card-header-flex .card-title {
+    margin-bottom: 0 !important;
+    border-bottom: none !important;
+}
+
+.card-info-trigger {
+    color: var(--gold);
+    cursor: pointer;
+    font-size: 0.9rem;
+    opacity: 0.6;
+    transition: all 0.2s;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+
+.card-info-trigger:hover {
+    opacity: 1;
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.3);
+    text-shadow: 0 0 10px var(--gold);
+}
+
+/* --- Mobile Commander (CDR) View --- */
+@media (max-width: 1024px) {
+    .dashboard-main {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+        gap: 1rem;
+    }
+
+    .sidebar {
+        order: 2;
+    }
+
+    .main-content {
+        order: 1;
+    }
+
+    header {
+        padding: 0 1rem;
+    }
+
+    .header-center {
+        display: none; /* Hide search in macro view on mobile, use a dedicated toggle if needed */
+    }
+
+    .status-ribbon {
+        gap: 0.5rem;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+
+    .status-item span:not(.status-dot) {
+        font-size: 0.5rem;
+    }
+
+    /* Target specific cards for better mobile stack */
+    .metric-item {
+        padding: 8px;
+    }
+
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .logo-sub {
+        display: none;
+    }
+
+    .sim-balance-pill {
+        font-size: 0.6rem;
+        padding: 4px 8px;
+    }
+
+    /* Fixed Commander HUD for Mobile */
+    .mobile-commander-hud {
+        display: flex !important;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 70px;
+        background: rgba(5, 5, 5, 0.95);
+        border-top: 2px solid var(--gold);
+        backdrop-filter: blur(15px);
+        z-index: 2000;
+        padding: 0 1rem;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+    }
+
+    .app-container {
+        padding-bottom: 70px; /* Space for HUD */
+    }
+
+    .hud-symbol {
+        font-size: 1.1rem;
+        font-weight: 900;
+        color: var(--text-main);
+        display: block;
+    }
+
+    .hud-price {
+        font-size: 0.75rem;
+        color: var(--gold);
+        font-family: var(--font-data);
+    }
+
+    .hud-bias {
+        font-size: 0.8rem;
+        font-weight: 800;
+        letter-spacing: 1px;
+    }
+
+    .hud-label {
+        font-size: 0.45rem;
+        color: var(--text-dim);
+        font-weight: 800;
+        text-transform: uppercase;
+        margin-top: 2px;
+    }
+
+    .hud-rec {
+        font-size: 0.8rem;
+        font-weight: 900;
+        color: var(--gold);
+    }
+
+    .hud-trigger-btn {
+        background: var(--gold);
+        color: #000;
+        border: none;
+        padding: 6px 15px;
+        border-radius: 4px;
+        font-weight: 900;
+        font-size: 0.7rem;
+        margin-top: 4px;
+        box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+    }
+
+}
+
+/* Initially hide Mobile HUD on desktop */
+.mobile-commander-hud {
+    display: none;
+}

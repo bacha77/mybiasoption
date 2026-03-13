@@ -43,11 +43,71 @@
 
 
     <div class="app-container">
+        <!-- New Member Handbook Modal -->
+        <div id="handbook-modal" class="handbook-modal" style="display: none;">
+            <div class="handbook-content">
+                <div class="handbook-header">
+                    <span class="premium-shimmer">ELITE MEMBER HANDBOOK</span>
+                    <button id="btn-close-handbook" class="close-btn">×</button>
+                </div>
+                <div class="handbook-body">
+                    <section class="handbook-step">
+                        <h3><span class="step-num">1</span> Identify the Bias</h3>
+                        <p>Look at the <strong>Daily Bias Confidence</strong> card. This is your compass. Only trade in the direction of the bias (Green for Calls, Red for Puts).</p>
+                    </section>
+                    <section class="handbook-step">
+                        <h3><span class="step-num">2</span> Wait for Liquidity</h3>
+                        <p>Watch the <strong>Institutional Strikezones</strong>. We wait for the price to "Sweep" a Low or High. This traps retail traders and lets institutions enter.</p>
+                    </section>
+                    <section class="handbook-step">
+                        <h3><span class="step-num">3</span> The Trigger</h3>
+                        <p>When the <strong>Option Recommendation</strong> card lights up with a specific Strike and Target, that is your signal to enter.</p>
+                    </section>
+                    <div class="handbook-footer">
+                        <p><em>"Trade with the Whales, not against them."</em></p>
+                        <button id="btn-close-handbook-footer" class="action-btn">UNDERSTOOD</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- New Member Handbook Modal -->
+        <div id="handbook-modal" class="handbook-modal" style="display: none;">
+            <div class="handbook-content">
+                <div class="handbook-header">
+                    <span class="premium-shimmer">ELITE MEMBER HANDBOOK</span>
+                    <button id="btn-close-handbook" class="close-btn">×</button>
+                </div>
+                <div class="handbook-body">
+                    <section class="handbook-step">
+                        <h3><span class="step-num">1</span> Identify the Bias</h3>
+                        <p>Look at the <strong>Daily Bias Confidence</strong> card. This is your compass. Only trade in the direction of the bias (Green for Calls, Red for Puts).</p>
+                    </section>
+                    <section class="handbook-step">
+                        <h3><span class="step-num">2</span> Wait for Liquidity</h3>
+                        <p>Watch the <strong>Institutional Strikezones</strong>. We wait for the price to "Sweep" a Low or High. This traps retail traders and lets institutions enter.</p>
+                    </section>
+                    <section class="handbook-step">
+                        <h3><span class="step-num">3</span> The Trigger</h3>
+                        <p>When the <strong>Option Recommendation</strong> card lights up with a specific Strike and Target, that is your signal to enter.</p>
+                    </section>
+                    <div class="handbook-footer">
+                        <p><em>"Trade with the Whales, not against them."</em></p>
+                        <button id="btn-close-handbook-footer" class="action-btn">UNDERSTOOD</button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <!-- System Status Ribbon -->
         <div class="status-ribbon">
             <div class="status-item">
                 <span class="status-dot green"></span>
                 <span>SYSTEM: LIVE</span>
+            </div>
+            <div class="status-item" id="btn-open-handbook" style="cursor: pointer; color: var(--gold); border: 1px solid var(--gold); padding: 0 8px; border-radius: 2px;">
+                <span style="font-size: 0.5rem; font-weight: 900;">🔥 START HERE: TACTICAL BRIEFING</span>
+            </div>
+            <div class="status-item" id="btn-audio-toggle" style="cursor: pointer; color: var(--text-dim); border: 1px solid var(--border); padding: 0 8px; border-radius: 2px; margin-left: 10px;">
+                <span id="audio-icon">🔇</span> <span style="font-size: 0.5rem; font-weight: 900;">INSTITUTIONAL HOOTER</span>
             </div>
             <div class="status-item" data-tooltip="Dollar Strength. Falling Dollar = Tailwind for Stocks.">
                 <span class="m-label">DXY:</span>
@@ -92,14 +152,14 @@
             </div>
         </header>
 
-        <!-- Macro Pulse Ticker (Replaced the static wait message) -->
+        <!-- Macro Pulse Ticker -->
         <div class="ticker-wrap">
             <div id="ticker-content" class="ticker-content">
-                <span class="RS-label">MARKET BREADTH:</span> <span id="breadth-val-ticker"
-                    class="bullish-text">72%</span> •
-                <span class="RS-label">VIX PULSE:</span> <span id="vix-val-ticker" class="bullish-text">14.20</span> •
-                <span class="RS-label">CONFLUENCE:</span> <span id="confluence-val-ticker"
-                    class="bullish-text">90%</span>
+                <span class="RS-label">LIVE INSTITUTIONAL FEED:</span> 
+                <span id="news-ticker-render" style="color: var(--gold);">Waiting for Bloomberg feed...</span>
+                <span style="margin: 0 20px; color: var(--border);">/</span>
+                <span class="RS-label">BREADTH:</span> <span id="breadth-val-ticker" class="bullish-text">--%</span> •
+                <span class="RS-label">VIX:</span> <span id="vix-val-ticker" class="bullish-text">--</span>
             </div>
         </div>
 
@@ -151,7 +211,10 @@
 
                 <!-- Institutional Metrics Grid -->
                 <section class="card accent-border reveal-2">
-                    <div class="card-title">Institutional Markers & Data Points</div>
+                    <div class="card-header-flex">
+                        <div class="card-title">Institutional Markers & Data Points</div>
+                        <span class="card-info-trigger" data-card="markers">ⓘ</span>
+                    </div>
                     <div class="metrics-grid">
                         <div class="metric-item"
                             data-tooltip="Institutional 'True North'. Price above Midnight Open = Daily Bullish Bias.">
@@ -243,7 +306,10 @@
 
                 <!-- Macro Correlation Pulse -->
                 <section class="card reveal-3">
-                    <div class="card-title">Macro Correlation Pulse (Risk-On/Off)</div>
+                    <div class="card-header-flex">
+                        <div class="card-title">Macro Correlation Pulse (Risk-On/Off)</div>
+                        <span class="card-info-trigger" data-card="macro">ⓘ</span>
+                    </div>
                     <div class="macro-grid">
                         <div class="macro-item"
                             data-tooltip="U.S. Dollar Strength. Inversely correlated to stocks. If DXY drops, SPY usually rallies.">
@@ -281,7 +347,10 @@
 
                 <!-- Sector Health Matrix -->
                 <section class="card reveal-4" style="padding-bottom: 1.5rem;">
-                    <div class="card-title">Institutional Health Matrix</div>
+                    <div class="card-header-flex">
+                        <div class="card-title">Institutional Health Matrix</div>
+                        <span class="card-info-trigger" data-card="health">ⓘ</span>
+                    </div>
 
                     <!-- SPY Pipeline -->
                     <div style="margin-bottom: 1.25rem;">
@@ -332,7 +401,10 @@
 
                 <!-- Heatmap / Order Flow -->
                 <section class="card reveal-5">
-                    <div class="card-title">Institutional Order Flow Heatmap</div>
+                    <div class="card-header-flex">
+                        <div class="card-title">Institutional Order Flow Heatmap</div>
+                        <span class="card-info-trigger" data-card="heatmap">ⓘ</span>
+                    </div>
                     <div id="heatmap" class="heatmap-viz" style="min-height: 200px;">
                         <!-- JS Loaded Levels -->
                     </div>
@@ -343,7 +415,10 @@
             <aside class="sidebar">
                 <!-- Gauge Card -->
                 <section class="card reveal-4">
-                    <div class="card-title">Daily Bias Confidence</div>
+                    <div class="card-header-flex">
+                        <div class="card-title">Daily Bias Confidence</div>
+                        <span class="card-info-trigger" data-card="bias">ⓘ</span>
+                    </div>
                     <div class="bias-gauge-container">
                         <div id="bias-label" class="bias-large">NEUTRAL</div>
                         <div id="bias-strength-bar" class="bias-conf-bar">
@@ -394,7 +469,10 @@
 
                 <!-- StrikeZone Magnets (The Next Liquidity Draw) -->
                 <section class="card accent-border reveal-4">
-                    <div class="card-title">Institutional StrikeZones</div>
+                    <div class="card-header-flex">
+                        <div class="card-title">Institutional StrikeZones</div>
+                        <span class="card-info-trigger" data-card="strikezones">ⓘ</span>
+                    </div>
                     <div id="magnet-zones-container" class="magnet-grid" style="grid-template-columns: repeat(2, 1fr); gap: 10px;">
                         <div class="magnet-item">
                             <span class="magnet-label">BSL DRAW</span>
@@ -427,7 +505,10 @@
 
                 <!-- Recommendation Card -->
                 <section class="card accent-border reveal-5">
-                    <div class="card-title">Option Recommendation (Gold Standard)</div>
+                    <div class="card-header-flex">
+                        <div class="card-title">Option Recommendation (Gold Standard)</div>
+                        <span class="card-info-trigger" data-card="recommendation">ⓘ</span>
+                    </div>
                     <div id="rec-box" class="rec-box">
                         <div class="rec-action-row">
                             <span id="rec-action" class="rec-action-text">WAITING</span>
@@ -505,6 +586,22 @@
         </main>
 
         <!-- Institutional Whale Tape -->
+        <!-- Mobile Commander HUD -->
+        <div class="mobile-commander-hud">
+            <div class="hud-item">
+                <span id="mobile-hud-symbol" class="hud-symbol">SPY</span>
+                <span id="mobile-hud-price" class="hud-price">000.00</span>
+            </div>
+            <div class="hud-item center">
+                <div id="mobile-hud-bias" class="hud-bias">NEUTRAL</div>
+                <div class="hud-label">CURRENT BIAS</div>
+            </div>
+            <div class="hud-item right">
+                <div id="mobile-hud-rec" class="hud-rec">WAIT</div>
+                <button id="mobile-trigger-btn" class="hud-trigger-btn">EXECUTE</button>
+            </div>
+        </div>
+
         <div class="whale-tape-wrapper">
             <div class="whale-label">🐋 WHALE TAPE</div>
             <div id="whale-ticker" class="whale-ticker">
@@ -554,6 +651,26 @@
             </div>
             <div class="modal-footer">
                 <button id="btn-confirm-trade" class="btn-confirm" disabled>PULL THE TRIGGER</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dynamic Card Info Modal -->
+    <div id="card-info-modal" class="handbook-modal" style="display: none;">
+        <div class="handbook-content">
+            <div class="handbook-header">
+                <span id="card-info-title" class="premium-shimmer">CARD INSTRUCTIONS</span>
+                <button id="btn-close-card-info" class="close-btn">×</button>
+            </div>
+            <div class="handbook-body">
+                <p id="card-info-text" style="font-size: 0.85rem; color: #fff; line-height: 1.6;"></p>
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                    <span style="color: var(--gold); font-size: 0.7rem; font-weight: 900;">🔥 HOW TO MAKE MONEY:</span>
+                    <p id="card-info-money" style="font-size: 0.8rem; color: var(--bullish); margin-top: 5px;"></p>
+                </div>
+                <div class="handbook-footer">
+                    <button id="btn-close-card-info-footer" class="action-btn">UNDERSTOOD</button>
+                </div>
             </div>
         </div>
     </div>
