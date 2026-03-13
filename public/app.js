@@ -1419,6 +1419,42 @@ function updateUI(data) {
                     }
                 });
             }
+
+            // --- ELITE FOREX OVERLAYS ---
+            const fxJudas = document.getElementById('fx-judas-alert');
+            if (fxJudas) {
+                if (data.bias.judas) {
+                    fxJudas.style.display = 'block';
+                    fxJudas.innerText = data.bias.judas.label;
+                } else {
+                    fxJudas.style.display = 'none';
+                }
+            }
+
+            const fxRetailVal = document.getElementById('fx-retail-val');
+            const fxRetailFill = document.getElementById('fx-retail-fill');
+            if (data.bias.retailSentiment !== undefined) {
+                const rs = data.bias.retailSentiment;
+                if (fxRetailVal) fxRetailVal.innerText = `${rs.toFixed(0)}% LONG`;
+                if (fxRetailFill) {
+                    fxRetailFill.style.width = `${rs}%`;
+                    fxRetailFill.style.background = rs >= 75 ? 'var(--bearish)' : (rs <= 25 ? 'var(--bullish)' : 'linear-gradient(90deg, var(--bearish) 0%, var(--bullish) 100%)');
+                }
+            }
+
+            const fxTapeList = document.getElementById('fx-whale-tape-list');
+            if (fxTapeList && data.whaleTape) {
+                if (fxTapeList.innerHTML.includes('Tracking order flow')) fxTapeList.innerHTML = '';
+                const t = data.whaleTape;
+                const c = t.type === 'BUY_BLOCK' ? 'var(--bullish)' : 'var(--bearish)';
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.justifyContent = 'space-between';
+                row.style.animation = 'slide-in-right 0.3s ease-out';
+                row.innerHTML = `<span style="color:${c}; font-weight:900;">$${t.size} ${t.type === 'BUY_BLOCK' ? '▲' : '▼'}</span> <span style="color:var(--text-dim); opacity:0.6;">${t.time}</span>`;
+                fxTapeList.prepend(row);
+                if (fxTapeList.children.length > 5) fxTapeList.removeChild(fxTapeList.lastChild);
+            }
         } else if (fxRadarContainer) {
             fxRadarContainer.style.display = 'none';
         }
