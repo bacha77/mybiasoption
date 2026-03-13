@@ -1694,25 +1694,14 @@ function updateUI(data) {
 }
 
 function updateWatchlist(data) {
-    const listContainer = document.getElementById('watchlist-list');
     const stocksList = document.getElementById('stocks-list');
     const forexList = document.getElementById('forex-list');
-    const emptyEl = document.getElementById('watchlist-empty');
-    const countEl = document.getElementById('watchlist-count');
+    const stocksCountEl = document.getElementById('stocks-count');
+    const forexCountEl = document.getElementById('forex-count');
     
-    if (!listContainer || !stocksList || !forexList) return;
+    if (!stocksList || !forexList) return;
 
     const wl = data.watchlist || [];
-    if (countEl) countEl.innerText = `${wl.length} Tickers`;
-
-    if (wl.length === 0) {
-        if (emptyEl) emptyEl.style.display = 'block';
-        stocksList.innerHTML = '';
-        forexList.innerHTML = '';
-        return;
-    }
-
-    if (emptyEl) emptyEl.style.display = 'none';
 
     // --- ALPHA SORTING: Rank by "GO" status, then Confluence Score ---
     wl.sort((a, b) => {
@@ -1801,20 +1790,8 @@ function updateWatchlist(data) {
         }
     });
 
-    // Update Headers with counts and hide empty sections
-    const stockSection = document.getElementById('stocks-section');
-    const forexSection = document.getElementById('forex-section');
-    
-    if (stockSection) {
-        stockSection.style.display = stockCount > 0 ? 'block' : 'none';
-        const h = stockSection.querySelector('.watchlist-subheader');
-        if (h) h.innerHTML = `<span>EQUITY & INDICES</span> <span style="opacity:0.5; font-size:0.5rem;">${stockCount}</span>`;
-    }
-    if (forexSection) {
-        forexSection.style.display = forexCount > 0 ? 'block' : 'none';
-        const h = forexSection.querySelector('.watchlist-subheader');
-        if (h) h.innerHTML = `<span>FOREX & CRYPTO</span> <span style="opacity:0.5; font-size:0.5rem;">${forexCount}</span>`;
-    }
+    if (stocksCountEl) stocksCountEl.innerText = `${stockCount} TICKERS`;
+    if (forexCountEl) forexCountEl.innerText = `${forexCount} TICKERS`;
 }
 
 function updateChecklist(data) {

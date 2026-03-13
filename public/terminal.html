@@ -578,32 +578,30 @@
                 </section>
 
 
-                <!-- Premium Watchlist Card -->
-                <section class="card reveal-9"
-                    style="flex: 1; display: flex; flex-direction: column; min-height: 400px; padding: 0;">
-                    <div class="card-header"
-                        style="padding: 1rem; border-bottom: 2px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2);">
-                        <span style="font-weight: 800; font-size: 0.9rem; letter-spacing: 1px;">MY WATCHLIST</span>
+                <!-- Equity Watchlist Card -->
+                <section id="stocks-card" class="card reveal-9" style="flex: 1; display: flex; flex-direction: column; min-height: 300px; padding: 0; margin-bottom: 1rem;">
+                    <div class="card-header" style="padding: 0.8rem 1rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2);">
+                        <span style="font-weight: 800; font-size: 0.75rem; letter-spacing: 1.5px; color: var(--text-bright);">EQUITY WATCHLIST</span>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            <span id="watchlist-count" style="font-size: 0.7rem; color: var(--text-dim);">0
-                                Tickers</span>
-                            <button id="btn-add-symbol"
-                                style="background: var(--accent); border: none; color: #000; padding: 2px 8px; border-radius: 4px; font-weight: 900; cursor: pointer; font-size: 0.8rem;">+</button>
+                            <span id="stocks-count" style="font-size: 0.6rem; color: var(--text-dim); font-weight: 700;">0 TICKERS</span>
+                            <button id="btn-add-symbol" style="background: var(--accent); border: none; color: #000; padding: 2px 6px; border-radius: 2px; font-weight: 900; cursor: pointer; font-size: 0.7rem;">+</button>
                         </div>
                     </div>
+                    <div id="stocks-list" class="watchlist-grid" style="flex: 1; overflow-y: auto; padding: 0.5rem;">
+                        <!-- Stocks logic -->
+                    </div>
+                </section>
 
-                    <div id="watchlist-list" class="watchlist-grid" style="flex: 1; overflow-y: auto; padding: 0.5rem; display: flex; flex-direction: column; gap: 15px;">
-                        <div id="stocks-section">
-                            <div class="watchlist-subheader">EQUITY & INDICES</div>
-                            <div id="stocks-list" class="watchlist-subgrid"></div>
+                <!-- Forex & Crypto Watchlist Card -->
+                <section id="forex-card" class="card reveal-10" style="flex: 1; display: flex; flex-direction: column; min-height: 300px; padding: 0;">
+                    <div class="card-header" style="padding: 0.8rem 1rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2);">
+                        <span style="font-weight: 800; font-size: 0.75rem; letter-spacing: 1.5px; color: var(--gold);">FOREX & CRYPTO</span>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <span id="forex-count" style="font-size: 0.6rem; color: var(--text-dim); font-weight: 700;">0 TICKERS</span>
                         </div>
-                        <div id="forex-section">
-                            <div class="watchlist-subheader">FOREX & CRYPTO</div>
-                            <div id="forex-list" class="watchlist-subgrid"></div>
-                        </div>
-                        <div id="watchlist-empty" style="text-align: center; padding: 2rem; color: var(--text-dim); font-size: 0.8rem;">
-                            Initializing Premium Feed...
-                        </div>
+                    </div>
+                    <div id="forex-list" class="watchlist-grid" style="flex: 1; overflow-y: auto; padding: 0.5rem;">
+                        <!-- Forex logic -->
                     </div>
                 </section>
             </aside>
