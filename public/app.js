@@ -184,19 +184,15 @@ const btnCloseChecklist = document.getElementById('btn-close-checklist');
 const btnConfirmTrade = document.getElementById('btn-confirm-trade');
 const triggerChecks = document.querySelectorAll('.trigger-check');
 
-// --- Institutional Audio Hooter ---
+// --- INSTITUTIONAL AUDIO ENGINE ---
 class InstitutionalAudio {
     constructor() {
         this.ctx = null;
         this.enabled = false;
-        this.whaleFreq = 164.81; // E3 (Whale Sonar)
-        this.signalFreq = 880.00; // A5 (Signal Chime)
+        this.whaleFreq = 164.81; // E3
+        this.signalFreq = 880.00; // A5
     }
-
-    init() {
-        if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-
+    init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
     play(freq, type = 'sine', duration = 0.2, volume = 0.1) {
         if (!this.enabled) return;
         try {
@@ -214,29 +210,58 @@ class InstitutionalAudio {
             osc.stop(this.ctx.currentTime + duration);
         } catch (e) { }
     }
-
     playWhale() { this.play(this.whaleFreq, 'triangle', 0.6, 0.12); }
     playSignal() { this.play(this.signalFreq, 'sine', 0.4, 0.08); }
 }
 
-const audioHooter = new InstitutionalAudio();
-const btnAudioToggle = document.getElementById('btn-audio-toggle');
-const audioIcon = document.getElementById('audio-icon');
+class VoiceNarrator {
+    constructor() {
+        this.enabled = false;
+        this.synth = window.speechSynthesis;
+    }
+    toggle() {
+        this.enabled = !this.enabled;
+        const btn = document.getElementById('btn-voice-toggle');
+        const icon = document.getElementById('voice-icon');
+        if (btn && icon) {
+            btn.style.color = this.enabled ? '#38bdf8' : 'var(--text-dim)';
+            btn.style.borderColor = this.enabled ? '#38bdf8' : 'var(--border)';
+            icon.innerText = this.enabled ? '🎙️' : '🔇';
+        }
+        if (this.enabled && this.synth) this.speak("SQUAWK ACTIVATED");
+        return this.enabled;
+    }
+    speak(text) {
+        if (!this.enabled || !this.synth) return;
+        this.synth.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 0.9;
+        this.synth.speak(utterance);
+    }
+}
 
-btnAudioToggle?.addEventListener('click', () => {
+const audioHooter = new InstitutionalAudio();
+const voiceNarrator = new VoiceNarrator();
+
+document.getElementById('btn-audio-toggle')?.addEventListener('click', () => {
     audioHooter.enabled = !audioHooter.enabled;
+    const btn = document.getElementById('btn-audio-toggle');
+    const icon = document.getElementById('audio-icon');
     if (audioHooter.enabled) {
         audioHooter.init();
-        audioIcon.innerText = '🔊';
-        btnAudioToggle.style.color = 'var(--gold)';
-        btnAudioToggle.style.borderColor = 'var(--gold)';
-        audioHooter.playSignal(); // Test beep
+        icon.innerText = '🔊';
+        btn.style.color = 'var(--gold)';
+        btn.style.borderColor = 'var(--gold)';
+        audioHooter.playSignal();
     } else {
-        audioIcon.innerText = '🔇';
-        btnAudioToggle.style.color = 'var(--text-dim)';
-        btnAudioToggle.style.borderColor = 'var(--border)';
+        icon.innerText = '🔇';
+        btn.style.color = 'var(--text-dim)';
+        btn.style.borderColor = 'var(--border)';
     }
 });
+
+document.getElementById('btn-voice-toggle')?.addEventListener('click', () => voiceNarrator.toggle());
 
 let lastSignalAction = '';
 let lastPrice = 0;
@@ -1147,11 +1172,23 @@ function updateUI(data) {
                 recBox.className = 'rec-box ' + (data.recommendation.action.includes('CALL') ? 'rec-call' : data.recommendation.action.includes('PUT') ? 'rec-put' : '');
             }
 
-            // Audio Alert
+            // MTF Grid Sync
+            if (data.multiTfBias) {
+                ['1m', '5m', '15m', '1h'].forEach(tf => {
+                    const dot = document.getElementById(`mtf-dot-${tf}`);
+                    if (dot) {
+                        const b = data.multiTfBias[tf] || 'NEUTRAL';
+                        dot.className = 'mtf-dot ' + (b === 'BULLISH' || b === 'STRONG BULLISH' ? 'bullish' : b === 'BEARISH' || b === 'STRONG BEARISH' ? 'bearish' : 'neutral');
+                    }
+                });
+            }
+
+            // Audio & Voice Alert
             if (data.recommendation.isStable && data.recommendation.action !== 'WAIT') {
                 const signalKey = `${data.symbol}_${data.recommendation.action}`;
                 if (lastSignalAction !== signalKey) {
                     audioHooter.playSignal();
+                    voiceNarrator.speak(`Alert. ${data.symbol} Gold Signal. ${data.recommendation.action}. Confirming Confluence.`);
                     lastSignalAction = signalKey;
                     showToast(`ELITE SIGNAL: ${data.recommendation.action} on ${data.symbol}`);
                 }
@@ -1386,6 +1423,14 @@ function updateWatchlist(data) {
         }
         return;
     }
+
+    // --- ALPHA SORTING: Rank by Confluence Score then Change ---
+    wl.sort((a, b) => {
+        if ((b.confluenceScore || 0) !== (a.confluenceScore || 0)) {
+            return (b.confluenceScore || 0) - (a.confluenceScore || 0);
+        }
+        return Math.abs(b.dailyChangePercent || 0) - Math.abs(a.dailyChangePercent || 0);
+    });
 
     listContainer.innerHTML = '';
 
