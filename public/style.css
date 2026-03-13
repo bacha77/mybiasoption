@@ -251,6 +251,39 @@ header {
     border-color: var(--accent);
     transform: none;
 }
+.protocol-status-ribbon {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    margin-left: 20px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+}
+.protocol-status-ribbon.ready {
+    border-color: var(--bullish);
+    color: var(--bullish);
+    box-shadow: 0 0 10px var(--bullish-glow);
+}
+.protocol-status-ribbon.ready .p-dot { background: var(--bullish); box-shadow: 0 0 8px var(--bullish); }
+
+.protocol-status-ribbon.warning {
+    border-color: var(--gold);
+    color: var(--gold);
+}
+.protocol-status-ribbon.warning .p-dot { background: var(--gold); }
+
+.p-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+}
 
 /* --- VIX Gauge --- */
 .vix-container {
@@ -445,6 +478,35 @@ header {
     gap: 1.5rem;
     padding: 1.5rem;
     min-height: 0;
+    transition: filter 0.5s ease, opacity 0.5s ease;
+}
+
+.dashboard-main.protocol-standby {
+    filter: grayscale(0.8) blur(1px);
+    opacity: 0.5;
+    pointer-events: none; /* Block interaction in Standby */
+}
+
+.dashboard-main.protocol-monitoring {
+    filter: grayscale(0.3);
+    opacity: 0.85;
+}
+
+.dashboard-main.protocol-standby::after {
+    content: 'PROTOCOL: STANDBY - WAITING FOR INSTITUTIONAL ALIGNMENT';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.8);
+    color: var(--gold);
+    padding: 20px 40px;
+    border: 1px solid var(--gold);
+    font-size: 0.8rem;
+    font-weight: 900;
+    z-index: 1000;
+    letter-spacing: 2px;
+    pointer-events: none;
 }
 
 .chart-canvas-container {
@@ -833,28 +895,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     font-weight: 500;
 }
 
-.trade-row {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    background: #0a0a0a;
-    border-radius: 0;
-}
 
-.trade-main {
-    display: flex;
-    justify-content: space-between;
-    font-weight: 700;
-    font-family: var(--font-data);
-    font-size: 0.7rem;
-}
-
-.trade-sub {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.55rem;
-    color: var(--text-dim);
-    margin-top: 2px;
-}
 
 /* --- Watchlist --- */
 .watchlist-table {
@@ -1361,6 +1402,29 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 .ticker-card.active-symbol {
     border-left-color: var(--accent);
     background: rgba(56, 189, 248, 0.15);
+}
+
+.ticker-card.ready-signal {
+    border-color: var(--bullish);
+    background: linear-gradient(90deg, rgba(0, 255, 136, 0.05) 0%, transparent 100%);
+    box-shadow: 0 0 15px var(--bullish-glow);
+}
+
+.go-badge {
+    background: var(--bullish);
+    color: #000;
+    font-size: 0.5rem;
+    font-weight: 900;
+    padding: 1px 4px;
+    border-radius: 2px;
+    margin-left: 5px;
+    vertical-align: middle;
+    animation: go-pulse 1s infinite alternate;
+}
+
+@keyframes go-pulse {
+    from { opacity: 0.7; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1.05); }
 }
 
 .ticker-info {
@@ -2497,10 +2561,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
         display: none;
     }
 
-    .sim-balance-pill {
-        font-size: 0.6rem;
-        padding: 4px 8px;
-    }
+
 
     /* Fixed Commander HUD for Mobile */
     .mobile-commander-hud {
@@ -2611,4 +2672,85 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
 
 .mtf-dot.neutral {
     background: #94a3b8;
+}
+
+/* --- Watchlist Ticker Cards & Live Pulses --- */
+.ticker-card {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.ticker-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--accent);
+}
+
+.ticker-card.active-symbol {
+    border-color: var(--gold);
+    background: rgba(245, 158, 11, 0.05);
+}
+
+.ticker-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+}
+
+.ticker-sym {
+    font-size: 0.9rem;
+    font-weight: 800;
+}
+
+.ticker-price {
+    font-size: 0.8rem;
+    font-family: var(--font-data);
+    color: var(--gold);
+}
+
+.ticker-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    font-weight: 700;
+}
+
+.rs-badge {
+    font-size: 0.55rem;
+    background: var(--accent);
+    color: #000;
+    padding: 1px 3px;
+    border-radius: 2px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+/* Pulse Animations */
+@keyframes pulse-bullish {
+    0% { background: rgba(0, 255, 136, 0); }
+    50% { background: rgba(0, 255, 136, 0.15); }
+    100% { background: rgba(0, 255, 136, 0); }
+}
+
+@keyframes pulse-bearish {
+    0% { background: rgba(255, 62, 62, 0); }
+    50% { background: rgba(255, 62, 62, 0.15); }
+    100% { background: rgba(255, 62, 62, 0); }
+}
+
+.pulse-up {
+    animation: pulse-bullish 0.8s ease-out;
+}
+
+.pulse-down {
+    animation: pulse-bearish 0.8s ease-out;
 }

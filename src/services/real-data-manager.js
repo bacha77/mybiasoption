@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import YahooFinance from 'yahoo-finance2';
 import { LiquidityEngine } from '../logic/liquidity-engine.js';
+import { InstitutionalAlgorithm } from '../logic/institutional-algorithm.js';
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
@@ -52,7 +53,10 @@ export class RealDataManager {
         this.blockTrades = []; // Store recent institutional blocks
         this.activePositions = {}; // Tracks { [symbol]: { type, entry, sl, tp, active } }
         this.onBlockCallback = null;
+        this.onPriceUpdateCallback = null;
         this.maxBlockTrades = 20; // Keep only 20 most recent
+        this.eliteAlgo = new InstitutionalAlgorithm();
+        console.log("[INIT] Institutional Algorithm Engine Loaded");
     }
 
     async initialize() {
@@ -340,6 +344,10 @@ export class RealDataManager {
                     }
                 }
             });
+
+            if (this.onPriceUpdateCallback) {
+                this.onPriceUpdateCallback(symbol, price, stock.dailyChangePercent, stock.candles);
+            }
         }
     }
 
@@ -652,7 +660,34 @@ export class RealDataManager {
             whaleImbalance: (stock.whaleBuyVol + stock.whaleSellVol > 0) ?
                 ((stock.whaleBuyVol - stock.whaleSellVol) / (stock.whaleBuyVol + stock.whaleSellVol) * 100) : 0,
             smt: this.detectSMT(symbol, tf),
-            adr
+            adr,
+            radar: this.getInstitutionalRadar(symbol, tf)
+        };
+    }
+
+    getInstitutionalRadar(symbol, tf) {
+        const stock = this.stocks[symbol];
+        const killzone = this.eliteAlgo.getKillzoneStatus();
+        
+        // Proxy GEX logic
+        const currentPrice = stock ? stock.currentPrice : 0;
+        const gex = this.eliteAlgo.calculateGEX(currentPrice, symbol);
+        
+        // SMT Logic (SPY vs QQQ)
+        const other = (symbol === 'SPY' ? 'QQQ' : (symbol === 'QQQ' ? 'SPY' : null));
+        let smt = null;
+        if (other && this.stocks[other] && stock) {
+            smt = this.eliteAlgo.detectSMT(
+                symbol, stock.currentPrice, stock.candles[tf],
+                other, this.stocks[other].currentPrice, this.stocks[other].candles[tf]
+            );
+        }
+
+        return {
+            killzone,
+            gex,
+            smt,
+            irScore: 50 // Baseline
         };
     }
 
@@ -663,7 +698,7 @@ export class RealDataManager {
 
         liquidityDraws.highs.concat(liquidityDraws.lows).forEach(draw => {
             const roundedPrice = Math.round(draw.price * 100) / 100;
-            const volume = stock.volumeClusters[roundedPrice] || Math.floor(Math.random() * 500) + 100; // Small fallback instead of total mock
+            const volume = stock.volumeClusters[roundedPrice] || 0; // Remove random fallback
             heatmap.push({ price: draw.price, volume, type: draw.type });
         });
         return heatmap;
@@ -680,31 +715,11 @@ export class RealDataManager {
         };
 
         const other = pairs[symbol];
-        if (!other) return null;
+        if (!other || !this.stocks[other]) return null;
 
-        const stockA = this.stocks[symbol];
-        const stockB = this.stocks[other];
-        if (!stockA || !stockB || !stockA.candles[tf] || !stockB.candles[tf] || stockA.candles[tf].length < 10 || stockB.candles[tf].length < 10) return null;
-
-        const cA = stockA.candles[tf].slice(-10);
-        const cB = stockB.candles[tf].slice(-10);
-
-        const lowA = Math.min(...cA.map(c => c.low));
-        const lowB = Math.min(...cB.map(c => c.low));
-        const highA = Math.max(...cA.map(c => c.high));
-        const highB = Math.max(...cB.map(c => c.high));
-
-        const lastA = cA[cA.length - 1];
-        const lastB = cB[cB.length - 1];
-
-        // Bullish SMT: One makes lower low, other makes higher low
-        if (lastA.low <= lowA && lastB.low > lowB) return { type: 'BULLISH', symbol: other, message: `Bullish SMT Divergence (QQQ Strength)` };
-        if (lastB.low <= lowB && lastA.low > lowA) return { type: 'BULLISH', symbol: other, message: `Bullish SMT Divergence (SPY Strength)` };
-
-        // Bearish SMT: One makes higher high, other makes lower high
-        if (lastA.high >= highA && lastB.high < highB) return { type: 'BEARISH', symbol: other, message: `Bearish SMT Divergence (QQQ Weakness)` };
-        if (lastB.high >= highB && lastA.high < highA) return { type: 'BEARISH', symbol: other, message: `Bearish SMT Divergence (SPY Weakness)` };
-
-        return null;
+        return this.eliteAlgo.detectSMT(
+            symbol, this.stocks[symbol].currentPrice, this.stocks[symbol].candles[tf],
+            other, this.stocks[other].currentPrice, this.stocks[other].candles[tf]
+        );
     }
 }

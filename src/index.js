@@ -7,7 +7,6 @@ import { fileURLToPath } from 'url';
 import { LiquidityEngine } from './logic/liquidity-engine.js';
 import { RealDataManager } from './services/real-data-manager.js';
 import { telegram } from './services/telegram-service.js';
-import { simTrader } from './services/simulation-trader.js';
 import fs from 'fs';
 import { NewsService } from './services/news-service.js';
 
@@ -38,6 +37,16 @@ const io = new Server(httpServer);
 const engine = new LiquidityEngine();
 const simulator = new RealDataManager();
 const lastAlerts = new Map();
+let globalLastAlertTime = 0;
+
+// Helper to prevent Telegram flooding (Max 1 alert per 60s globally)
+function canSendGlobal(isPriority = false) {
+    const now = Date.now();
+    // Non-priority signals (Walls, Squeezes) are blocked if a priority signal just fired
+    if (!isPriority && (now - globalLastAlertTime < 120000)) return false; // 2 min wait for soft alerts
+    if (isPriority && (now - globalLastAlertTime < 60000)) return false; // 1 min wait for hard signals
+    return true;
+}
 
 async function startServer() {
     console.log("Starting BIAS Strategy Server...");
@@ -56,14 +65,30 @@ async function startServer() {
             const lastWhale = lastAlerts.get(whaleKey) || 0;
             const cooldown = 900000; // 15 Minute Cooldown per symbol for Whale Spikes
 
-            // Only fire Telegram if > $3M AND cooldown passed (Reduces 90% of noise)
-            if (block.value >= 3000000 && (Date.now() - lastWhale > cooldown)) {
+            // Only fire Telegram if > $5M AND cooldown passed (Extreme Noise Reduction)
+            if (block.value >= 5000000 && (Date.now() - lastWhale > 1800000) && canSendGlobal()) {
                 telegram.sendWhaleAlert(block.symbol, block.price, block.value, block.type).catch(() => { });
                 lastAlerts.set(whaleKey, Date.now());
+                globalLastAlertTime = Date.now();
             }
             
             // Still emit to Dashboard in real-time (No cooldown for HUD)
             io.emit('whale_alert', block);
+        }
+    };
+
+    simulator.onPriceUpdateCallback = (symbol, price, change, candles) => {
+        // Emit high-frequency update for the dashboard's focused symbol
+        if (symbol === simulator.currentSymbol) {
+            const latestCandle = candles[simulator.currentTimeframe]?.slice(-1)[0];
+            io.emit('price_update', {
+                symbol,
+                price,
+                change,
+                candle: latestCandle,
+                // Include partial radar/bias updates if they can be calculated quickly
+                // For now, just the price for maximum speed
+            });
         }
     };
 
@@ -94,9 +119,6 @@ async function startServer() {
         }
     });
 
-    app.get('/api/trades', (req, res) => {
-        res.json(simTrader.tradeHistory.slice(-10).reverse());
-    });
 
     app.get('/api/config', (req, res) => {
         res.json({
@@ -157,8 +179,7 @@ async function startServer() {
         socket.emit('init', {
             ...initialData,
             watchlist: processWatchlist(),
-            simBalance: simTrader.balance,
-            activeTrades: Array.from(simTrader.activePositions.values()),
+            blockTrades: simulator.blockTrades,
             blockTrades: simulator.blockTrades,
             sectors: simulator.sectors.map(s => ({
                 symbol: s,
@@ -174,8 +195,7 @@ async function startServer() {
                 socket.emit('tf_updated', {
                     ...update,
                     watchlist: wl,
-                    simBalance: simTrader.balance,
-                    activeTrades: Array.from(simTrader.activePositions.values()),
+                    blockTrades: simulator.blockTrades,
                     blockTrades: simulator.blockTrades,
                     sectors: simulator.sectors.map(s => ({
                         symbol: s,
@@ -218,8 +238,7 @@ async function startServer() {
                 socket.emit('symbol_updated', {
                     ...update,
                     watchlist: wl,
-                    simBalance: simTrader.balance,
-                    activeTrades: Array.from(simTrader.activePositions.values()),
+                    blockTrades: simulator.blockTrades,
                     blockTrades: simulator.blockTrades,
                     sectors: simulator.sectors.map(s => ({
                         symbol: s,
@@ -278,9 +297,12 @@ async function startServer() {
                 if (allBullish || allBearish) {
                     const direction = allBullish ? 'BULLISH' : 'BEARISH';
                     const alertKey = `${engineName}_MATRIX_${direction}_${new Date().getHours()}`;
-                    if (!lastAlerts.has(alertKey)) {
+                    // Squelch engine confluence alerts (Only once per 6 hours)
+                    const lastEngine = lastAlerts.get(alertKey) || 0;
+                    if (!lastAlerts.has(alertKey) && (Date.now() - lastEngine > 21600000) && canSendGlobal()) {
                         telegram.sendEngineConfluenceAlert(engineName, direction, symbols).catch(() => { });
                         lastAlerts.set(alertKey, Date.now());
+                        globalLastAlertTime = Date.now();
                     }
                 }
             });
@@ -325,11 +347,12 @@ async function startServer() {
                     triggers.forEach(t => {
                         const alertKey = `${symbol}_WALL_${t.name}`;
                         const lastTime = lastAlerts.get(alertKey);
-                        // 2 Hour cooldown for the same wall level
-                        if (isAlertWindow && (!lastTime || (Date.now() - lastTime > 7200000))) {
+                        // 8 Hour cooldown for the same wall level (Aggressive de-clutter)
+                        if (isAlertWindow && (!lastTime || (Date.now() - lastTime > 28800000)) && canSendGlobal()) {
                             console.log(`[TAG] ${symbol} hit ${t.name} at ${price}`);
                             telegram.sendWallAlert(symbol, price, t.name, t.val, t.type).catch(() => {});
                             lastAlerts.set(alertKey, Date.now());
+                            globalLastAlertTime = Date.now();
                         }
                     });
                 }
@@ -337,24 +360,27 @@ async function startServer() {
                 // --- SILVER BULLET SESSION ALERT ---
                 if (stockData.session && (stockData.session.session === 'SILVER_BULLET' || stockData.session.session === 'LONDON_BULLET')) {
                     const sbKey = `SB_ALERT_${symbol}_${new Date().getHours()}`;
-                    if (isAlertWindow && !lastAlerts.has(sbKey)) {
+                    if (isAlertWindow && !lastAlerts.has(sbKey) && canSendGlobal(true)) {
                         const isCall = rec && rec.action.includes('CALL');
                         const isPut = rec && rec.action.includes('PUT');
                         if (isCall || isPut) {
                             console.log(`[SB] ${symbol} Silver Bullet Entry Detected!`);
                             telegram.sendSignalAlert(symbol, stockData.bias.bias, stockData.currentPrice, rec.action, "🚀 SILVER BULLET ALGO ENTRY: Expansion window is active. Follow institutional volume.", rec.strike, rec.trim, rec.target, rec.sl, "1h", stockData.session.session).catch(() => {});
                             lastAlerts.set(sbKey, Date.now());
+                            globalLastAlertTime = Date.now();
                         }
                     }
                 }
 
-                // --- VOLATILITY SQUEEZE ALERT ---
+                // --- VOLATILITY SQUEEZE ALERT (DE-PRIORITIZED) ---
                 if (stockData.bias && stockData.bias.squeeze && stockData.bias.squeeze.status === 'SQUEEZING') {
                     const squeezeKey = `SQUEEZE_${symbol}_${new Date().getHours()}`;
-                    if (isAlertWindow && !lastAlerts.has(squeezeKey) && stockData.bias.squeeze.intensity > 0.7) { // Increased intensity threshold
+                    // Intensity must be > 0.85 and only once per day per symbol for squeals
+                    if (isAlertWindow && !lastAlerts.has(squeezeKey) && stockData.bias.squeeze.intensity > 0.85 && canSendGlobal()) { 
                         console.log(`[SQUEEZE] ${symbol} is coiling... Intensity: ${stockData.bias.squeeze.intensity}`);
                         telegram.sendSqueezeAlert(symbol, stockData.bias.squeeze.intensity).catch(() => {});
                         lastAlerts.set(squeezeKey, Date.now());
+                        globalLastAlertTime = Date.now();
                     }
                 }
 
@@ -362,12 +388,13 @@ async function startServer() {
                 if (stockData && stockData.markers && stockData.markers.smt) {
                     const smt = stockData.markers.smt;
                     const smtKey = `${symbol}_SMT_${smt.type}_${new Date().getHours()}`;
-                    // SMT cooldown increased to 4 hours
+                    // SMT cooldown increased to 8 hours
                     const lastSmt = lastAlerts.get(smtKey) || 0;
-                    if (isAlertWindow && (Date.now() - lastSmt > 14400000)) { 
+                    if (isAlertWindow && (Date.now() - lastSmt > 28800000) && canSendGlobal()) { 
                         console.log(`[SMT] ${symbol} vs ${smt.symbol} | ${smt.type} Divergence!`);
                         telegram.sendSmtAlert(symbol, smt.symbol, smt.type, smt.message).catch(() => {});
                         lastAlerts.set(smtKey, Date.now());
+                        globalLastAlertTime = Date.now();
                     }
                 }
 
@@ -411,12 +438,12 @@ async function startServer() {
 
                 // The Golden Filter: 
                 // 1. All standard confluence (Stable + Trend)
-                // 2. High Confidence (80+)
-                // 3. MASTER HEALTH SCORE (The 85%+ threshold)
+                // 2. High Confidence (90+)
+                // 3. MASTER HEALTH SCORE (The 92%+ threshold)
                 // 4. Macro & Matrix Agreement
                 const isGoldStandard = stockData && !stockData.loading && rec && rec.isStable &&
-                    stockData.checklist?.trendAlign && (rec.confidence >= 80) &&
-                    (stockData.confluenceScore >= 85) && // MUST have 85%+ Health Matrix alignment
+                    stockData.checklist?.trendAlign && (rec.confidence >= 90) &&
+                    (stockData.confluenceScore >= 92) && // Extreme threshold for professional alerts
                     macroAligned && matrixAgreement;
 
                 if (isGoldStandard && rec.action !== 'WAIT') {
@@ -427,24 +454,24 @@ async function startServer() {
 
                     let canSend = false;
                     if (!lastActionData) {
-                        canSend = true;
+                        canSend = canSendGlobal(true);
                     } else {
                         const timeSinceLast = Date.now() - lastActionData.time;
                         const isOpposite = (lastActionData.action.includes('CALL') && rec.action.includes('PUT')) ||
                             (lastActionData.action.includes('PUT') && rec.action.includes('CALL'));
 
-                        // Block opposite signals for 2 hours (Prevent Flip-Flopping)
-                        if (isOpposite && timeSinceLast < 7200000) {
-                            console.log(`[${symbol}] Alert Blocked: Direction flip cooldown (Wait 2h).`);
+                        // Block opposite signals for 4 hours (Prevent Flip-Flopping)
+                        if (isOpposite && timeSinceLast < 14400000) {
+                            console.log(`[${symbol}] Alert Blocked: Direction flip cooldown (Wait 4h).`);
                             canSend = false;
                         }
-                        // Block same-direction signals for 2 hours (Professional Frequency)
-                        else if (!isOpposite && timeSinceLast < 7200000) {
-                            console.log(`[${symbol}] Alert Blocked: Cooldown period (Wait 2h).`);
+                        // Block same-direction signals for 4 hours (Professional Frequency)
+                        else if (!isOpposite && timeSinceLast < 14400000) {
+                            console.log(`[${symbol}] Alert Blocked: Cooldown period (Wait 4h).`);
                             canSend = false;
                         }
                         else {
-                            canSend = true;
+                            canSend = canSendGlobal(true);
                         }
                     }
 
@@ -464,6 +491,7 @@ async function startServer() {
                             rec.session
                         ).catch(() => { });
                         lastAlerts.set(symbolKey, { action: rec.action, time: Date.now() });
+                        globalLastAlertTime = Date.now();
                     }
                 } else if (rec && rec.action !== 'WAIT') {
                     // LOG why we didn't send
@@ -483,19 +511,9 @@ async function startServer() {
                 }
 
                 // --- EXPERT UPGRADE: SIMULATED PAPER TRADING ---
-                if (rec && rec.action !== 'WAIT' && rec.isStable) {
-                    simTrader.processSignal(symbol, rec, stockData.currentPrice).catch(() => { });
-                }
 
-                // --- NEW: HIGH CONFLUENCE ALERT (Whale Detector) ---
-                const check = stockData.checklist || {};
-                const activeCriteria = [];
-                if (check.trendAlign) activeCriteria.push("1m/5m/15m Trend Alignment");
-                if (check.sweepDetected) activeCriteria.push("Institutional Liquidity Sweep");
-                if (check.stableSignal) activeCriteria.push("Stable Signal (Time-Based)");
-                if (check.relativeStrength) activeCriteria.push("Relative Strength High");
-                if (check.gammaCheck) activeCriteria.push("Gamma Wall / Price Magnet Confluence");
-
+                // --- HIGH CONFLUENCE ALERT (Whale Detector) - SILENCED TO REDUCE NOISE ---
+                /*
                 if (activeCriteria.length >= 5) {
                     const confluenceKey = `${symbol}_CONFLUENCE_ALERT`;
                     const lastAlertTime = lastAlerts.get(confluenceKey) || 0;
@@ -513,10 +531,9 @@ async function startServer() {
                         lastAlerts.set(confluenceKey, Date.now());
                     }
                 }
+                */
             });
 
-            // Update all sim positions based on newest prices
-            await simTrader.updatePositions(simulator.stocks).catch(() => { });
 
             // --- MACRO PULSE MONITORING (VIX Velocity & RORO Shift) ---
             const vix = simulator.internals.vix;
@@ -586,22 +603,16 @@ async function startServer() {
                 }
             }
 
-            console.log(`[EMIT] Sending update. Watchlist symbols: ${watchlistUpdate.length}`);
             io.emit('update', {
                 ...currentUpdate,
                 watchlist: watchlistUpdate,
-                simBalance: simTrader.balance,
-                activeTrades: Array.from(simTrader.activePositions.values()),
                 blockTrades: simulator.blockTrades,
-                sectors: simulator.sectors.map(s => ({
-                    symbol: s,
-                    change: simulator.stocks[s]?.dailyChangePercent || 0
-                }))
+                sectors: processSectors()
             });
         } catch (err) {
             console.error("Update Loop Error:", err.message);
         } finally {
-            setTimeout(runUpdateLoop, 5000);
+            setTimeout(runUpdateLoop, 2000);
         }
     };
 
@@ -630,6 +641,25 @@ async function startServer() {
             console.error("Server error:", err.message);
             logToFile(`Server error: ${err.message}`);
         }
+    });
+}
+
+function processSectors() {
+    return simulator.sectors.map(s => {
+        const stock = simulator.stocks[s];
+        if (!stock) return { symbol: s, change: 0, bias: 'NEUTRAL' };
+        
+        const tf = simulator.currentTimeframe;
+        const candles = stock.candles[tf] || [];
+        const markers = simulator.getInstitutionalMarkers(s, tf);
+        const bias = engine.calculateBias(stock.currentPrice || 0, [], [], stock.bloomberg, markers, 0, simulator.internals, s, candles);
+        
+        return {
+            symbol: s,
+            change: stock.dailyChangePercent || 0,
+            price: stock.currentPrice || 0,
+            bias: bias.bias
+        };
     });
 }
 
@@ -733,7 +763,17 @@ function processData(symbol = simulator.currentSymbol) {
 
     const finalConfScore = calculateConfluenceScore(symbol, stock, bias, markers, relativeStrength, multiTfBias);
 
-    return {
+    if (markers.radar) {
+        markers.radar.irScore = simulator.eliteAlgo.calculateIRScore(
+            bias, 
+            markers.radar.killzone, 
+            markers.radar.smt, 
+            markers.radar.gex
+        );
+        console.log(`[DEBUG] Radar for ${symbol}: Score=${markers.radar.irScore}`);
+    }
+
+    const finalData = {
         symbol,
         currentPrice: stock.currentPrice,
         dailyChangePercent: stock.dailyChangePercent,
@@ -769,8 +809,11 @@ function processData(symbol = simulator.currentSymbol) {
             eurGbpCorr: engine.calculateCorrelation(simulator.stocks['EURUSD=X']?.candles[activeTf] || [], simulator.stocks['GBPUSD=X']?.candles[activeTf] || []),
             isInverseDxy: (engine.calculateCorrelation(candles, simulator.stocks['DX-Y.NYB']?.candles[activeTf] || []) < -80),
             midnightOpen: markers.midnightOpen
-        } : null
+        } : null,
+        institutionalRadar: markers.radar
     };
+
+    return finalData;
 }
 
 function processWatchlist() {

@@ -1,4 +1,5 @@
 const socket = io();
+let watchlistPrevPrices = {}; // Tracks previous prices to trigger pulses
 
 // Supabase Auth Integration
 let supabaseClient;
@@ -131,7 +132,6 @@ const nyClockEl = document.getElementById('ny-clock');
 const globalSearch = document.getElementById('global-search');
 const toastContainer = document.getElementById('toast-container');
 const watchlistList = document.getElementById('watchlist-list');
-const tradeHistoryBody = document.getElementById('trade-history-body');
 const recAction = document.getElementById('rec-action');
 const recStrike = document.getElementById('rec-strike');
 const recTarget = document.getElementById('rec-target');
@@ -140,7 +140,6 @@ const recBox = document.getElementById('rec-box');
 const recRR = document.getElementById('rec-rr');
 const trapBadge = document.getElementById('trap-badge');
 const netWhaleVal = document.getElementById('net-whale-val');
-const simBalanceVal = document.getElementById('sim-balance-val');
 const dxyValEl = document.getElementById('dxy-val');
 const dxyBarEl = document.getElementById('dxy-bar');
 const vixBarEl = document.getElementById('vix-bar');
@@ -177,12 +176,76 @@ const roroLabel = document.getElementById('roro-label');
 const roroBar = document.getElementById('roro-bar');
 const roroVal = document.getElementById('roro-val');
 
+// Radar Elements
+const radarIrScore = document.getElementById('radar-ir-score');
+const radarSessionName = document.getElementById('radar-session-name');
+const radarSessionTimer = document.getElementById('radar-session-timer');
+const radarSmtStatus = document.getElementById('radar-smt-status');
+const radarGammaStatus = document.getElementById('radar-gamma-status');
+const radarRealityText = document.getElementById('radar-reality-text');
+const radarSessionBox = document.getElementById('radar-session-box');
+
 // Trigger Checklist Elements
 const btnUnlockSignal = document.getElementById('btn-unlock-signal');
 const checklistModal = document.getElementById('checklist-modal');
 const btnCloseChecklist = document.getElementById('btn-close-checklist');
 const btnConfirmTrade = document.getElementById('btn-confirm-trade');
 const triggerChecks = document.querySelectorAll('.trigger-check');
+
+// Study Guide Elements
+const studyGuideModal = document.getElementById('study-guide-modal');
+const guideTitle = document.getElementById('guide-title');
+const guideBody = document.getElementById('guide-body');
+const btnCloseGuide = document.getElementById('btn-close-guide');
+const btnCloseGuideFooter = document.getElementById('btn-close-guide-footer');
+
+const STUDY_GUIDE_CONTENT = {
+    'macro': {
+        title: 'MACRO CORRELATION PULSE',
+        steps: [
+            { h: 'DXY (Dollar Index)', p: 'The global benchmark for US Dollar strength. Institutions use the Dollar as a safe haven. If DXY is RISING, it creates gravity for Stocks and Crypto, pulling them DOWN. If DXY is FALLING, it acts as fuel for a market rally.' },
+            { h: 'VIX (Volatility Index)', p: 'Known as the "Fear Gauge". It measures the cost of option protection. VIX below 15 means extreme complacency (Safe to Bull). VIX spiking above 20 means institutions are hedging for a crash.' },
+            { h: 'RORO INDEX', p: 'Risk-On / Risk-Off. This is a proprietary calculation of the relationship between yields, dollars, and volatility. High RORO means big money is aggressively buying risk assets.' }
+        ]
+    },
+    'health': {
+        title: 'INSTITUTIONAL HEALTH MATRIX',
+        steps: [
+            { h: 'The Engine Principle', p: 'No ticker moves alone. The Health Matrix tracks the "Sub-Sectors" (XLK, SMH, XLF) that power the index. If SPY is trying to rally but its health-matrix is Red, the move is a fakeout.' },
+            { h: 'Forex Radar (SMT)', p: 'Smart Money Technique. We monitor the correlation between EUR and GBP. When they diverge (e.g., EUR makes a lower low but GBP doesn\'t), it reveals institutional manipulation and an impending reversal.' },
+            { h: 'Inverse-DXY Realm', p: 'A specific market condition where all asset movement is being dictated strictly by Dollar manipulation. Trading outside this alignment is high-risk.' }
+        ]
+    },
+    'heatmap': {
+        title: 'INSTITUTIONAL HEATMAP',
+        steps: [
+            { h: 'Limit Order Clusters', p: 'This is the "Hidden Map" of the market. The bright zones indicate where massive buy/sell limit orders (Whale Blocks) are sitting. Price will often react violently at these levels.' },
+            { h: 'GEX Walls', p: 'Call Walls and Put Walls represent Market Maker hedging levels. They act as "Magnets" or "Hard Ceilings" that the market struggles to penetrate.' }
+        ]
+    },
+    'bias': {
+        title: 'BIAS & MACRO NARRATIVE',
+        steps: [
+            { h: 'The B.I.A.S Machine', p: 'Aggregates 15+ institutional metrics (RORO, Tick, Breadth, Flows) to determine the Daily Program. Never trade against the Bias.' },
+            { h: 'AMD (Accumulation/Manipulation/Distribution)', p: 'The three phases of the algorithmic day. Accumulation happens in Asia. Manipulation (Judas Swing) often occurs at London Open to trap retail. Distribution is the real move.' },
+            { h: 'Midnight Open', p: 'The "True Daily Open". If price is above Midnight Open, institutions are leaning Bullish for the day. If below, the program is Bearish.' }
+        ]
+    },
+    'strikezones': {
+        title: 'INSTITUTIONAL STRIKEZONES',
+        steps: [
+            { h: 'Liquidity Draws (BSL/SSL)', p: 'Price is not random; it is a magnet to Liquidity. Buyside Liquidity (BSL) exists above old highs. Sellside Liquidity (SSL) exists below old lows. Algorithms move price to these areas to clear out stops.' },
+            { h: 'CBDR Standard Deviations', p: 'Based on the Central Bank Dealers Range. These project the mathematical probability of high/low expansion for the day.' }
+        ]
+    },
+    'recommendation': {
+        title: 'GOLD STANDARD SIGNALS',
+        steps: [
+            { h: 'Algorithmic Confluence', p: 'A signal only appears when 5+ metrics (Trend, SMT, Flow, Macro, Walls) align perfectly. This is the 90%+ win-rate threshold.' },
+            { h: 'Trims & Targets', p: 'Institutional trading is about scaling. "Trim" is where you take partial profits and move your stop to break even. "Target" is the final goal area.' }
+        ]
+    }
+};
 
 // --- INSTITUTIONAL AUDIO ENGINE ---
 class InstitutionalAudio {
@@ -220,6 +283,10 @@ class VoiceNarrator {
         this.synth = window.speechSynthesis;
     }
     toggle() {
+        if (!this.synth) {
+            showToast("SPEECH SYNTHESIS NOT SUPPORTED IN THIS BROWSER");
+            return false;
+        }
         this.enabled = !this.enabled;
         const btn = document.getElementById('btn-voice-toggle');
         const icon = document.getElementById('voice-icon');
@@ -228,16 +295,23 @@ class VoiceNarrator {
             btn.style.borderColor = this.enabled ? '#38bdf8' : 'var(--border)';
             icon.innerText = this.enabled ? '🎙️' : '🔇';
         }
-        if (this.enabled && this.synth) this.speak("SQUAWK ACTIVATED");
+        if (this.enabled) {
+            this.speak("SQUAWK ACTIVATED. MONITORING FOR ELITE SIGNALS.");
+            showToast("VOICE SQUAWK: ARMED");
+        } else {
+            showToast("VOICE SQUAWK: SILENCED");
+        }
         return this.enabled;
     }
     speak(text) {
         if (!this.enabled || !this.synth) return;
-        this.synth.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.0;
-        utterance.pitch = 0.9;
-        this.synth.speak(utterance);
+        try {
+            this.synth.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.1; // Slightly faster for urgency
+            utterance.pitch = 0.95;
+            this.synth.speak(utterance);
+        } catch (e) { }
     }
 }
 
@@ -254,10 +328,12 @@ document.getElementById('btn-audio-toggle')?.addEventListener('click', () => {
         btn.style.color = 'var(--gold)';
         btn.style.borderColor = 'var(--gold)';
         audioHooter.playSignal();
+        showToast("INSTITUTIONAL HOOTER: ARMED");
     } else {
         icon.innerText = '🔇';
         btn.style.color = 'var(--text-dim)';
         btn.style.borderColor = 'var(--border)';
+        showToast("INSTITUTIONAL HOOTER: SILENCED");
     }
 });
 
@@ -524,6 +600,86 @@ function setChartData(candles) {
         console.error("[CHART] Error in setChartData:", e);
     }
 }
+function updateInstitutionalRadar(radar, bias) {
+    if (!radar) return;
+
+    // 1. IR Score
+    if (radarIrScore) {
+        radarIrScore.innerText = Math.round(radar.irScore);
+        radarIrScore.style.color = radar.irScore > 75 ? 'var(--bullish)' : (radar.irScore < 40 ? 'var(--bearish)' : '#fff');
+    }
+
+    // 2. Killzone
+    if (radarSessionName && radar.killzone) {
+        radarSessionName.innerText = radar.killzone.name.replace('_', ' ');
+        radarSessionName.style.color = radar.killzone.color;
+        
+        if (radarSessionTimer) {
+            radarSessionTimer.innerText = radar.killzone.active ? `INSTITUTIONAL POWER: ${Math.round(radar.killzone.progress)}%` : 'NO VOLATILITY';
+        }
+        
+        if (radarSessionBox) {
+            radarSessionBox.style.border = `1px solid ${radar.killzone.color}44`;
+        }
+    }
+
+    // 3. SMT Divergence
+    if (radarSmtStatus) {
+        if (radar.smt) {
+            radarSmtStatus.innerText = radar.smt.type.replace('_', ' ');
+            radarSmtStatus.style.color = radar.smt.type.includes('BULLISH') ? 'var(--bullish)' : 'var(--bearish)';
+        } else {
+            radarSmtStatus.innerText = 'STABLE';
+            radarSmtStatus.style.color = 'var(--text-dim)';
+        }
+    }
+
+    // 4. Dealer Gamma
+    if (radarGammaStatus && radar.gex) {
+        const topWall = radar.gex.reduce((a, b) => a.gamma > b.gamma ? a : b);
+        radarGammaStatus.innerText = `${topWall.isMagnet ? 'MAGNET:' : 'WALL:'} ${topWall.strike.toFixed(2)}`;
+        radarGammaStatus.style.color = topWall.strike > bias.vwap ? 'var(--bullish)' : 'var(--bearish)';
+    }
+
+    // 5. Reality Narrative
+    if (radarRealityText) {
+        let narrative = "Synchronizing institutional pulse...";
+        if (radar.killzone.active) {
+            narrative = `MARKET CONDITION: ${radar.killzone.name} is active. Institutions are actively positioning.`;
+            if (radar.smt) narrative += ` CRITICAL SMT detected vs ${radar.smt.leader}.`;
+        } else {
+            narrative = "OFF-PEAK: Expect low liquidity and retail noise. Algorithmic trade quality is reduced.";
+        }
+        radarRealityText.innerText = narrative;
+        radarRealityText.style.borderLeftColor = radar.irScore > 60 ? 'var(--bullish)' : (radar.irScore < 40 ? 'var(--bearish)' : 'var(--border)');
+    }
+}
+
+function updateProtocolStatus(data) {
+    const el = document.getElementById('protocol-status-indicator');
+    const main = document.querySelector('.dashboard-main');
+    if (!el || !main) return;
+
+    const text = el.querySelector('.p-text');
+    const rec = data.recommendation;
+    const score = data.confluenceScore || 0;
+
+    // Reset classes
+    main.classList.remove('protocol-standby', 'protocol-monitoring');
+
+    if (rec && rec.action !== 'WAIT' && score >= 80 && rec.isStable) {
+        el.className = 'protocol-status-ribbon ready';
+        if (text) text.innerText = `PROTOCOL: READY (${rec.action})`;
+    } else if (data.markers?.radar?.killzone?.active) {
+        el.className = 'protocol-status-ribbon warning';
+        if (text) text.innerText = 'PROTOCOL: MONITORING (KILLZONE)';
+        main.classList.add('protocol-monitoring');
+    } else {
+        el.className = 'protocol-status-ribbon';
+        if (text) text.innerText = 'PROTOCOL: STANDBY (WAITING)';
+        main.classList.add('protocol-standby');
+    }
+}
 function updateChartOverlays(data) {
     if (!candleSeries || !data.markers || !data.currentPrice) return;
 
@@ -722,6 +878,7 @@ socket.on('init', (data) => {
 });
 
 socket.on('update', (data) => {
+    // console.log('[SOCKET] Update received:', data.symbol, data.institutionalRadar ? 'RADAR OK' : 'NO RADAR');
     updateUI(data);
     if (candleSeries && data.candles && data.candles.length > 0) {
         const lastCandle = data.candles[data.candles.length - 1];
@@ -784,27 +941,83 @@ socket.on('watchlist_updated', (data) => {
     updateWatchlist(data);
 });
 
-async function updateHistory() {
-    if (!tradeHistoryBody) return;
-    try {
-        const res = await fetch('/api/trades');
-        const trades = await res.json();
-        tradeHistoryBody.innerHTML = trades.map(t => `
-            <tr>
-                <td class="w-sym" style="font-family: var(--font-data); font-weight:700;">${t.symbol}</td>
-                <td class="${t.profit > 0 ? 'bullish-text' : 'bearish-text'}" style="font-family: var(--font-data); font-weight:700;">
-                    ${t.profit > 0 ? '+' : ''}$${t.profit.toFixed(0)}
-                </td>
-                <td style="font-size: 0.55rem; color: var(--text-dim); text-align:right; text-transform:uppercase;">${t.reason}</td>
-            </tr>
-        `).join('') || '<tr><td colspan="3" style="text-align:center; font-size:0.75rem; padding: 2rem;">No history yet.</td></tr>';
-    } catch (e) { }
-}
-setInterval(updateHistory, 30000);
-updateHistory();
+socket.on('price_update', (data) => {
+    if (data.symbol === document.getElementById('symbol-display')?.innerText) {
+        // Update Main Price
+        if (priceEl && data.price) {
+            const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
+            const newPrice = data.price;
+            
+            if (lastPrice > 0) {
+                const priceContainer = priceEl.parentElement;
+                priceContainer.classList.remove('flash-up', 'flash-down');
+                void priceContainer.offsetWidth;
+                if (newPrice > lastPrice) priceContainer.classList.add('flash-up');
+                else if (newPrice < lastPrice) priceContainer.classList.add('flash-down');
+            }
+            lastPrice = newPrice;
+            priceEl.innerText = newPrice.toLocaleString(undefined, {
+                minimumFractionDigits: isFX ? 4 : 2,
+                maximumFractionDigits: isFX ? 5 : 2
+            });
+        }
+        
+        // Update Change
+        if (changeEl && data.change != null) {
+            changeEl.innerText = `${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}%`;
+            changeEl.className = 'main-change ' + (data.change >= 0 ? 'bullish-text' : 'bearish-text');
+        }
+        
+        // Update Candle
+        if (candleSeries && data.candle) {
+            const c = data.candle;
+            try {
+                candleSeries.update({
+                    time: Math.floor(c.timestamp / 1000),
+                    open: Number(c.open),
+                    high: Number(c.high),
+                    low: Number(c.low),
+                    close: Number(c.close)
+                });
+            } catch (e) {}
+        }
+    }
+
+    // --- REAL-TIME WATCHLIST TICKER SYNC ---
+    const tickerItem = document.querySelector(`.ticker-card[data-symbol="${data.symbol}"]`);
+    if (tickerItem) {
+        const pEl = tickerItem.querySelector('.ticker-price');
+        const cEl = tickerItem.querySelector('.ticker-meta span:first-child');
+        const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
+        
+        if (pEl && data.price) {
+            const oldPriceText = pEl.innerText.replace('$', '').replace(',', '');
+            const oldPrice = parseFloat(oldPriceText);
+            pEl.innerText = `$${data.price.toFixed(isFX ? 4 : 2)}`;
+            
+            // Pulse effect
+            tickerItem.classList.remove('pulse-up', 'pulse-down');
+            void tickerItem.offsetWidth;
+            if (data.price > oldPrice) tickerItem.classList.add('pulse-up');
+            else if (data.price < oldPrice) tickerItem.classList.add('pulse-down');
+            setTimeout(() => tickerItem.classList.remove('pulse-up', 'pulse-down'), 800);
+        }
+        
+        if (cEl && data.change != null) {
+            cEl.innerText = `${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}%`;
+            cEl.style.color = data.change >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+        }
+    }
+});
+
+// --- UI UPDATE CORE ---
 
 function updateUI(data) {
     if (!data) return;
+    if (data.watchlist) updateWatchlist(data);
+
+    // Protocol Update
+    updateProtocolStatus(data);
 
     // Refresh Institutional Chart Overlays
     updateChartOverlays(data);
@@ -825,31 +1038,7 @@ function updateUI(data) {
     const symbolDisplay = document.getElementById('symbol-display');
     if (symbolDisplay) symbolDisplay.innerText = data.symbol || 'SPY';
 
-    if (data.simBalance && simBalanceVal) {
-        simBalanceVal.innerText = `$${data.simBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-    }
 
-    // Active Positions
-    const activeTradesContainer = document.getElementById('active-trades-container');
-    if (activeTradesContainer && data.activeTrades) {
-        if (data.activeTrades.length === 0) {
-            activeTradesContainer.innerHTML = '<p style="color:var(--text-dim); text-align:center;">No active positions.</p>';
-        } else {
-            activeTradesContainer.innerHTML = data.activeTrades.map(trade => `
-                <div class="trade-row">
-                    <div class="trade-main">
-                        <span class="${trade.type.includes('CALL') ? 'bullish-text' : 'bearish-text'}">${trade.symbol}</span>
-                        <span>$${trade.entryPrice.toFixed(trade.symbol.includes('=X') ? 4 : 2)}</span>
-                    </div>
-                    <div class="trade-sub">
-                        <span>PRICE: $${trade.cost.toFixed(2)}</span>
-                        <span>QTY: ${trade.size}</span>
-                        <span style="color:var(--gold);">TP: ${trade.tp.toFixed(trade.symbol.includes('=X') ? 4 : 2)}</span>
-                    </div>
-                </div>
-            `).join('');
-        }
-    }
 
     // --- WHALE TAPE REAL-TIME FEED ---
     if (whaleTickerScroll && data.blockTrades && data.blockTrades.length > 0) {
@@ -1220,14 +1409,15 @@ function updateUI(data) {
                 });
             }
 
-            // Audio & Voice Alert
-            if (data.recommendation.isStable && data.recommendation.action !== 'WAIT') {
+            // Audio & Voice Alert - Strictly for PROTOCOL READY signals
+            const protocolReady = (data.recommendation.action !== 'WAIT' && (data.confluenceScore || 0) >= 75);
+            if (data.recommendation.isStable && protocolReady) {
                 const signalKey = `${data.symbol}_${data.recommendation.action}`;
                 if (lastSignalAction !== signalKey) {
                     audioHooter.playSignal();
-                    voiceNarrator.speak(`Alert. ${data.symbol} Gold Signal. ${data.recommendation.action}. Confirming Confluence.`);
+                    voiceNarrator.speak(`Protocol Ready. ${data.symbol} elite signal found. Action. ${data.recommendation.action}. Confluence high.`);
                     lastSignalAction = signalKey;
-                    showToast(`ELITE SIGNAL: ${data.recommendation.action} on ${data.symbol}`);
+                    showToast(`PROTOCOL READY: ${data.recommendation.action} on ${data.symbol}`);
                 }
             }
         }
@@ -1330,10 +1520,8 @@ function updateUI(data) {
                             changeEl.className = 'sector-change ' + (sData.change >= 0 ? 'bullish-text' : 'bearish-text');
                         }
                         el.classList.remove('bullish', 'bearish');
-                        if (Math.abs(sData.change) > 0.1) {
-                            if (sData.change > 0) el.classList.add('bullish');
-                            else el.classList.add('bearish');
-                        }
+                        if (sData.bias === 'BULLISH') el.classList.add('bullish');
+                        else if (sData.bias === 'BEARISH') el.classList.add('bearish');
                     }
                 });
             };
@@ -1420,29 +1608,32 @@ function updateUI(data) {
                     if (cbdrSd2El) cbdrSd2El.innerText = (bias === 'BULLISH' || bias === 'STRONG BULLISH') ? c.sd2_high.toFixed(precision) : c.sd2_low.toFixed(precision);
                 }
             }
-        }
-        if (data.watchlist) updateWatchlist(data);
+    }
+}
 
-        // --- MOBILE COMMANDER HUD SYNC ---
-        const mobileSymbol = document.getElementById('mobile-hud-symbol');
-        const mobilePrice = document.getElementById('mobile-hud-price');
-        const mobileBias = document.getElementById('mobile-hud-bias');
-        const mobileRec = document.getElementById('mobile-hud-rec');
-        const mobileTrigger = document.getElementById('mobile-trigger-btn');
 
-        if (mobileSymbol) mobileSymbol.innerText = data.symbol || 'SPY';
-        if (mobilePrice && data.currentPrice) {
-            const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
-            mobilePrice.innerText = `$${data.currentPrice.toFixed(isFX ? 4 : 2)}`;
-        }
-        if (mobileBias && data.bias) {
-            mobileBias.innerText = data.bias.bias;
-            mobileBias.className = 'hud-bias ' + (data.bias.bias === 'BULLISH' ? 'bullish-text' : data.bias.bias === 'BEARISH' ? 'bearish-text' : 'gold-text');
-        }
-        if (mobileRec && data.recommendation) {
-            mobileRec.innerText = data.recommendation.action;
-            mobileRec.className = 'hud-rec ' + (data.recommendation.action.includes('CALL') ? 'bullish-text' : data.recommendation.action.includes('PUT') ? 'bearish-text' : 'gold-text');
-        }
+    if (data.institutionalRadar) {
+        updateInstitutionalRadar(data.institutionalRadar, data.bias);
+    }
+
+    // --- MOBILE COMMANDER HUD SYNC ---
+    const mobileSymbol = document.getElementById('mobile-hud-symbol');
+    const mobilePrice = document.getElementById('mobile-hud-price');
+    const mobileBias = document.getElementById('mobile-hud-bias');
+    const mobileRec = document.getElementById('mobile-hud-rec');
+
+    if (mobileSymbol) mobileSymbol.innerText = data.symbol || 'SPY';
+    if (mobilePrice && data.currentPrice) {
+        const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
+        mobilePrice.innerText = `$${data.currentPrice.toFixed(isFX ? 4 : 2)}`;
+    }
+    if (mobileBias && data.bias) {
+        mobileBias.innerText = data.bias.bias;
+        mobileBias.className = 'hud-bias ' + (data.bias.bias === 'BULLISH' ? 'bullish-text' : data.bias.bias === 'BEARISH' ? 'bearish-text' : 'gold-text');
+    }
+    if (mobileRec && data.recommendation) {
+        mobileRec.innerText = data.recommendation.action;
+        mobileRec.className = 'hud-rec ' + (data.recommendation.action.includes('CALL') ? 'bullish-text' : data.recommendation.action.includes('PUT') ? 'bearish-text' : 'gold-text');
     }
 }
 
@@ -1461,8 +1652,13 @@ function updateWatchlist(data) {
         return;
     }
 
-    // --- ALPHA SORTING: Rank by Confluence Score then Change ---
+    // --- ALPHA SORTING: Rank by "GO" status, then Confluence Score ---
     wl.sort((a, b) => {
+        const aReady = (a.recommendation?.action !== 'WAIT' && (a.confluenceScore || 0) >= 80 && a.recommendation?.isStable);
+        const bReady = (b.recommendation?.action !== 'WAIT' && (b.confluenceScore || 0) >= 80 && b.recommendation?.isStable);
+
+        if (bReady !== aReady) return bReady ? 1 : -1;
+        
         if ((b.confluenceScore || 0) !== (a.confluenceScore || 0)) {
             return (b.confluenceScore || 0) - (a.confluenceScore || 0);
         }
@@ -1475,22 +1671,36 @@ function updateWatchlist(data) {
         try {
             if (!stock || !stock.symbol) return;
 
-            const card = document.createElement('div');
-            card.className = 'ticker-card' + (data.symbol === stock.symbol ? ' active-symbol' : '');
+            const price = typeof stock.price === 'number' ? stock.price : 0;
+            const prevPrice = watchlistPrevPrices[stock.symbol];
+            
+            let pulseClass = '';
+            if (prevPrice !== undefined && price !== prevPrice) {
+                pulseClass = price > prevPrice ? 'pulse-up' : 'pulse-down';
+            }
+            // Update tracking
+            watchlistPrevPrices[stock.symbol] = price;
 
             const rec = stock.recommendation || { action: 'WAIT' };
             const action = rec.action || 'WAIT';
             const actionClass = action.includes('CALL') ? 'bullish-text' : action.includes('PUT') ? 'bearish-text' : 'text-dim';
 
+            // STRICTOR "GO" GUARD: Action + Score 80+ + Stable Signal
+            const isReady = (action !== 'WAIT' && (stock.confluenceScore || 0) >= 80 && rec.isStable);
+            const readyBadge = isReady ? '<span class="go-badge">GO</span>' : '';
+
+            const card = document.createElement('div');
+            card.className = `ticker-card ${pulseClass} ${data.symbol === stock.symbol ? 'active-symbol' : ''} ${isReady ? 'ready-signal' : ''}`;
+            card.setAttribute('data-symbol', stock.symbol);
+
             const isFX = stock.symbol.includes('=X') || stock.symbol.includes('USD');
             const precision = isFX ? 4 : 2;
-            const biasText = stock.bias || 'NEUTRAL';
-            const biasClass = biasText === 'BULLISH' ? 'bullish-text' : biasText === 'BEARISH' ? 'bearish-text' : '';
-            const price = typeof stock.price === 'number' ? stock.price : 0;
+            const biasText = (stock.bias && stock.bias.bias) ? stock.bias.bias : (stock.bias || 'NEUTRAL');
+            const biasClass = biasText.includes('BULLISH') ? 'bullish-text' : biasText.includes('BEARISH') ? 'bearish-text' : '';
 
             card.innerHTML = `
                 <div class="ticker-info">
-                    <span class="ticker-sym">${stock.symbol} ${stock.hasRS ? '<span class="rs-badge">RS</span>' : ''}</span>
+                    <span class="ticker-sym">${stock.symbol} ${readyBadge} ${stock.hasRS ? '<span class="rs-badge">RS</span>' : ''}</span>
                     <span class="ticker-price">$${price.toFixed(precision)}</span>
                 </div>
                 <div class="ticker-metrics">
@@ -1500,12 +1710,15 @@ function updateWatchlist(data) {
                     </div>
                     <span class="ticker-signal ${actionClass} ${action !== 'WAIT' ? 'pulse-subtle' : ''}">${action}</span>
                 </div>
+                <div class="ticker-meta">
+                    <span style="color:${stock.dailyChangePercent >= 0 ? 'var(--bullish)' : 'var(--bearish)'};">${stock.dailyChangePercent >= 0 ? '+' : ''}${stock.dailyChangePercent?.toFixed(2)}%</span>
+                    <span style="color:var(--text-dim); font-size: 0.5rem;">${stock.adr ? 'ADR: ' + stock.adr.toFixed(2) : ''}</span>
+                </div>
             `;
 
             card.onclick = () => {
                 console.log(`[UI] Switching focus to: ${stock.symbol}`);
                 let symbolToEmit = stock.symbol;
-                // Normalization for common search formats to Yahoo-friendly ones
                 if (symbolToEmit === 'BTCUSD') symbolToEmit = 'BTC-USD';
                 if (symbolToEmit === 'ETHUSD') symbolToEmit = 'ETH-USD';
                 if (symbolToEmit === 'EURUSD') symbolToEmit = 'EURUSD=X';
@@ -1514,12 +1727,16 @@ function updateWatchlist(data) {
                 if (symbolToEmit === 'DXY' || symbolToEmit === 'DX-Y') symbolToEmit = 'DX-Y.NYB';
                 
                 socket.emit('switch_symbol', symbolToEmit);
-                // Instant UI feedback
                 document.querySelectorAll('.ticker-card').forEach(c => c.classList.remove('active-symbol'));
                 card.classList.add('active-symbol');
             };
 
             listContainer.appendChild(card);
+
+            // Strip pulse class after animation finishes (0.8s) to allow re-triggering
+            if (pulseClass) {
+                setTimeout(() => card.classList.remove(pulseClass), 800);
+            }
         } catch (err) {
             console.error(`[UI] Error rendering symbol ${stock?.symbol}:`, err);
         }
@@ -1596,4 +1813,50 @@ btnConfirmTrade?.addEventListener('click', () => {
     if (pendingSignalData) {
         updateUI(pendingSignalData);
     }
+});
+
+
+// Re-link Study Guide Triggers (since they might have been lost in duplication cleanup)
+document.querySelectorAll('.card-info-trigger').forEach(trigger => {
+    trigger.addEventListener('click', (e) => {
+        const cardType = e.target.getAttribute('data-card');
+        if (typeof openStudyGuide === 'function') {
+            openStudyGuide(cardType);
+        }
+    });
+});
+
+function openStudyGuide(cardType) {
+    const data = STUDY_GUIDE_CONTENT[cardType];
+    if (!data || !studyGuideModal || !guideTitle || !guideBody) return;
+
+    guideTitle.innerText = data.title;
+    guideBody.innerHTML = data.steps.map((step, idx) => `
+        <section class="handbook-step">
+            <h3><span class="step-num">${idx + 1}</span> ${step.h}</h3>
+            <p>${step.p}</p>
+        </section>
+    `).join('');
+
+    studyGuideModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeStudyGuide() {
+    if (studyGuideModal) {
+        studyGuideModal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+}
+
+btnCloseGuide?.addEventListener('click', closeStudyGuide);
+btnCloseGuideFooter?.addEventListener('click', closeStudyGuide);
+studyGuideModal?.addEventListener('click', (e) => {
+    if (e.target === studyGuideModal) closeStudyGuide();
+});
+
+// Fix the Tactical Briefing button (redirecting to Study Guide)
+btnOpenHandbook?.addEventListener('click', () => {
+    // Default to 'macro' or similar if no specific type
+    openStudyGuide('bias');
 });

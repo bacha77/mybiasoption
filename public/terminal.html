@@ -43,57 +43,18 @@
 
 
     <div class="app-container">
-        <!-- New Member Handbook Modal -->
-        <div id="handbook-modal" class="handbook-modal" style="display: none;">
+        <!-- STUDY GUIDE MODAL (Dynamic Educational Layer) -->
+        <div id="study-guide-modal" class="handbook-modal" style="display: none;">
             <div class="handbook-content">
                 <div class="handbook-header">
-                    <span class="premium-shimmer">ELITE MEMBER HANDBOOK</span>
-                    <button id="btn-close-handbook" class="close-btn">×</button>
+                    <span id="guide-title" class="premium-shimmer">STUDY GUIDE</span>
+                    <button id="btn-close-guide" class="close-btn">×</button>
                 </div>
-                <div class="handbook-body">
-                    <section class="handbook-step">
-                        <h3><span class="step-num">1</span> Identify the Bias</h3>
-                        <p>Look at the <strong>Daily Bias Confidence</strong> card. This is your compass. Only trade in the direction of the bias (Green for Calls, Red for Puts).</p>
-                    </section>
-                    <section class="handbook-step">
-                        <h3><span class="step-num">2</span> Wait for Liquidity</h3>
-                        <p>Watch the <strong>Institutional Strikezones</strong>. We wait for the price to "Sweep" a Low or High. This traps retail traders and lets institutions enter.</p>
-                    </section>
-                    <section class="handbook-step">
-                        <h3><span class="step-num">3</span> The Trigger</h3>
-                        <p>When the <strong>Option Recommendation</strong> card lights up with a specific Strike and Target, that is your signal to enter.</p>
-                    </section>
-                    <div class="handbook-footer">
-                        <p><em>"Trade with the Whales, not against them."</em></p>
-                        <button id="btn-close-handbook-footer" class="action-btn">UNDERSTOOD</button>
-                    </div>
+                <div id="guide-body" class="handbook-body">
+                    <!-- Dynamic Content Loaded by app.js -->
                 </div>
-            </div>
-        </div>
-        <!-- New Member Handbook Modal -->
-        <div id="handbook-modal" class="handbook-modal" style="display: none;">
-            <div class="handbook-content">
-                <div class="handbook-header">
-                    <span class="premium-shimmer">ELITE MEMBER HANDBOOK</span>
-                    <button id="btn-close-handbook" class="close-btn">×</button>
-                </div>
-                <div class="handbook-body">
-                    <section class="handbook-step">
-                        <h3><span class="step-num">1</span> Identify the Bias</h3>
-                        <p>Look at the <strong>Daily Bias Confidence</strong> card. This is your compass. Only trade in the direction of the bias (Green for Calls, Red for Puts).</p>
-                    </section>
-                    <section class="handbook-step">
-                        <h3><span class="step-num">2</span> Wait for Liquidity</h3>
-                        <p>Watch the <strong>Institutional Strikezones</strong>. We wait for the price to "Sweep" a Low or High. This traps retail traders and lets institutions enter.</p>
-                    </section>
-                    <section class="handbook-step">
-                        <h3><span class="step-num">3</span> The Trigger</h3>
-                        <p>When the <strong>Option Recommendation</strong> card lights up with a specific Strike and Target, that is your signal to enter.</p>
-                    </section>
-                    <div class="handbook-footer">
-                        <p><em>"Trade with the Whales, not against them."</em></p>
-                        <button id="btn-close-handbook-footer" class="action-btn">UNDERSTOOD</button>
-                    </div>
+                <div class="handbook-footer">
+                    <button id="btn-close-guide-footer" class="action-btn">CLOSE GUIDE</button>
                 </div>
             </div>
         </div>
@@ -106,8 +67,8 @@
             <div class="status-item" id="btn-open-handbook" style="cursor: pointer; color: var(--gold); border: 1px solid var(--gold); padding: 0 8px; border-radius: 2px;">
                 <span style="font-size: 0.5rem; font-weight: 900;">🔥 START HERE: TACTICAL BRIEFING</span>
             </div>
-            <div class="status-item" id="btn-audio-toggle" style="cursor: pointer; color: var(--gold); border: 1px solid var(--gold); padding: 0 8px; border-radius: 2px; margin-left: 10px;">
-                <span id="audio-icon">🔊</span> <span style="font-size: 0.5rem; font-weight: 900;">INSTITUTIONAL HOOTER</span>
+            <div class="status-item" id="btn-audio-toggle" style="cursor: pointer; color: var(--text-dim); border: 1px solid var(--border); padding: 0 8px; border-radius: 2px; margin-left: 10px;">
+                <span id="audio-icon">🔇</span> <span style="font-size: 0.5rem; font-weight: 900;">INSTITUTIONAL HOOTER</span>
             </div>
             <div class="status-item" id="btn-voice-toggle" style="cursor: pointer; color: var(--text-dim); border: 1px solid var(--border); padding: 0 8px; border-radius: 2px; margin-left: 10px;">
                 <span id="voice-icon">🔇</span> <span style="font-size: 0.5rem; font-weight: 900;">VOICE SQUAWK</span>
@@ -141,15 +102,16 @@
                         autocomplete="off">
                     <span class="search-icon">🔍</span>
                 </div>
+                <div id="protocol-status-indicator" class="protocol-status-ribbon">
+                    <span class="p-dot"></span>
+                    <span class="p-text">PROTOCOL: STANDBY</span>
+                </div>
             </div>
 
             <div class="header-stats">
                 <div class="session-bar">
                     <div id="market-status-dot" class="session-dot pulse"></div>
                     <span id="market-session-text">ESTABLISHING SESSION...</span>
-                </div>
-                <div id="sim-balance-display" class="sim-balance-pill">
-                    ⚡ SIM BALANCE: <span id="sim-balance-val">$10,000.00</span>
                 </div>
                 <button id="logout-btn" class="logout-btn" style="display: none;">Log Out</button>
             </div>
@@ -245,21 +207,6 @@
                             <span id="adr-val" class="m-value gold-text">0.00</span>
                         </div>
                         <div class="metric-item"
-                            data-tooltip="Point of Control. The price level with the most institutional volume today. Acts as a magnet.">
-                            <span class="m-label">POC</span>
-                            <span id="poc-val" class="m-value">0.00</span>
-                        </div>
-                        <div class="metric-item"
-                            data-tooltip="New York Open (09:30 EST). Key anchor point for the US session.">
-                            <span class="m-label">NY Open</span>
-                            <span id="ny-open-val" class="m-value">0.00</span>
-                        </div>
-                        <div class="metric-item"
-                            data-tooltip="London Open (03:00 EST). Often creates the high or low of the day.">
-                            <span class="m-label">London Open</span>
-                            <span id="london-open-val" class="m-value">0.00</span>
-                        </div>
-                        <div class="metric-item"
                             data-tooltip="Call Wall (GEX Ceiling). The heavy strike price where Market Makers will short and defend.">
                             <span class="m-label">Call Wall</span>
                             <span id="call-wall-val" class="m-value bearish-text">0.00</span>
@@ -270,23 +217,12 @@
                             <span id="put-wall-val" class="m-value bullish-text">0.00</span>
                         </div>
                         <div class="metric-item"
-                            data-tooltip="Cumulative Volume Delta. Measures aggressive buying vs selling. Green CVD = Institutions are buying at the market.">
-                            <span class="m-label">CVD</span>
-                            <span id="cvd-val" class="m-value">0</span>
-                        </div>
-                        <div class="metric-item"
                             data-tooltip="Market Breadth. Percentage of watchlist tickers trending up. High breadth confirms a healthy trend.">
                             <span class="m-label">MARKET BREADTH</span>
                             <span id="breadth-val" class="m-value gold-text">50%</span>
                         </div>
-                        <div class="metric-item"
-                            data-tooltip="Net Institutional Value. Difference between total Bullish and Bearish $1M+ whale blocks today.">
-                            <span class="m-label">NET WHALE FLOW</span>
-                            <span id="net-whale-val" class="m-value gold-text">$0.00M</span>
-                        </div>
-                        <div class="metric-item full-width"
-                            data-tooltip="Institutional Order-Flow Imbalance. Shows the percentage of aggressive buying vs selling from large blocks.">
-                            <span class="m-label">Whale Order-Flow Imbalance</span>
+                        <div class="metric-item" data-tooltip="Institutional Order Flow Imbalance. Shows if Whales are aggressively buying or selling.">
+                            <span class="m-label">FLOW IMBALANCE</span>
                             <div class="imbalance-container">
                                 <div id="imbalance-bar" class="imbalance-bar"></div>
                                 <div id="imbalance-text" class="imbalance-text">50% BULL / 50% BEAR</div>
@@ -335,6 +271,7 @@
                                 <span id="vix-val-macro" class="m-value">0.00</span>
                                 <span id="vix-corr" class="corr-tag">INVERSE</span>
                             </div>
+                        </div>
                         <div class="macro-item" data-tooltip="Risk-On / Risk-Off Index. Consolidated macro sentiment from DXY, VIX, Yields, and Breadth.">
                             <div class="macro-label">RORO SENTIMENT INDEX</div>
                             <div class="roro-container" style="display:flex; flex-direction:column; align-items:center; gap:5px; margin-top:10px;">
@@ -379,7 +316,7 @@
                     </div>
 
                     <!-- IWM Pipeline -->
-                    <div>
+                    <div title="Small Cap Engine. Tracks the health of regional banks (KRE) and biotechs (XBI). IWM resilience often confirms a broad market rally.">
                         <div
                             style="font-size: 0.6rem; font-weight: 800; color: #22c55e; margin-bottom: 0.5rem; letter-spacing: 1.5px; display: flex; align-items: center; gap: 8px; opacity: 0.8;">
                             <span style="width: 15px; height: 1.5px; background: #22c55e;"></span> IWM (SMALL CAP)
@@ -391,7 +328,7 @@
                     </div>
 
                     <!-- FX Pipeline -->
-                    <div>
+                    <div title="Currency Health Engine. Tracks DXY strength vs EUR, GBP, and JPY. Critical for identifying Dollar-driven reversals in stocks.">
                         <div
                             style="font-size: 0.6rem; font-weight: 800; color: #f59e0b; margin-bottom: 0.5rem; letter-spacing: 1.5px; display: flex; align-items: center; gap: 8px; opacity: 0.8;">
                             <span style="width: 15px; height: 1.5px; background: #f59e0b;"></span> FX CONFLUENCE ENGINE
@@ -404,16 +341,16 @@
                         <div id="forex-radar-container" style="display: none; margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--border);">
                             <div style="font-size: 0.55rem; font-weight: 800; color: var(--gold); margin-bottom: 0.5rem; letter-spacing: 1.5px; opacity: 0.9;">FOREX INTELLIGENCE RADAR</div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                <div class="radar-item" style="background: rgba(255,255,255,0.02); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+                                <div class="radar-item" title="Relationship between this pair and the US Dollar Index. -80% to -100% is institutional Inverse Alignment." style="background: rgba(255,255,255,0.02); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
                                     <div class="radar-label" style="font-size: 0.5rem; color: var(--text-dim); margin-bottom: 2px;">DXY CORRELATION</div>
                                     <div id="fx-dxy-corr" class="radar-val" style="font-size: 0.75rem; font-weight: 800; color: var(--text-bright);">--%</div>
                                 </div>
-                                <div class="radar-item" style="background: rgba(255,255,255,0.02); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+                                <div class="radar-item" title="Smart Money Technique Sync. Tracks if EUR and GBP are moving in harmony. Divergence here signals an institutional reversal." style="background: rgba(255,255,255,0.02); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
                                     <div class="radar-label" style="font-size: 0.5rem; color: var(--text-dim); margin-bottom: 2px;">EUR/GBP SMT</div>
                                     <div id="fx-smt-sync" class="radar-val" style="font-size: 0.75rem; font-weight: 800; color: var(--gold);">ACTIVE</div>
                                 </div>
                             </div>
-                            <div id="fx-inverse-dxy-badge" style="display:none; font-size: 0.5rem; text-align: center; margin-top: 8px; padding: 2px; background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 2px; font-weight: 900; letter-spacing: 0.5px;">INVERSE-DXY REALM</div>
+                            <div id="fx-inverse-dxy-badge" title="ALGO REGIME: You are in a 'Inverse Dollar Realm'. All moves are strictly driven by Dollar Index manipulation." style="display:none; font-size: 0.5rem; text-align: center; margin-top: 8px; padding: 2px; background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 2px; font-weight: 900; letter-spacing: 0.5px; cursor: help;">INVERSE-DXY REALM</div>
                         </div>
                     </div>
                 </section>
@@ -432,6 +369,42 @@
 
             <!-- Right Column (Sidebar) -->
             <aside class="sidebar">
+                <!-- Institutional Intelligence Radar (Elite Layer) -->
+                <section class="card accent-border reveal-1" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(20, 20, 20, 0) 100%); border: 1px solid rgba(16, 185, 129, 0.2);">
+                    <div class="card-header-flex">
+                        <div class="card-title" style="color: var(--bullish); text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);">Institutional Intelligence Radar</div>
+                        <span class="card-info-trigger" data-card="radar">ⓘ</span>
+                    </div>
+                    
+                    <div class="radar-container" style="display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: 1rem;">
+                        <div class="radar-main" style="display: flex; justify-content: space-between; align-items: center;">
+                            <div class="radar-score-box">
+                                <div class="radar-label" style="font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase;">IR-REALITY SCORE</div>
+                                <div id="radar-ir-score" style="font-size: 1.8rem; font-weight: 900; color: #fff;">00</div>
+                            </div>
+                            <div id="radar-session-box" class="session-badge" style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.05); border-radius: 4px; text-align: center;">
+                                <div id="radar-session-name" style="font-size: 0.8rem; font-weight: 800; color: #f59e0b;">OFF-HOURS</div>
+                                <div id="radar-session-timer" style="font-size: 0.55rem; color: var(--text-dim);">NO VOLATILITY</div>
+                            </div>
+                        </div>
+
+                        <div class="radar-details" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                            <div class="radar-mini-card" style="padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 4px;">
+                                <div style="font-size: 0.5rem; color: var(--text-dim);">SMT DIVERGENCE</div>
+                                <div id="radar-smt-status" style="font-size: 0.7rem; font-weight: 700;">STABLE</div>
+                            </div>
+                            <div class="radar-mini-card" style="padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 4px;">
+                                <div style="font-size: 0.5rem; color: var(--text-dim);">DEALER GAMMA</div>
+                                <div id="radar-gamma-status" style="font-size: 0.7rem; font-weight: 700;">LOW GEAR</div>
+                            </div>
+                        </div>
+
+                        <div id="radar-reality-text" style="font-size: 0.65rem; padding: 0.6rem; background: rgba(0,0,0,0.2); border-left: 2px solid var(--bullish); font-style: italic; color: var(--text-bright);">
+                            Synchronizing institutional pulse... Waiting for high-impact window.
+                        </div>
+                    </div>
+                </section>
+
                 <!-- Gauge Card -->
                 <section class="card reveal-4">
                     <div class="card-header-flex">
@@ -452,7 +425,7 @@
                     </div>
 
                     <!-- NEW: INSTITUTIONAL MACRO NARRATIVE (AMD) -->
-                    <div class="macro-narrative-container">
+                    <div class="macro-narrative-container" title="Power of 3 (AMD): Tracks Accumulation (sideways), Manipulation (fakeout), and Distribution (trending).">
                         <div class="section-header">
                             <span class="section-title">INSTITUTIONAL MACRO NARRATIVE</span>
                             <span id="current-amd-status" class="status-dot">●</span>
@@ -493,29 +466,29 @@
                         <span class="card-info-trigger" data-card="strikezones">ⓘ</span>
                     </div>
                     <div id="magnet-zones-container" class="magnet-grid" style="grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                        <div class="magnet-item">
+                        <div class="magnet-item" title="Buyside Liquidity. The price area where buy-stop orders (liquidity) are sitting. This acts as a magnet for bullish expansions.">
                             <span class="magnet-label">BSL DRAW</span>
                             <span id="magnet-bsl-price" class="magnet-price">--</span>
                             <span id="magnet-bsl-dist" class="magnet-dist">--%</span>
                         </div>
-                        <div class="magnet-item">
+                        <div class="magnet-item" title="Sellside Liquidity. The price area where sell-stop orders are clustered. This acts as a magnet for bearish drops.">
                             <span class="magnet-label">SSL DRAW</span>
                             <span id="magnet-ssl-price" class="magnet-price">--</span>
                             <span id="magnet-ssl-dist" class="magnet-dist">--%</span>
                         </div>
-                        <div class="magnet-item" style="border-top: 1px solid var(--border); padding-top: 8px;">
+                        <div class="magnet-item" title="The High of the Asia session range. Institutional algorithms often sweep this level during London open (Judas Swing)." style="border-top: 1px solid var(--border); padding-top: 8px;">
                             <span class="magnet-label">ASIA HIGH</span>
                             <span id="magnet-asia-high" class="magnet-price" style="color:var(--accent);">--</span>
                         </div>
-                        <div class="magnet-item" style="border-top: 1px solid var(--border); padding-top: 8px;">
+                        <div class="magnet-item" title="The Low of the Asia session range. A major bounce or distribution point for the NY session." style="border-top: 1px solid var(--border); padding-top: 8px;">
                             <span class="magnet-label">ASIA LOW</span>
                             <span id="magnet-asia-low" class="magnet-price" style="color:var(--accent);">--</span>
                         </div>
-                        <div class="magnet-item" style="border-top: 1px solid var(--border); padding-top: 8px;">
+                        <div class="magnet-item" title="Central Bank Dealers Range Standard Deviation 1. The algorithmic expected trend expansion for the day." style="border-top: 1px solid var(--border); padding-top: 8px;">
                             <span class="magnet-label">CBDR SD1 (TARGET)</span>
                             <span id="magnet-cbdr-sd1" class="magnet-price" style="color:var(--gold);">--</span>
                         </div>
-                        <div class="magnet-item" style="border-top: 1px solid var(--border); padding-top: 8px;">
+                        <div class="magnet-item" title="Central Bank Dealers Range Standard Deviation 2. The extreme algorithmic boundary. Price rarely exceeds this daily expansion." style="border-top: 1px solid var(--border); padding-top: 8px;">
                             <span class="magnet-label">CBDR SD2 (MAX)</span>
                             <span id="magnet-cbdr-sd2" class="magnet-price" style="color:#ff3366;">--</span>
                         </div>
@@ -561,13 +534,6 @@
                     </div>
                 </section>
 
-                <!-- Active Positions -->
-                <section class="card reveal-6">
-                    <div class="card-title">Active Paper Trades</div>
-                    <div id="active-trades-container" style="font-size: 0.65rem;">
-                        <p style="color:var(--text-dim); text-align:center; padding: 1rem;">NO OPEN POSITIONS</p>
-                    </div>
-                </section>
 
                 <!-- Institutional Block Trades -->
                 <section class="card reveal-7">
@@ -577,19 +543,6 @@
                     </div>
                 </section>
 
-                <!-- Portfolio / Sim Stats -->
-                <section class="card reveal-8">
-                    <div class="card-title">Simulation Trade History</div>
-                    <div style="max-height: 200px; overflow-y: auto;">
-                        <table class="watchlist-table">
-                            <tbody id="trade-history-body" style="font-family: var(--font-data); font-size: 0.65rem;">
-                                <tr>
-                                    <td colspan="3" style="text-align:center; padding: 1rem; color: var(--text-dim);">FETCHING HISTORICAL DATA...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
 
                 <!-- Premium Watchlist Card -->
                 <section class="card reveal-9"
