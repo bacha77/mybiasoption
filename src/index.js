@@ -808,6 +808,8 @@ function processData(symbol = simulator.currentSymbol) {
             dxyCorr: engine.calculateCorrelation(candles, simulator.stocks['DX-Y.NYB']?.candles[activeTf] || []),
             eurGbpCorr: engine.calculateCorrelation(simulator.stocks['EURUSD=X']?.candles[activeTf] || [], simulator.stocks['GBPUSD=X']?.candles[activeTf] || []),
             isInverseDxy: (engine.calculateCorrelation(candles, simulator.stocks['DX-Y.NYB']?.candles[activeTf] || []) < -80),
+            smt: markers.radar?.smt,
+            session: engine.getMarketSession(symbol),
             midnightOpen: markers.midnightOpen
         } : null,
         institutionalRadar: markers.radar

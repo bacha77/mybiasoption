@@ -1313,9 +1313,14 @@ function updateUI(data) {
                 dxyCorrEl.style.color = corr < -80 ? 'var(--bullish)' : (corr > 80 ? 'var(--bearish)' : 'var(--text-bright)');
             }
             if (smtSyncEl) {
-                const sync = data.forexRadar.eurGbpCorr || 0;
-                smtSyncEl.innerText = sync > 90 ? 'SYNC' : 'DIVERGED';
-                smtSyncEl.style.color = sync > 90 ? 'var(--bullish)' : 'var(--gold)';
+                if (data.forexRadar.smt) {
+                    smtSyncEl.innerText = `SMT ${data.forexRadar.smt.type}`;
+                    smtSyncEl.style.color = data.forexRadar.smt.type === 'BULLISH' ? 'var(--bullish)' : 'var(--bearish)';
+                } else {
+                    const sync = data.forexRadar.eurGbpCorr || 0;
+                    smtSyncEl.innerText = sync > 90 ? 'SYNC' : 'ALIGNING';
+                    smtSyncEl.style.color = sync > 90 ? 'var(--bullish)' : 'var(--gold)';
+                }
             }
             if (inverseBadge) {
                 inverseBadge.style.display = data.forexRadar.isInverseDxy ? 'block' : 'none';

@@ -268,10 +268,17 @@ export class LiquidityEngine {
 
         // --- DXY CORRELATION (Critical for Forex) ---
         if (isForex && internals.dxy > 0) {
-            const dxyStrength = internals.dxy > 103.5; 
+            const dxyStrength = internals.dxy > 102.5; // Institutional base
+            const dxyBullish = internals.dxyChange > 0;
+            
             if (isUSDQuote) {
-                if (dxyStrength) bearishScore += 2.5; // DXY UP = EURUSD DOWN
-                else bullishScore += 1.5;
+                // If EURUSD/GBPUSD: DXY UP = BEARISH, DXY DOWN = BULLISH
+                if (dxyBullish) bearishScore += 4.0;
+                else bullishScore += 3.0;
+            } else if (symbol.startsWith('USD')) {
+                // If USDJPY/USDCAD: DXY UP = BULLISH, DXY DOWN = BEARISH
+                if (dxyBullish) bullishScore += 4.0;
+                else bearishScore += 3.0;
             }
         }
 
@@ -442,8 +449,27 @@ export class LiquidityEngine {
 
         // --- ELITE: DOLLAR SENSITIVITY (FX WEIGHTING) ---
         if (isForex && internals && typeof internals.dxyChange === 'number') {
-            if (internals.dxyChange > 0.05) bearishScore += 2.5;
-            if (internals.dxyChange < -0.05) bullishScore += 2.5;
+            const dxyChange = internals.dxyChange;
+            if (isUSDQuote) {
+                if (dxyChange > 0) bearishScore += 5.0; // Heavy negative correlation
+                else bullishScore += 4.0;
+            } else if (symbol.startsWith('USD')) {
+                if (dxyChange > 0) bullishScore += 5.0; // Positive correlation
+                else bearishScore += 4.0;
+            }
+        }
+
+        // --- FOREX KILLZONE INTENSITY ---
+        const session = this.getMarketSession(symbol);
+        if (isForex) {
+            if (session.session.includes('LONDON') || session.session.includes('NY')) {
+                bullishScore *= 1.5;
+                bearishScore *= 1.5;
+            } else {
+                // Outside Killzones, dampen signals to avoid range chop
+                bullishScore *= 0.5;
+                bearishScore *= 0.5;
+            }
         }
 
         // --- PROFESSIONAL UPGRADE: SETUP-BASED BIAS WEIGHTING ---
@@ -1131,7 +1157,15 @@ export class LiquidityEngine {
 
         if (stable.action !== 'WAIT') {
             const isCall = stable.action.includes('CALL');
-            sl = isCall ? (currentPrice - (atr * 1.8)).toFixed(2) : (currentPrice + (atr * 1.8)).toFixed(2);
+            const isForex = symbol.includes('=X') || symbol === 'BTC-USD';
+            
+            if (isForex) {
+                // Forex SL: Use ATR-based pips (usually 20-50 pips)
+                const pips = atr * 2.0;
+                sl = isCall ? (currentPrice - pips).toFixed(5) : (currentPrice + pips).toFixed(5);
+            } else {
+                sl = isCall ? (currentPrice - (atr * 1.8)).toFixed(2) : (currentPrice + (atr * 1.8)).toFixed(2);
+            }
 
             // --- EXPERT UPGRADE: RISK-TO-REWARD (R:R) VALIDATION ---
             const targetPrice = parseFloat(stable.target);
