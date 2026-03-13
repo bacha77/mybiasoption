@@ -49,10 +49,20 @@ async function startServer() {
 
     console.log(`[INIT] Watchlist loaded with ${simulator.watchlist.length} symbols.`);
 
-    // Whale Alert Integration
+    // --- INSTITUTIONAL SIGNAL GUARD: Anti-Spam Logic ---
     simulator.onBlockCallback = (block) => {
         if (block.isElite) {
-            telegram.sendWhaleAlert(block.symbol, block.price, block.value, block.type).catch(() => { });
+            const whaleKey = `WHALE_${block.symbol}`;
+            const lastWhale = lastAlerts.get(whaleKey) || 0;
+            const cooldown = 900000; // 15 Minute Cooldown per symbol for Whale Spikes
+
+            // Only fire Telegram if > $3M AND cooldown passed (Reduces 90% of noise)
+            if (block.value >= 3000000 && (Date.now() - lastWhale > cooldown)) {
+                telegram.sendWhaleAlert(block.symbol, block.price, block.value, block.type).catch(() => { });
+                lastAlerts.set(whaleKey, Date.now());
+            }
+            
+            // Still emit to Dashboard in real-time (No cooldown for HUD)
             io.emit('whale_alert', block);
         }
     };
@@ -315,8 +325,8 @@ async function startServer() {
                     triggers.forEach(t => {
                         const alertKey = `${symbol}_WALL_${t.name}`;
                         const lastTime = lastAlerts.get(alertKey);
-                        // 60 minute cooldown for the same wall
-                        if (isAlertWindow && (!lastTime || (Date.now() - lastTime > 3600000))) {
+                        // 2 Hour cooldown for the same wall level
+                        if (isAlertWindow && (!lastTime || (Date.now() - lastTime > 7200000))) {
                             console.log(`[TAG] ${symbol} hit ${t.name} at ${price}`);
                             telegram.sendWallAlert(symbol, price, t.name, t.val, t.type).catch(() => {});
                             lastAlerts.set(alertKey, Date.now());
@@ -341,7 +351,7 @@ async function startServer() {
                 // --- VOLATILITY SQUEEZE ALERT ---
                 if (stockData.bias && stockData.bias.squeeze && stockData.bias.squeeze.status === 'SQUEEZING') {
                     const squeezeKey = `SQUEEZE_${symbol}_${new Date().getHours()}`;
-                    if (isAlertWindow && !lastAlerts.has(squeezeKey) && stockData.bias.squeeze.intensity > 0.6) {
+                    if (isAlertWindow && !lastAlerts.has(squeezeKey) && stockData.bias.squeeze.intensity > 0.7) { // Increased intensity threshold
                         console.log(`[SQUEEZE] ${symbol} is coiling... Intensity: ${stockData.bias.squeeze.intensity}`);
                         telegram.sendSqueezeAlert(symbol, stockData.bias.squeeze.intensity).catch(() => {});
                         lastAlerts.set(squeezeKey, Date.now());
@@ -352,7 +362,9 @@ async function startServer() {
                 if (stockData && stockData.markers && stockData.markers.smt) {
                     const smt = stockData.markers.smt;
                     const smtKey = `${symbol}_SMT_${smt.type}_${new Date().getHours()}`;
-                    if (isAlertWindow && !lastAlerts.has(smtKey)) {
+                    // SMT cooldown increased to 4 hours
+                    const lastSmt = lastAlerts.get(smtKey) || 0;
+                    if (isAlertWindow && (Date.now() - lastSmt > 14400000)) { 
                         console.log(`[SMT] ${symbol} vs ${smt.symbol} | ${smt.type} Divergence!`);
                         telegram.sendSmtAlert(symbol, smt.symbol, smt.type, smt.message).catch(() => {});
                         lastAlerts.set(smtKey, Date.now());
@@ -621,6 +633,37 @@ async function startServer() {
     });
 }
 
+function calculateConfluenceScore(symbol, stock, bias, markers, relativeStrength, multiTfBias) {
+    let confScoreValue = 0;
+    if (bias && bias.bias !== 'NEUTRAL') {
+        // 1. TF Alignment check (40 pts)
+        const tfs = ['1m', '5m', '15m'];
+        const matchCount = tfs.filter(t => multiTfBias[t] === bias.bias).length;
+        confScoreValue += (matchCount / tfs.length) * 40;
+
+        // 2. Midnight Open Alignment (20 pts)
+        if (markers.midnightOpen > 0) {
+            const isAbv = stock.currentPrice > markers.midnightOpen;
+            if ((bias.bias === 'BULLISH' && isAbv) || (bias.bias === 'BEARISH' && !isAbv)) {
+                confScoreValue += 20;
+            }
+        }
+
+        // 3. CVD / Volume Confirmation (20 pts)
+        if (markers.cvd !== undefined) {
+            if ((bias.bias === 'BULLISH' && markers.cvd > 0) || (bias.bias === 'BEARISH' && markers.cvd < 0)) {
+                confScoreValue += 20;
+            }
+        }
+
+        // 4. Relative Strength vs SPY (20 pts)
+        if ((bias.bias === 'BULLISH' && relativeStrength > 0) || (bias.bias === 'BEARISH' && relativeStrength < 0)) {
+            confScoreValue += 20;
+        }
+    }
+    return Math.round(confScoreValue);
+}
+
 function processData(symbol = simulator.currentSymbol) {
     // Normalize Yahoo symbols (e.g., BRK.B -> BRK-B)
     const normalizedSymbol = symbol.replace(/\./g, '-');
@@ -688,40 +731,7 @@ function processData(symbol = simulator.currentSymbol) {
     const stableSignal = recommendation.isStable;
     const rsCheck = relativeStrength > 0.05;
 
-    // --- Master Global Confluence Score Calculation ---
-    // Alignment Points:
-    // 1. Bias vs Multi-TF Bias (40 pts)
-    // 2. Midnight Open Confluence (20 pts)
-    // 3. CVD & Volume Confirmation (20 pts)
-    // 4. Relative Strength Alignment (20 pts)
-    let confScoreValue = 0;
-    if (bias.bias !== 'NEUTRAL') {
-        // TF Alignment check (Strong alignment if all TFs match)
-        const tfs = ['1m', '5m', '15m'];
-        const matchCount = tfs.filter(t => multiTfBias[t] === bias.bias).length;
-        confScoreValue += (matchCount / tfs.length) * 40;
-
-        // Midnight Open Alignment
-        if (markers.midnightOpen > 0) {
-            const isAbv = stock.currentPrice > markers.midnightOpen;
-            if ((bias.bias === 'BULLISH' && isAbv) || (bias.bias === 'BEARISH' && !isAbv)) {
-                confScoreValue += 20;
-            }
-        }
-
-        // CVD / Volume Confirmation
-        if (markers.cvd !== undefined) {
-            if ((bias.bias === 'BULLISH' && markers.cvd > 0) || (bias.bias === 'BEARISH' && markers.cvd < 0)) {
-                confScoreValue += 20;
-            }
-        }
-
-        // Relative Strength vs SPY (Market Leadership)
-        if ((bias.bias === 'BULLISH' && relativeStrength > 0) || (bias.bias === 'BEARISH' && relativeStrength < 0)) {
-            confScoreValue += 20;
-        }
-    }
-    const finalConfScore = Math.round(confScoreValue);
+    const finalConfScore = calculateConfluenceScore(symbol, stock, bias, markers, relativeStrength, multiTfBias);
 
     return {
         symbol,
@@ -787,19 +797,15 @@ function processWatchlist() {
             const recommendation = engine.getOptionRecommendation(bias, markers, stock.currentPrice || 0, tf, symbol, candles);
             const hasRS = (stock.dailyChangePercent || 0) > spyChange;
 
-            // Simple Score for Watchlist
-            let score = 0;
-            if (bias.bias !== 'NEUTRAL') {
-                if (markers.midnightOpen > 0) {
-                    const isAbv = stock.currentPrice > markers.midnightOpen;
-                    if ((bias.bias === 'BULLISH' && isAbv) || (bias.bias === 'BEARISH' && !isAbv)) score += 25;
-                }
-                if (markers.cvd !== undefined) {
-                    if ((bias.bias === 'BULLISH' && markers.cvd > 0) || (bias.bias === 'BEARISH' && markers.cvd < 0)) score += 25;
-                }
-                if (recommendation.isStable) score += 25;
-                if ((bias.bias === 'BULLISH' && hasRS) || (bias.bias === 'BEARISH' && !hasRS)) score += 25;
-            }
+            const multiTfBias = {};
+            simulator.timeframes.forEach(timeframe => {
+                const tfCandles = stock.candles[timeframe] || [];
+                const tfMarkers = simulator.getInstitutionalMarkers(normalizedSym, timeframe);
+                const tfBias = engine.calculateBias(stock.currentPrice || 0, [], [], bloomberg, tfMarkers, 0, internals, symbol, tfCandles);
+                multiTfBias[timeframe] = tfBias.bias;
+            });
+
+            const score = calculateConfluenceScore(symbol, stock, bias, markers, (stock.dailyChangePercent || 0) - spyChange, multiTfBias);
 
             return {
                 symbol,
@@ -808,7 +814,7 @@ function processWatchlist() {
                 bias: bias ? bias.bias : 'NEUTRAL',
                 omon: bloomberg.omon || 'NEUTRAL',
                 recommendation: recommendation || { action: 'WAIT' },
-                hasRS: hasRS,
+                hasRS: (stock.dailyChangePercent || 0) > spyChange,
                 confluenceScore: score
             };
         } catch (err) {

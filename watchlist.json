@@ -12,12 +12,18 @@
   "GOOGL",
   "AMD",
   "NFLX",
+  "PLTR",
+  "SMCI",
+  "ARM",
+  "MSTR",
+  "COIN",
+  "GLD",
+  "USO",
+  "JPM",
+  "GS",
   "BTC-USD",
   "EURUSD=X",
   "GBPUSD=X",
   "USDJPY=X",
-  "AUDUSD=X",
-  "MSF",
-  "BTCUSD",
-  "BTCUSDSPY"
+  "AUDUSD=X"
 ]
