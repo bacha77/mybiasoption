@@ -1382,7 +1382,7 @@ export class LiquidityEngine {
      * Usually occurs in the first 1-2 hours of London/NY sessions.
      */
     detectJudasSwing(candles, markers, session) {
-        if (!candles || candles.length < 20) return null;
+        if (!candles || candles.length < 20 || !session || !session.session) return null;
         if (!session.session.includes('LONDON') && !session.session.includes('NY')) return null;
 
         const currentPrice = candles[candles.length - 1].close;

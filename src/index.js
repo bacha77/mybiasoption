@@ -751,7 +751,7 @@ function processData(symbol = simulator.currentSymbol) {
     const absorption = engine.detectAbsorption(candles);
     const sweeps = engine.detectLiquidationSweep(candles, draws);
     const recommendation = engine.getOptionRecommendation(bias, markers, stock.currentPrice, tf, symbol, candles);
-    recommendation.tacticalNarrative = engine.getInstitutionalNarrative(symbol, stock.currentPrice, markers, bias, session);
+    recommendation.tacticalNarrative = engine.getInstitutionalNarrative(symbol, stock.currentPrice, markers, bias, engine.getSessionInfo(symbol));
 
     const multiTfBias = {};
     simulator.timeframes.forEach(timeframe => {
@@ -822,7 +822,7 @@ function processData(symbol = simulator.currentSymbol) {
             eurGbpCorr: engine.calculateCorrelation(simulator.stocks['EURUSD=X']?.candles[activeTf] || [], simulator.stocks['GBPUSD=X']?.candles[activeTf] || []),
             isInverseDxy: (engine.calculateCorrelation(candles, simulator.stocks['DX-Y.NYB']?.candles[activeTf] || []) < -80),
             smt: markers.radar?.smt,
-            session: engine.getMarketSession(symbol),
+            session: engine.getSessionInfo(symbol),
             globalSessions: engine.getGlobalForexSessions(),
             midnightOpen: markers.midnightOpen
         } : null,
@@ -860,7 +860,7 @@ function processWatchlist() {
             const markers = simulator.getInstitutionalMarkers(normalizedSym, tf);
             const internals = simulator.internals;
             const bloomberg = stock.bloomberg || { omon: 'NEUTRAL' };
-            const bias = engine.calculateBias(stock.currentPrice || 0, [], { highs: [], lows: [] }, bloomberg, markers, 0, internals, symbol, candles);
+            const bias = engine.calculateBias(stock.currentPrice || 0, [], { highs: [], lows: [] }, bloomberg, markers, 0, internals, normalizedSym, candles);
             const recommendation = engine.getOptionRecommendation(bias, markers, stock.currentPrice || 0, tf, symbol, candles);
             const hasRS = (stock.dailyChangePercent || 0) > spyChange;
 
@@ -868,7 +868,7 @@ function processWatchlist() {
             simulator.timeframes.forEach(timeframe => {
                 const tfCandles = stock.candles[timeframe] || [];
                 const tfMarkers = simulator.getInstitutionalMarkers(normalizedSym, timeframe);
-                const tfBias = engine.calculateBias(stock.currentPrice || 0, [], [], bloomberg, tfMarkers, 0, internals, symbol, tfCandles);
+                const tfBias = engine.calculateBias(stock.currentPrice || 0, [], [], bloomberg, tfMarkers, 0, internals, normalizedSym, tfCandles);
                 multiTfBias[timeframe] = tfBias.bias;
             });
 
