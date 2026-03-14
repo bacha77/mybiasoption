@@ -1433,4 +1433,61 @@ export class LiquidityEngine {
         }
         return null;
     }
+
+    /**
+     * Detects the current Power of Three (PO3) phase based on time and price action.
+     * PO3 Cycle: Accumulation -> Manipulation -> Distribution
+     */
+    detectPO3Phase(candles, markers, session) {
+        if (!candles || candles.length < 50) return { phase: 'INERTIA', progress: 0 };
+
+        const now = new Date();
+        const nyTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const hour = nyTime.getHours();
+
+        // 1. Accumulation Phase (Typically Asian Range: 18:00 - 02:00 NY)
+        if (hour >= 18 || hour < 2) {
+            return {
+                phase: 'ACCUMULATION',
+                label: 'PHASE I: ACCUMULATION (ASIAN RANGE)',
+                progress: 25,
+                color: 'var(--gold)',
+                description: 'Institutions are building positions. Expect tight range and low volatility.'
+            };
+        }
+
+        // 2. Manipulation Phase (Typically London/NY Open: 02:00 - 10:00 NY)
+        // This is where Judas Swings happen.
+        if (hour >= 2 && hour < 10) {
+            const isJudas = this.detectJudasSwing(candles, markers, session);
+            return {
+                phase: 'MANIPULATION',
+                label: isJudas ? 'PHASE II: MANIPULATION ACTIVE' : 'PHASE II: MANIPULATION WINDOW',
+                progress: 50,
+                color: isJudas ? 'var(--bearish)' : 'var(--gold)',
+                description: isJudas ? 'TRAP DETECTED. Institutions are clearing retail stops.' : 'Watch for false moves against the true trend.'
+            };
+        }
+
+        // 3. Distribution Phase (Typically 10:00 - 16:00 NY)
+        // The "True Move" of the day.
+        if (hour >= 10 && hour < 16) {
+            return {
+                phase: 'DISTRIBUTION',
+                label: 'PHASE III: DISTRIBUTION (TRUE TREND)',
+                progress: 75,
+                color: 'var(--bullish)',
+                description: 'Liquidity is being distributed. Trend following is high probability.'
+            };
+        }
+
+        // 4. Closing / Re-Accumulation (16:00 - 18:00 NY)
+        return {
+            phase: 'RE-ACCUMULATION',
+            label: 'PHASE IV: CYCLE COMPLETION',
+            progress: 100,
+            color: 'var(--text-dim)',
+            description: 'Market session closing. Volatility fading.'
+        };
+    }
 }

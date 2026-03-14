@@ -600,7 +600,10 @@ function setChartData(candles) {
         console.error("[CHART] Error in setChartData:", e);
     }
 }
-function updateInstitutionalRadar(radar, bias) {
+function updateInstitutionalRadar(data) {
+    const radar = data.institutionalRadar;
+    const bias = data.bias;
+    const po3 = data.po3;
     if (!radar) return;
 
     // 1. IR Score
@@ -723,6 +726,19 @@ function updateInstitutionalRadar(radar, bias) {
         while (tapeList.children.length > 8) {
             tapeList.removeChild(tapeList.lastChild);
         }
+    }
+
+    // 9. PO3 Cycle Engine (Main Radar)
+    const po3Badge = document.getElementById('po3-phase-badge');
+    const po3Progress = document.getElementById('po3-progress-bar');
+    const po3Desc = document.getElementById('po3-description');
+
+    if (po3 && po3Badge && po3Progress && po3Desc) {
+        po3Badge.innerText = po3.phase;
+        po3Badge.style.background = po3.color;
+        po3Progress.style.width = `${po3.progress}%`;
+        po3Progress.style.background = po3.color;
+        po3Desc.innerText = po3.label + ": " + po3.description;
     }
 }
 
@@ -1455,6 +1471,16 @@ function updateUI(data) {
                 fxTapeList.prepend(row);
                 if (fxTapeList.children.length > 5) fxTapeList.removeChild(fxTapeList.lastChild);
             }
+
+            // --- FX PO3 TRACKER ---
+            const fxPo3Phase = document.getElementById('fx-po3-phase');
+            const fxPo3Progress = document.getElementById('fx-po3-progress');
+            if (data.po3 && fxPo3Phase && fxPo3Progress) {
+                fxPo3Phase.innerText = data.po3.phase;
+                fxPo3Phase.style.color = data.po3.color;
+                fxPo3Progress.style.width = `${data.po3.progress}%`;
+                fxPo3Progress.style.background = data.po3.color;
+            }
         } else if (fxRadarContainer) {
             fxRadarContainer.style.display = 'none';
         }
@@ -1783,7 +1809,7 @@ function updateUI(data) {
 
 
     if (data.institutionalRadar) {
-        updateInstitutionalRadar(data.institutionalRadar, data.bias);
+        updateInstitutionalRadar(data);
     }
 
     // --- MOBILE COMMANDER HUD SYNC ---

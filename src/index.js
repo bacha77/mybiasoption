@@ -827,7 +827,8 @@ function processData(symbol = simulator.currentSymbol) {
             midnightOpen: markers.midnightOpen
         } : null,
         institutionalRadar: markers.radar,
-        whaleTape: engine.generateOrderFlowTape(symbol, stock.currentPrice, candles)
+        whaleTape: engine.generateOrderFlowTape(symbol, stock.currentPrice, candles),
+        po3: engine.detectPO3Phase(candles, markers, engine.getSessionInfo(symbol))
     };
 
     return finalData;
