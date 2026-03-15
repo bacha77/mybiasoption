@@ -746,7 +746,7 @@ function processData(symbol = simulator.currentSymbol) {
 
     const internals = simulator.internals;
     const bias = engine.calculateBias(stock.currentPrice, fvgs, draws, bloomberg, markers, relativeStrength, internals, symbol, candles);
-    const heatmap = simulator.generateHeatmapData(draws);
+    const heatmap = engine.calculateInstitutionalHeatmap(candles, markers, stock.currentPrice, symbol);
 
     const absorption = engine.detectAbsorption(candles);
     const sweeps = engine.detectLiquidationSweep(candles, draws);

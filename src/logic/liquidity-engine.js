@@ -1490,4 +1490,93 @@ export class LiquidityEngine {
             description: 'Market session closing. Volatility fading.'
         };
     }
+
+    /**
+     * Institutional Liquidity Heatmap (Gravity Engine)
+     * Maps the market as a schedule of transactions by identifying "Liquidity Pools" 
+     * and "Value Hubs" where institutional activity is concentrated.
+     */
+    calculateInstitutionalHeatmap(candles, markers, currentPrice, symbol) {
+        if (!candles || candles.length < 50) return [];
+        
+        const heatmap = [];
+        const isForex = symbol.includes('=X') || symbol.includes('USD');
+        const precision = isForex ? 5 : 2;
+        
+        // 1. Identify "Price Magnets" (Round Numbers / Century Levels)
+        const roundStep = isForex ? 0.0050 : (currentPrice > 500 ? 10 : 5);
+        const baseLevel = Math.floor(currentPrice / (roundStep * 4)) * (roundStep * 4);
+        
+        for (let i = -3; i <= 3; i++) {
+            const level = baseLevel + (i * roundStep);
+            if (level <= 0) continue;
+            
+            heatmap.push({
+                price: level,
+                strength: 40, // Base strength for psychological levels
+                type: 'PSYCH_LEVEL',
+                label: `LEVEL: ${level.toFixed(precision)}`,
+                color: 'rgba(255, 215, 0, 0.2)'
+            });
+        }
+
+        // 2. Identify "Liquidity Pools" (Clusters of historical Highs/Lows)
+        const highs = candles.map(c => c.high);
+        const lows = candles.map(c => c.low);
+        
+        // Find Untested Extremes (potential Stop Loss clusters)
+        const recentHigh = Math.max(...highs.slice(-100));
+        const recentLow = Math.min(...lows.slice(-100));
+        
+        heatmap.push({
+            price: recentHigh,
+            strength: 85,
+            type: 'BSL_POOL',
+            label: 'BUY-SIDE LIQUIDITY (STOPS)',
+            color: 'rgba(255, 51, 102, 0.4)'
+        });
+        
+        heatmap.push({
+            price: recentLow,
+            strength: 85,
+            type: 'SSL_POOL',
+            label: 'SELL-SIDE LIQUIDITY (STOPS)',
+            color: 'rgba(0, 242, 255, 0.4)'
+        });
+
+        // 3. Fair Value Gaps (FVG) - Acting as "Liquidity Vacuums"
+        const fvgs = this.findFVGs(candles.slice(-50));
+        fvgs.forEach(fvg => {
+            const mid = (fvg.top + fvg.bottom) / 2;
+            heatmap.push({
+                price: mid,
+                strength: 60,
+                type: 'IMBALANCE',
+                label: 'LIQUIDITY VOID',
+                color: 'rgba(245, 158, 11, 0.3)'
+            });
+        });
+
+        // 4. Institutional Order Blocks (OB)
+        if (markers.poc) {
+            heatmap.push({
+                price: markers.poc,
+                strength: 95,
+                type: 'VALUE_CORE',
+                label: 'CONTROL HUB (POC)',
+                color: 'rgba(168, 85, 247, 0.5)'
+            });
+        }
+
+        // 5. Calculate "Institutional Gravity"
+        // Adjust strength based on proximity to current price
+        return heatmap.map(zone => {
+            const distance = Math.abs(currentPrice - zone.price) / currentPrice;
+            const proximityBonus = distance < 0.005 ? 15 : 0;
+            return {
+                ...zone,
+                gravity: Math.min(100, zone.strength + proximityBonus)
+            };
+        }).sort((a, b) => b.gravity - a.gravity);
+    }
 }

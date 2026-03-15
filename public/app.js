@@ -848,12 +848,23 @@ function updateChartOverlays(data) {
     }
 
     // --- NEW: ASIA RANGE & LIQUIDITY MAGNETS ---
-    if (data.bias && data.bias.asiaRange) {
-        const ar = data.bias.asiaRange;
-        addLevel(ar.high, 'rgba(56, 189, 248, 0.4)', 1, 'ASIA HIGH', 12);
-        addLevel(ar.low, 'rgba(56, 189, 248, 0.4)', 1, 'ASIA LOW', 12);
-        addLevel(ar.mid, 'rgba(56, 189, 248, 0.2)', 2, 'ASIA MID', 5);
+    if (m.asiaRange) {
+        addLevel(m.asiaRange.high, 'rgba(56, 189, 248, 0.4)', 1, 'ASIA HIGH', 1);
+        addLevel(m.asiaRange.low, 'rgba(56, 189, 248, 0.4)', 1, 'ASIA LOW', 1);
     }
+
+    // --- INSTITUTIONAL HEATMAP (GRAVITY ZONES) ---
+    if (data.heatmap) {
+        data.heatmap.slice(0, 5).forEach(zone => {
+            // Only add lines for high-gravity targets (> 70)
+            if (zone.gravity > 70) {
+                addLevel(zone.price, zone.color, 1, `[HUNT] ${zone.type}`, 2);
+            }
+        });
+    }
+
+    // Finalize Levels
+    levels.sort((a, b) => b.weight - a.weight);
 
     if (data.bias && data.bias.restingLiquidity) {
         const rl = data.bias.restingLiquidity;
@@ -1583,20 +1594,34 @@ function updateUI(data) {
             }
         }
 
-        // Heatmap
+        // Institutional Heatmap (Gravity Engine)
         if (data.heatmap) {
-            heatmapContainer.innerHTML = '';
+            heatmapContainer.innerHTML = `
+                <div style="font-size: 0.6rem; color: var(--gold); margin-bottom: 5px; opacity: 0.8; letter-spacing: 1px;">
+                    INSTITUTIONAL GRAVITY ENGINE
+                </div>
+            `;
             const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
             const precision = isFX ? 4 : 2;
-            data.heatmap.sort((a, b) => b.volume - a.volume).slice(0, 10).forEach(h => {
+            
+            data.heatmap.slice(0, 8).forEach(h => {
                 const div = document.createElement('div');
                 div.className = 'metric-item';
-                div.style.flexDirection = 'row';
-                div.style.justifyContent = 'space-between';
+                div.style.background = `linear-gradient(90deg, ${h.color} 0%, transparent ${h.gravity}%)`;
+                div.style.borderLeft = `3px solid ${h.color}`;
+                div.style.marginBottom = '6px';
+                div.style.padding = '4px 8px';
+                div.style.borderRadius = '2px';
+                
                 div.innerHTML = `
-                    <span class="m-label">${h.type}</span>
-                    <span class="m-value ${h.type === 'BSL' ? 'bullish-text' : 'bearish-text'}">$${h.price.toFixed(precision)}</span>
-                    <span class="m-label">${h.volume} VOL</span>
+                    <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                        <span style="font-weight:900; font-size:0.65rem; color:#fff;">${h.type}</span>
+                        <span style="font-family:'JetBrains Mono'; font-weight:800; color:var(--gold);">$${h.price.toFixed(precision)}</span>
+                        <div style="text-align:right;">
+                            <span style="display:block; font-size:0.5rem; color:var(--text-dim);">GRAVITY</span>
+                            <span style="font-weight:900; font-size:0.7rem; color:${h.gravity > 80 ? 'var(--bullish)' : '#fff'};">${h.gravity}%</span>
+                        </div>
+                    </div>
                 `;
                 heatmapContainer.appendChild(div);
             });
