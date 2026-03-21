@@ -29,8 +29,13 @@ process.on('uncaughtException', (err) => {
     process.exit(1);
 });
 
+import helmet from 'helmet';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+app.use(helmet({
+    contentSecurityPolicy: false, // Allow external fonts and scripts for Lightweight Charts
+}));
 const httpServer = createServer(app);
 const io = new Server(httpServer);
 
@@ -173,6 +178,15 @@ async function startServer() {
 
     // SSE / WebSocket updates
     io.on('connection', (socket) => {
+        console.log('[SOCKET] User connected:');
+        socket.on('manual_scan_trigger', () => {
+            console.log('[SOCKET] MANUAL SCAN TRIGGERED BY USER');
+            const signals = simulator.watchlist.map(sym => {
+                const d = processData(sym);
+                return { symbol: sym, ...d.scalpScan };
+            });
+            socket.emit('scalper_pulse', { updates: signals });
+        });
         console.log('Client connected to BIAS dashboard');
 
         const initialData = processData();
@@ -207,6 +221,14 @@ async function startServer() {
         });
 
         socket.on('switch_symbol', async (symbol) => {
+        socket.on('manual_scan', () => {
+            const signals = [];
+            simulator.watchlist.forEach(sym => {
+                const d = processData(sym);
+                if (d.scalpScan) signals.push({ symbol: sym, ...d.scalpScan });
+            });
+            socket.emit('scalper_pulse', { updates: signals });
+        });
             try {
                 symbol = symbol.toUpperCase().trim();
                 
@@ -262,6 +284,30 @@ async function startServer() {
             await simulator.updateAll();
             const currentUpdate = processData();
             const watchlistUpdate = processWatchlist();
+
+            // --- GLOBAL SCALPER BACKGROUND SCANNER ---
+            const activeSignals = [];
+            simulator.watchlist.forEach(sym => {
+                const d = processData(sym);
+                
+                // Signal triggers: High Velocity OR Multi-Timeframe Alignment (3+)
+                const isAligned = d.alignedCount >= 3;
+                const hasVelocity = d.scalpScan && d.scalpScan.velocity > 1.5;
+
+                if (hasVelocity || isAligned) {
+                    activeSignals.push({ 
+                        symbol: sym, 
+                        ...d.scalpScan, 
+                        alignedCount: d.alignedCount,
+                        isHighConviction: isAligned && hasVelocity,
+                        signal: isAligned ? `MTF ALIGN: ${d.alignedCount}TF` : d.scalpScan.signal
+                    });
+                }
+            });
+            if (activeSignals.length > 0) {
+                console.log(`[SCALPER] Pulse detected ${activeSignals.length} signals.`);
+                io.emit('scalper_pulse', { updates: activeSignals });
+            }
 
             // High-performance NY Time calculation
             const nyFormatter = new Intl.DateTimeFormat('en-US', {
@@ -488,7 +534,21 @@ async function startServer() {
                             rec.target,
                             rec.sl,
                             rec.duration,
-                            rec.session
+                            rec.session,
+                            {
+                                institutionalRadar: {
+                                    irScore: stockData.bias.irScore,
+                                    multiTfBias: stockData.multiTfBias,
+                                    alignedCount: stockData.checklist?.alignedCount,
+                                    draws: stockData.markers?.draws,
+                                    fvgs: stockData.markers?.fvgs,
+                                    heatmap: stockData.markers?.heatmap,
+                                    absorption: stockData.markers?.absorption,
+                                    sweeps: stockData.markers?.sweeps,
+                                    killzone: stockData.session,
+                                    gex: stockData.markers?.gex
+                                }
+                            }
                         ).catch(() => { });
                         lastAlerts.set(symbolKey, { action: rec.action, time: Date.now() });
                         globalLastAlertTime = Date.now();
@@ -512,26 +572,37 @@ async function startServer() {
 
                 // --- EXPERT UPGRADE: SIMULATED PAPER TRADING ---
 
-                // --- HIGH CONFLUENCE ALERT (Whale Detector) - SILENCED TO REDUCE NOISE ---
-                /*
-                if (activeCriteria.length >= 5) {
-                    const confluenceKey = `${symbol}_CONFLUENCE_ALERT`;
-                    const lastAlertTime = lastAlerts.get(confluenceKey) || 0;
+                // --- IR-REALITY ALIGNMENT ALERT (3-4 Light Check) ---
+                const bullCount = Object.values(stockData.multiTfBias || {}).filter(b => b.includes('BULLISH')).length;
+                const bearCount = Object.values(stockData.multiTfBias || {}).filter(b => b.includes('BEARISH')).length;
+                const alignedCount = Math.max(bullCount, bearCount);
 
-                    if (isAlertWindow && (Date.now() - lastAlertTime > 7200000)) { // 2 Hour cooldown per symbol
-                        console.log(`[${symbol}] >>> FIRING HIGH CONFLUENCE ALERT: ${activeCriteria.length}/5 Indicators <<<`);
-                        telegram.sendConfluenceAlert(
+                if (alignedCount >= 3) {
+                    const irKey = `${symbol}_IR_ALIGN_${alignedCount}_${Math.floor(Date.now() / 3600000)}`;
+                    const lastIrTime = lastAlerts.get(irKey) || 0;
+
+                    if (isAlertWindow && (Date.now() - lastIrTime > 14400000)) { // 4 Hour cooldown per level
+                        console.log(`[${symbol}] >>> FIRING IR-REALITY ALIGNMENT: ${alignedCount} TFs ALIGNED <<<`);
+                        telegram.sendIrRealityAlert(
                             symbol,
                             stockData.currentPrice,
-                            stockData.bias.bias,
-                            activeCriteria.length,
-                            5,
-                            activeCriteria
+                            bullCount > bearCount ? 'BULLISH' : 'BEARISH',
+                            alignedCount
                         ).catch(() => { });
-                        lastAlerts.set(confluenceKey, Date.now());
+                        lastAlerts.set(irKey, Date.now());
                     }
                 }
-                */
+                // --- THE HOLY GRAIL DETECTOR (ULTIMATE CONFLUENCE) ---
+                const isHolyGrail = (score >= 95 && alignedCount >= 4 && stockData.markers?.radar?.smt && stockData.session?.active);
+                if (isHolyGrail) {
+                    const grailKey = `${symbol}_HOLY_GRAIL_${Math.floor(Date.now() / 3600000)}`;
+                    if (!lastAlerts.has(grailKey)) {
+                        console.log(`[${symbol}] >>> 🔥 HOLY GRAIL SIGNAL DETECTED 🔥 <<<`);
+                        io.emit('holy_grail', { symbol, price: stockData.currentPrice, bias: stockData.bias.bias });
+                        telegram.sendMessage(`🔥 *HOLY GRAIL SIGNAL DETECTED: ${symbol}* 🔥\n----------------------------\n*Score:* 100% PERFECT ALIGNMENT\n*Status:* INSTITUTIONAL UNFAIRNESS\n*Action:* ${stockData.recommendation.action}\n\n_All institutional engines have reached maximum synchronization. This is a high-conviction event._`).catch(() => {});
+                        lastAlerts.set(grailKey, Date.now());
+                    }
+                }
             });
 
 
@@ -775,6 +846,10 @@ function processData(symbol = simulator.currentSymbol) {
 
     const finalConfScore = calculateConfluenceScore(symbol, stock, bias, markers, relativeStrength, multiTfBias);
 
+    const bullCount = Object.values(multiTfBias).filter(b => b.includes('BULLISH')).length;
+    const bearCount = Object.values(multiTfBias).filter(b => b.includes('BEARISH')).length;
+    const alignedCount = Math.max(bullCount, bearCount);
+
     if (markers.radar) {
         markers.radar.irScore = simulator.eliteAlgo.calculateIRScore(
             bias, 
@@ -783,7 +858,8 @@ function processData(symbol = simulator.currentSymbol) {
             markers.radar.gex,
             bias.retailSentiment
         );
-        console.log(`[DEBUG] Radar for ${symbol}: Score=${markers.radar.irScore}`);
+        markers.radar.alignedCount = alignedCount;
+        console.log(`[DEBUG] Radar for ${symbol}: Score=${markers.radar.irScore}, Aligned=${alignedCount}`);
     }
 
     const finalData = {
@@ -827,6 +903,9 @@ function processData(symbol = simulator.currentSymbol) {
             midnightOpen: markers.midnightOpen
         } : null,
         institutionalRadar: markers.radar,
+        whaleTape: engine.generateOrderFlowTape(symbol, stock.currentPrice, candles),
+        po3: engine.detectPO3Phase(candles, markers, engine.getSessionInfo(symbol)),
+        scalpScan: { velocity: ((Math.abs(markers.cvd || 0) / 1000).toFixed(1)), signal: (Math.abs(markers.cvd || 0) > 500 ? 'INSTITUTIONAL RELOAD' : 'SEARCHING...'), color: (markers.cvd > 0 ? '#10b981' : markers.cvd < 0 ? '#f43f5e' : '#94a3b8') },
         whaleTape: engine.generateOrderFlowTape(symbol, stock.currentPrice, candles),
         po3: engine.detectPO3Phase(candles, markers, engine.getSessionInfo(symbol))
     };
@@ -872,6 +951,10 @@ function processWatchlist() {
                 multiTfBias[timeframe] = tfBias.bias;
             });
 
+            const bullCount = Object.values(multiTfBias).filter(b => b.includes('BULLISH')).length;
+            const bearCount = Object.values(multiTfBias).filter(b => b.includes('BEARISH')).length;
+            const alignedCount = Math.max(bullCount, bearCount);
+
             const score = calculateConfluenceScore(symbol, stock, bias, markers, (stock.dailyChangePercent || 0) - spyChange, multiTfBias);
 
             return {
@@ -882,7 +965,9 @@ function processWatchlist() {
                 omon: bloomberg.omon || 'NEUTRAL',
                 recommendation: recommendation || { action: 'WAIT' },
                 hasRS: (stock.dailyChangePercent || 0) > spyChange,
-                confluenceScore: score
+                confluenceScore: score,
+                alignedCount,
+                multiTfBias // Send the whole thing for the matrix in the main list
             };
         } catch (err) {
             console.error(`[WATCHLIST] Error processing ${symbol}:`, err.message);

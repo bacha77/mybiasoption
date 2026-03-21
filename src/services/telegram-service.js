@@ -226,6 +226,26 @@ _The internal macro metrics (VIX, DXY, TNX, Breadth) have shifted to ${roro.labe
 
         await this.sendMessage(content);
     }
+
+    async sendIrRealityAlert(symbol, price, bias, alignedCount) {
+        const emoji = bias.includes('BULLISH') ? '🚦🟢' : '🚦🔴';
+        const isFX = symbol.includes('=X') || symbol.includes('USD');
+        const prec = isFX ? 4 : 2;
+        
+        const message = `
+${emoji} *IR-REALITY ALIGNMENT: ${symbol}*
+----------------------------
+*Aligned TFs:* ${alignedCount} / 4 Timeframes
+*Institutional Bias:* ${bias}
+*Current Price:* $${price.toFixed(prec)}
+
+_High-confluence scalping opportunity detected. Market structure is now aligned across multiple timeframes._
+
+[View IR-Reality Card](http://localhost:3000)
+        `.trim();
+
+        await this.sendMessage(message);
+    }
 }
 
 export const telegram = new TelegramService();

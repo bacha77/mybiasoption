@@ -601,10 +601,35 @@ export class LiquidityEngine {
         if (internals.newsImpact === 'LOW') confPoints += 20;
         if (Math.abs(totalScore) >= 10) confPoints += 40;
 
+        // --- INSTITUTIONAL NARRATIVE ENGINE ---
+        let narrative = "Synchronizing institutional pulse...";
+        const reasons = [];
+        if (biasLabel.includes('BULLISH')) {
+            if (currentPrice > midnightOpen) reasons.push("Price holding above Midnight Open structure.");
+            if (currentPrice > vwap) reasons.push("Institutional VWAP accumulation detected.");
+            if (isBullishDiv) reasons.push("Bullish SMT/Delta divergence confirmed.");
+            if (trap && trap.type.includes('BEAR_TRAP')) reasons.push("Cleverly engineered Bear Trap liquidated early sellers.");
+            if (cvd > 500) reasons.push("Aggressive whale buying (CVD) detected.");
+            narrative = "BULLISH BIAS: " + (reasons[0] || "Expanding toward liquidity ceiling.") + " " + (reasons[1] || "");
+        } else if (biasLabel.includes('BEARISH')) {
+            if (currentPrice < midnightOpen) reasons.push("Institutional selling below Midnight Open.");
+            if (currentPrice < vwap) reasons.push("VWAP distribution confirmed.");
+            if (isBearishDiv) reasons.push("Bearish SMT/Delta divergence detected.");
+            if (trap && trap.type.includes('BULL_TRAP')) reasons.push("Retail Bull Trap successfully triggered.");
+            if (cvd < -500) reasons.push("Significant institutional liquidation pressure.");
+            narrative = "BEARISH BIAS: " + (reasons[0] || "Diving toward sell-side liquidity pools.") + " " + (reasons[1] || "");
+        } else {
+            narrative = "NEUTRAL: Market is hunting for a clear liquidity draw. Expect range chop.";
+        }
+
         return {
             bias: biasLabel,
             score: totalScore,
-            confidence: Math.min(confPoints, 100),
+            confidence: Math.min(100, Math.max(0, confPoints)),
+            bullScore: bullishScore,
+            bearScore: bearishScore,
+            isDisplacement: this.detectDisplacement(candles),
+            narrative: narrative.trim(),
             metrics: bloombergMetrics,
             vwap,
             poc,
@@ -1578,5 +1603,37 @@ export class LiquidityEngine {
                 gravity: Math.min(100, zone.strength + proximityBonus)
             };
         }).sort((a, b) => b.gravity - a.gravity);
+    }
+
+    /**
+     * Institutional Displacement (FVG + High Volume/Speed)
+     * Identifies when institutions are "pumping" or "dumping" with intent.
+     */
+    detectDisplacement(candles) {
+        if (!candles || candles.length < 5) return null;
+        
+        // Displacement is a large, high-volume candle that leaves an FVG
+        for (let i = candles.length - 1; i >= 3; i--) {
+            const current = candles[i];
+            const prev = candles[i - 1];
+            const root = candles[i - 2];
+
+            const body = Math.abs(prev.close - prev.open);
+            const avgBody = candles.slice(i - 10, i - 1).reduce((s, c) => s + Math.abs(c.close - c.open), 0) / 9;
+            const isHighVolume = prev.volume > (candles.slice(i - 10, i - 1).reduce((s, c) => s + c.volume, 0) / 9) * 1.5;
+
+            // Large Body + High Volume usually = Displacement
+            if (body > avgBody * 2 && isHighVolume) {
+                // If it also created an FVG, it's confirmed
+                if (prev.high < current.low || prev.low > current.high) {
+                    return {
+                        direction: prev.close > prev.open ? 'BULLISH' : 'BEARISH',
+                        intensity: (body / avgBody).toFixed(1),
+                        timestamp: prev.timestamp
+                    };
+                }
+            }
+        }
+        return null;
     }
 }

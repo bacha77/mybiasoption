@@ -16,7 +16,7 @@ services:
       - key: SUPABASE_URL
         value: https://ntzfetwhppfriaawpbpz.supabase.co
       - key: SUPABASE_ANON_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50emZldHdocHBmcmlhYXdwYnB6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMDAyOTEsImV4cCI6MjA4ODY3NjI5MX0.xjKf6h-qu4F4ORIJMW3i8M2k8PF-0gSO52RLlw2N_8E
+        sync: true
       - key: SIM_BALANCE
         value: "10000"
       - key: GOOGLE_CLIENT_ID

@@ -502,7 +502,7 @@ header {
 }
 
 .dashboard-main.protocol-standby::after {
-    content: 'TACTICAL STANDBY • MONITORING LIQUIDITY • NO GOLD SIGNAL';
+    content: 'TACTICAL STANDBY ΓÇó MONITORING LIQUIDITY ΓÇó NO GOLD SIGNAL';
     position: absolute;
     bottom: 20px;
     right: 30px;
@@ -1250,6 +1250,25 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
     }
 }
 
+.displacement-badge {
+    padding: 4px 10px;
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    border-radius: 0;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    animation: flash-red 1.5s infinite;
+    letter-spacing: 0.5px;
+}
+
+@keyframes flash-red {
+    0% { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); }
+    50% { background: rgba(239, 68, 68, 0.3); border-color: #ef4444; }
+    100% { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); }
+}
+
 /* AMD HUD */
 .amd-hud {
     position: absolute;
@@ -1635,7 +1654,7 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
         padding: 4px 10px;
     }
 
-    /* Hide "âš¡ SIM BALANCE:" text using a small trick or just keeping it compact */
+    /* Hide "├ó┼í┬í SIM BALANCE:" text using a small trick or just keeping it compact */
     #sim-balance-display {
         display: flex;
         align-items: center;
@@ -2805,4 +2824,205 @@ div[style*="overflow-y: auto"]::-webkit-scrollbar-thumb {
         opacity: 1;
         transform: translateX(0);
     }
+}
+
+/* MTF Bias Matrix Styles */
+.mtf-box {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.tf-label {
+    display: block;
+    font-size: 0.5rem;
+    color: var(--text-dim);
+    font-weight: 800;
+    margin-bottom: 2px;
+}
+
+.tf-status {
+    width: 100%;
+    height: 4px;
+    background: #1a1a1a;
+    border-radius: 1px;
+}
+
+.tf-status.bullish { background: var(--bullish); box-shadow: 0 0 5px var(--bullish); }
+.tf-status.bearish { background: var(--bearish); box-shadow: 0 0 5px var(--bearish); }
+.tf-status.neutral { background: #334155; }
+
+/* Institutional Radar Enhancements */
+.radar-mini-card {
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.radar-mini-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+}
+
+.session-badge {
+    position: relative;
+    overflow: hidden;
+}
+
+#radar-session-progress {
+    transition: width 1s linear;
+    box-shadow: 0 0 10px var(--gold);
+}
+
+/* --- DATA SOURCE & STABILITY BADGES --- */
+.source-badge {
+    font-size: 0.45rem;
+    font-weight: 900;
+    padding: 1px 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.05);
+    color: var(--text-dim);
+    border: 1px solid rgba(255,255,255,0.1);
+    margin-left: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stale-label {
+    color: var(--bearish) !important;
+    animation: blink-stale 1.5s infinite;
+}
+
+@keyframes blink-stale {
+    0% { opacity: 1; }
+    50% { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+.ready-signal {
+    border-left: 3px solid var(--bullish) !important;
+    background: linear-gradient(90deg, rgba(0, 255, 136, 0.05) 0%, transparent 100%) !important;
+}
+
+.pulse-up { animation: pulse-up-flash 0.8s ease-out; }
+.pulse-down { animation: pulse-down-flash 0.8s ease-out; }
+
+@keyframes pulse-up-flash {
+    0% { background: rgba(0, 255, 136, 0.2); }
+    100% { background: transparent; }
+}
+@keyframes pulse-down-flash {
+    0% { background: rgba(255, 62, 62, 0.2); }
+    100% { background: transparent; }
+}
+
+/* --- INTEL TICKER SYSTEM --- */
+.intel-line {
+    background: #000;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    height: 30px;
+    overflow: hidden;
+    position: relative;
+    z-index: 100;
+}
+
+.intel-label {
+    background: var(--gold);
+    color: #000;
+    font-size: 0.6rem;
+    font-weight: 900;
+    padding: 0 10px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    z-index: 10;
+    box-shadow: 10px 0 20px rgba(0,0,0,0.5);
+}
+
+.intel-ticker-container {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+}
+
+.intel-ticker-content {
+    display: inline-block;
+    padding-left: 100%;
+    animation: intel-scroll 40s linear infinite;
+    font-family: var(--font-data);
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+}
+
+.intel-ticker-content span {
+    margin-right: 15rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.intel-ticker-content .highlight {
+    color: var(--accent);
+    font-weight: 900;
+}
+
+.intel-ticker-content .critical {
+    color: var(--bullish);
+    font-weight: 900;
+    text-shadow: 0 0 5px var(--bullish-glow);
+}
+
+@keyframes intel-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
+/* --- ENHANCED READY PULSE --- */
+.ready-signal {
+    border-left: 3px solid var(--bullish) !important;
+    background: linear-gradient(90deg, rgba(0, 255, 136, 0.08) 0%, transparent 100%) !important;
+    box-shadow: inset 5px 0 15px rgba(0, 255, 136, 0.05);
+}
+
+/* --- THE HOLY GRAIL UI --- */
+.holy-grail-card {
+    border: 2px solid var(--gold) !important;
+    background: linear-gradient(135deg, rgba(255, 157, 0, 0.15) 0%, rgba(5, 5, 5, 1) 100%) !important;
+    box-shadow: 0 0 30px rgba(255, 157, 0, 0.2) !important;
+    animation: grail-shimmer 2s infinite alternate;
+}
+
+@keyframes grail-shimmer {
+    0% { border-color: var(--gold); box-shadow: 0 0 10px rgba(255, 157, 0, 0.2); }
+    100% { border-color: #fff; box-shadow: 0 0 40px rgba(255, 157, 0, 0.4); }
+}
+
+.grail-badge {
+    background: var(--gold);
+    color: #000;
+    font-size: 0.5rem;
+    font-weight: 900;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 5px;
+    box-shadow: 0 0 10px var(--gold);
+}
+
+.toast-grail {
+    background: linear-gradient(90deg, #000 0%, var(--gold) 50%, #000 100%) !important;
+    color: #000 !important;
+    font-size: 1.2rem !important;
+    padding: 20px !important;
+    border: none !important;
+    text-align: center;
+    font-weight: 900 !important;
+    letter-spacing: 5px;
+    animation: slide-in-top 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }

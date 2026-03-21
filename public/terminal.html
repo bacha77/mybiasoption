@@ -48,7 +48,7 @@
             <div class="handbook-content">
                 <div class="handbook-header">
                     <span id="guide-title" class="premium-shimmer">STUDY GUIDE</span>
-                    <button id="btn-close-guide" class="close-btn">×</button>
+                    <button id="btn-close-guide" class="close-btn">+ù</button>
                 </div>
                 <div id="guide-body" class="handbook-body">
                     <!-- Dynamic Content Loaded by app.js -->
@@ -65,7 +65,7 @@
                 <span>SYSTEM: LIVE</span>
             </div>
             <div class="status-item" id="btn-open-handbook" style="cursor: pointer; color: var(--gold); border: 1px solid var(--gold); padding: 0 8px; border-radius: 2px;">
-                <span style="font-size: 0.5rem; font-weight: 900;">🔥 START HERE: TACTICAL BRIEFING</span>
+                <span style="font-size: 0.5rem; font-weight: 900;">⚡ START HERE: TACTICAL BRIEFING</span>
             </div>
             <div class="status-item" id="btn-audio-toggle" style="cursor: pointer; color: var(--text-dim); border: 1px solid var(--border); padding: 0 8px; border-radius: 2px; margin-left: 10px;">
                 <span id="audio-icon">🔇</span> <span style="font-size: 0.5rem; font-weight: 900;">INSTITUTIONAL HOOTER</span>
@@ -89,6 +89,16 @@
             <div class="status-item clock" id="ny-clock">00:00:00 EST</div>
         </div>
 
+        <!-- NEW: INSTITUTIONAL INTELLIGENCE TICKER -->
+        <div class="intel-line">
+            <div class="intel-label">INTEL:</div>
+            <div class="intel-ticker-container">
+                <div id="intel-ticker" class="intel-ticker-content">
+                    <span>SYSTEM INITIALIZING... INSTITUTIONAL LEVELS LOADED... SCANNING LIQUIDITY GAPS... MONITORING DARK POOLS...</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Dashboard Header -->
         <header>
             <div class="logo-section">
@@ -100,7 +110,7 @@
                 <div class="search-container">
                     <input type="text" id="global-search" placeholder="Search Symbol (e.g. SPY, BTCUSD)..."
                         autocomplete="off">
-                    <span class="search-icon">🔍</span>
+                    <span class="search-icon">=ƒöì</span>
                 </div>
                 <div id="protocol-status-indicator" class="protocol-status-ribbon">
                     <span class="p-dot"></span>
@@ -124,7 +134,7 @@
                 <span class="RS-label">LIVE INSTITUTIONAL FEED:</span> 
                 <span id="news-ticker-render" style="color: var(--gold);">Waiting for Bloomberg feed...</span>
                 <span style="margin: 0 20px; color: var(--border);">/</span>
-                <span class="RS-label">BREADTH:</span> <span id="breadth-val-ticker" class="bullish-text">--%</span> •
+                <span class="RS-label">BREADTH:</span> <span id="breadth-val-ticker" class="bullish-text">--%</span> GÇó
                 <span class="RS-label">VIX:</span> <span id="vix-val-ticker" class="bullish-text">--</span>
             </div>
         </div>
@@ -155,12 +165,13 @@
                             <div id="current-price" class="main-price">000.00</div>
                             <div id="price-change" class="main-change">+0.00%</div>
                             <div id="mss-badge" class="mss-badge" style="display:none;">MSS SHIFT</div>
-                            <div id="trap-badge" class="trap-badge" style="display:none;">⚠️ TRAP DETECTED</div>
+                            <div id="trap-badge" class="trap-badge" style="display:none;">GÜán+Å TRAP DETECTED</div>
                             <div id="smt-badge" class="smt-badge" style="display:none;">SMT DIVERGENCE</div>
                             <div id="absorption-badge" class="absorption-badge" style="display:none;">ABSORPTION
                                 DETECTED</div>
                             <div id="squeeze-badge" class="squeeze-badge" style="display:none;">VOLATILITY SQUEEZE</div>
                             <div id="fvg-badge" class="fvg-badge" style="display:none;">FVG DISPLACEMENT</div>
+                            <div id="displacement-badge" class="displacement-badge" style="display:none;">ALGO DISPLACEMENT</div>
                             <div id="bloomberg-sentiment-badge" class="bloomberg-badge" style="display:none;">BLOOMBERG
                                 SENTIMENT</div>
                             <div id="intermarket-badge" class="intermarket-badge" style="display:none;">CORR: 0%</div>
@@ -179,7 +190,7 @@
                 <section class="card accent-border reveal-2">
                     <div class="card-header-flex">
                         <div class="card-title">Institutional Markers & Data Points</div>
-                        <span class="card-info-trigger" data-card="markers">ⓘ</span>
+                        <span class="card-info-trigger" data-card="markers">Gôÿ</span>
                     </div>
                     <div class="metrics-grid">
                         <div class="metric-item"
@@ -248,7 +259,7 @@
                 <section class="card reveal-3">
                     <div class="card-header-flex">
                         <div class="card-title">Macro Correlation Pulse (Risk-On/Off)</div>
-                        <span class="card-info-trigger" data-card="macro">ⓘ</span>
+                        <span class="card-info-trigger" data-card="macro">Gôÿ</span>
                     </div>
                     <div class="macro-grid">
                         <div class="macro-item"
@@ -290,7 +301,7 @@
                 <section class="card reveal-4" style="padding-bottom: 1.5rem;">
                     <div class="card-header-flex">
                         <div class="card-title">Institutional Health Matrix</div>
-                        <span class="card-info-trigger" data-card="health">ⓘ</span>
+                        <span class="card-info-trigger" data-card="health">Gôÿ</span>
                     </div>
 
                     <!-- SPY Pipeline -->
@@ -408,7 +419,7 @@
                 <section class="card reveal-5">
                     <div class="card-header-flex">
                         <div class="card-title" style="color: var(--gold); border-left: 2px solid var(--gold); padding-left: 10px;">Institutional Liquidity Matrix</div>
-                        <span class="card-info-trigger" data-card="heatmap">ⓘ</span>
+                        <span class="card-info-trigger" data-card="heatmap">Gôÿ</span>
                     </div>
                     <div id="heatmap" class="heatmap-viz" style="min-height: 200px;">
                         <!-- JS Loaded Levels -->
@@ -422,7 +433,7 @@
                 <section class="card accent-border reveal-1" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(20, 20, 20, 0) 100%); border: 1px solid rgba(16, 185, 129, 0.2);">
                     <div class="card-header-flex">
                         <div class="card-title" style="color: var(--bullish); text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);">Institutional Intelligence Radar</div>
-                        <span class="card-info-trigger" data-card="radar">ⓘ</span>
+                        <span class="card-info-trigger" data-card="radar">Gôÿ</span>
                     </div>
                     
                     <div class="radar-container" style="display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: 1rem;">
@@ -431,13 +442,50 @@
                                 <div class="radar-label" style="font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase;">IR-REALITY SCORE</div>
                                 <div id="radar-ir-score" style="font-size: 1.8rem; font-weight: 900; color: #fff;">00</div>
                             </div>
-                            <div id="radar-session-box" class="session-badge" style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.05); border-radius: 4px; text-align: center;">
+                            <div id="radar-session-box" class="session-badge" style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.05); border-radius: 4px; text-align: center; min-width: 120px;">
                                 <div id="radar-session-name" style="font-size: 0.8rem; font-weight: 800; color: #f59e0b;">OFF-HOURS</div>
-                                <div id="radar-session-timer" style="font-size: 0.55rem; color: var(--text-dim);">NO VOLATILITY</div>
+                                <!-- Session Progress Bar -->
+                                <div style="width: 100%; height: 2px; background: rgba(255,255,255,0.1); margin: 4px 0; border-radius: 1px; overflow: hidden;">
+                                    <div id="radar-session-progress" style="width: 0%; height: 100%; background: var(--gold); transition: width 1s linear;"></div>
+                                </div>
+                                <div id="radar-session-timer" style="font-size: 0.55rem; color: var(--text-dim); font-weight: 700;">NO VOLATILITY</div>
+                            </div>
+                        </div>
+
+                        <!-- NEW: Multi-Timeframe Bias Consensus -->
+                        <div id="mtf-bias-consensus" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 5px;">
+                            <div class="mtf-box" data-tf="1m">
+                                <span class="tf-label">1M</span>
+                                <div class="tf-status"></div>
+                            </div>
+                            <div class="mtf-box" data-tf="5m">
+                                <span class="tf-label">5M</span>
+                                <div class="tf-status"></div>
+                            </div>
+                            <div class="mtf-box" data-tf="15m">
+                                <span class="tf-label">15M</span>
+                                <div class="tf-status"></div>
+                            </div>
+                            <div class="mtf-box" data-tf="1h">
+                                <span class="tf-label">1H</span>
+                                <div class="tf-status"></div>
+                            </div>
+                            <div class="mtf-box" data-tf="1d">
+                                <span class="tf-label">1D</span>
+                                <div class="tf-status"></div>
                             </div>
                         </div>
 
                         <div class="radar-details" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+
+                        <!-- SCALPER SCAN OVERLAY -->
+                        <div id='scalper-scan-overlay' style='margin-top: 0.5rem; padding: 0.6rem; background: rgba(0,255,180,0.05); border: 1px dashed rgba(0,255,180,0.2); border-radius: 4px; display: none;'>
+                            <div style='display: flex; justify-content: space-between; align-items: center;'>
+                                <span style='font-size: 0.5rem; color: #00ffb4; font-weight: 800;'>SCALPER VELOCITY</span>
+                                <span id='scalper-velocity-val' style='font-size: 0.6rem; font-weight: 900; color: #fff;'>0.0</span>
+                            </div>
+                            <div id='scalper-scan-result' style='font-size: 0.45rem; color: #94a3b8; margin-top: 4px; font-weight: 600;'>SCANNING FOR WHALE BLOCKS...</div>
+                        </div>
                             <div class="radar-mini-card" style="padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 4px;">
                                 <div style="font-size: 0.5rem; color: var(--text-dim);">SMT DIVERGENCE</div>
                                 <div id="radar-smt-status" style="font-size: 0.7rem; font-weight: 700;">STABLE</div>
@@ -448,8 +496,54 @@
                             </div>
                         </div>
 
+                        <!-- FAST-SWITCH ALIGNMENT RADAR (Institutional Pulse) -->
+                        <div id="radar-alignment-wrapper" style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.8rem;">
+                            <div style="font-size: 0.5rem; color: var(--gold); font-weight: 800; letter-spacing: 1px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <div id="pulse-heartbeat" style="width: 5px; height: 5px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 5px #22c55e; animation: pulse-opacity 1s infinite alternate;"></div>
+                                    <span>ALIGNED INSTITUTIONAL PULSE</span>
+                                    <span id="pulse-server-sync" style="font-size: 0.4rem; color: #22c55e; border: 1px solid #22c55e; padding: 0 3px; border-radius: 2px; margin-left: 10px; opacity: 0;">LIVE</span>
+                                </div>
+                                <span id="pulse-status" style="font-size: 0.4rem; color: var(--text-dim);">SEARCHING...</span>
+                            </div>
+                            <div id="radar-alignment-pulse" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                <div style="font-size: 0.45rem; color: var(--text-dim); font-style: italic;">No high-alignment setups yet. Monitoring...</div>
+                            </div>
+                        </div>
+
                         <div id="radar-reality-text" style="font-size: 0.65rem; padding: 0.6rem; background: rgba(0,0,0,0.2); border-left: 2px solid var(--bullish); font-style: italic; color: var(--text-bright);">
                             Synchronizing institutional pulse... Waiting for high-impact window.
+                        </div>
+
+                        <!-- ELITE CONFLUENCE CHECKLIST -->
+                        <div id="confluence-checklist" style="margin-top: 1rem; padding: 0.8rem; background: rgba(0,0,0,0.3); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="font-size: 0.55rem; font-weight: 800; color: var(--gold); letter-spacing: 1px; margin-bottom: 10px;">ELITE CONFLUENCE CHECKLIST</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <div class="conf-item" data-conf="midnight" style="display: flex; align-items: center; gap: 6px;">
+                                    <div class="conf-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);"></div>
+                                    <span style="font-size: 0.45rem; color: var(--text-dim); font-weight: 700;">MIDNIGHT OPEN</span>
+                                </div>
+                                <div class="conf-item" data-conf="vwap" style="display: flex; align-items: center; gap: 6px;">
+                                    <div class="conf-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);"></div>
+                                    <span style="font-size: 0.45rem; color: var(--text-dim); font-weight: 700;">VWAP ALIGN</span>
+                                </div>
+                                <div class="conf-item" data-conf="killzone" style="display: flex; align-items: center; gap: 6px;">
+                                    <div class="conf-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);"></div>
+                                    <span style="font-size: 0.45rem; color: var(--text-dim); font-weight: 700;">KILLZONE ACT</span>
+                                </div>
+                                <div class="conf-item" data-conf="smt" style="display: flex; align-items: center; gap: 6px;">
+                                    <div class="conf-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);"></div>
+                                    <span style="font-size: 0.45rem; color: var(--text-dim); font-weight: 700;">SMT DETECT</span>
+                                </div>
+                                <div class="conf-item" data-conf="dxy" style="display: flex; align-items: center; gap: 6px;">
+                                    <div class="conf-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);"></div>
+                                    <span style="font-size: 0.45rem; color: var(--text-dim); font-weight: 700;">DXY NEG CORR</span>
+                                </div>
+                                <div class="conf-item" data-conf="sector" style="display: flex; align-items: center; gap: 6px;">
+                                    <div class="conf-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);"></div>
+                                    <span style="font-size: 0.45rem; color: var(--text-dim); font-weight: 700;">SECTOR ALIGN</span>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- NEW: PO3 CYCLE ENGINE (Main Radar) -->
@@ -470,7 +564,7 @@
                         <div id="retail-sentiment-container" style="margin-top: 0.5rem; padding-top: 0.8rem; border-top: 1px solid rgba(255,255,255,0.05);">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                                 <div style="font-size: 0.55rem; font-weight: 800; color: var(--text-dim); letter-spacing: 1px; display: flex; align-items: center; gap: 4px;">
-                                    <span style="color: var(--gold);">⚠️</span> RETAIL POSITIONING
+                                    <span style="color: var(--gold);">GÜán+Å</span> RETAIL POSITIONING
                                 </div>
                                 <span id="retail-sentiment-val" style="font-size: 0.6rem; font-weight: 900; color: var(--text-bright);">50% LONG</span>
                             </div>
@@ -501,7 +595,7 @@
                 <section class="card reveal-4">
                     <div class="card-header-flex">
                         <div class="card-title">Daily Bias Confidence</div>
-                        <span class="card-info-trigger" data-card="bias">ⓘ</span>
+                        <span class="card-info-trigger" data-card="bias">Gôÿ</span>
                     </div>
                     <div class="bias-gauge-container">
                         <div id="bias-label" class="bias-large">NEUTRAL</div>
@@ -520,7 +614,7 @@
                     <div class="macro-narrative-container" title="Power of 3 (AMD): Tracks Accumulation (sideways), Manipulation (fakeout), and Distribution (trending).">
                         <div class="section-header">
                             <span class="section-title">INSTITUTIONAL MACRO NARRATIVE</span>
-                            <span id="current-amd-status" class="status-dot">●</span>
+                            <span id="current-amd-status" class="status-dot">GùÅ</span>
                         </div>
                         <div class="narrative-content">
                             <div id="narrative-phase" class="narrative-phase">WAITING FOR MIDNIGHT</div>
@@ -555,7 +649,7 @@
                 <section class="card accent-border reveal-4">
                     <div class="card-header-flex">
                         <div class="card-title">Institutional StrikeZones</div>
-                        <span class="card-info-trigger" data-card="strikezones">ⓘ</span>
+                        <span class="card-info-trigger" data-card="strikezones">Gôÿ</span>
                     </div>
                     <div id="magnet-zones-container" class="magnet-grid" style="grid-template-columns: repeat(2, 1fr); gap: 10px;">
                         <div class="magnet-item" title="Buyside Liquidity. The price area where buy-stop orders (liquidity) are sitting. This acts as a magnet for bullish expansions.">
@@ -591,7 +685,7 @@
                 <section class="card accent-border reveal-5">
                     <div class="card-header-flex">
                         <div class="card-title">Option Recommendation (Gold Standard)</div>
-                        <span class="card-info-trigger" data-card="recommendation">ⓘ</span>
+                        <span class="card-info-trigger" data-card="recommendation">Gôÿ</span>
                     </div>
                     <div id="rec-box" class="rec-box">
                         <div class="rec-action-row">
@@ -630,6 +724,27 @@
                 <!-- Institutional Block Trades -->
                 <section class="card reveal-7">
                     <div class="card-title">Institutional Block Feed</div>
+
+                <!-- ELITE SCALPER SCANNER (GOLD LAYER) -->
+                <section class='card reveal-10' style='border: 1px solid var(--gold); background: linear-gradient(180deg, rgba(255,215,0,0.05) 0%, transparent 100%);'>
+                    <div class='card-header' style='display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,215,0,0.1); padding: 0.8rem 1rem;'>
+                        <button id='btn-manual-scan' style='background: var(--gold); border: none; color: #000; padding: 2px 8px; border-radius: 2px; font-weight: 900; cursor: pointer; font-size: 0.55rem; margin-right: 10px;'>SCAN NOW</button>
+                        <span style='font-weight: 800; font-size: 0.7rem; color: var(--gold); letter-spacing: 2px;'>INSTITUTIONAL SCALPER SCAN</span>
+                        <span id='scan-status' style='font-size: 0.5rem; color: var(--text-dim); background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;'>LIVE</span>
+                    </div>
+                    <div id='scalper-scan-list' style='max-height: 250px; overflow-y: auto; padding: 0.5rem;'>
+                        <div style='text-align: center; padding: 2rem; color: var(--text-dim); font-size: 0.6rem;'>INITIALIZING SCALPER FREQUENCIES...</div>
+                    </div>
+                    <div style='padding: 0.8rem; border-top: 1px solid rgba(255,255,255,0.05);'>
+                        <div style='display: flex; justify-content: space-between; margin-bottom: 4px;'>
+                            <span style='font-size: 0.5rem; color: #94a3b8;'>SCANNER SENSITIVITY</span>
+                            <span style='font-size: 0.55rem; color: var(--gold); font-weight: 900;'>ULTRA-HIGH</span>
+                        </div>
+                        <div style='width: 100%; height: 2px; background: rgba(255,215,0,0.2); border-radius: 1px;'>
+                            <div style='width: 85%; height: 100%; background: var(--gold);'></div>
+                        </div>
+                    </div>
+                </section>
                     <div id="block-trades-feed" style="max-height: 150px; overflow-y: auto; font-size: 0.7rem;">
                         <p style="color:var(--text-dim); text-align:center;">Listening for whales...</p>
                     </div>
@@ -683,7 +798,7 @@
         </div>
 
         <div class="whale-tape-wrapper">
-            <div class="whale-label">🐋 WHALE TAPE</div>
+            <div class="whale-label">=ƒÉï WHALE TAPE</div>
             <div id="whale-ticker" class="whale-ticker">
                 <div class="ticker-scroll">
                     Detecting Institutional Block Trades... Monitoring Whale Momentum... Tracking Dark Pool Sweeps...
@@ -696,7 +811,7 @@
     <div id="checklist-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content">
             <div class="modal-header">
-                <span class="gold-text">⚠️ INSTITUTIONAL TRIGGER PROTOCOL</span>
+                <span class="gold-text">GÜán+Å INSTITUTIONAL TRIGGER PROTOCOL</span>
                 <button id="btn-close-checklist" class="close-btn">&times;</button>
             </div>
             <div class="checklist-body">
@@ -740,12 +855,12 @@
         <div class="handbook-content">
             <div class="handbook-header">
                 <span id="card-info-title" class="premium-shimmer">CARD INSTRUCTIONS</span>
-                <button id="btn-close-card-info" class="close-btn">×</button>
+                <button id="btn-close-card-info" class="close-btn">+ù</button>
             </div>
             <div class="handbook-body">
                 <p id="card-info-text" style="font-size: 0.85rem; color: #fff; line-height: 1.6;"></p>
                 <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-                    <span style="color: var(--gold); font-size: 0.7rem; font-weight: 900;">🔥 HOW TO MAKE MONEY:</span>
+                    <span style="color: var(--gold); font-size: 0.7rem; font-weight: 900;">=ƒöÑ HOW TO MAKE MONEY:</span>
                     <p id="card-info-money" style="font-size: 0.8rem; color: var(--bullish); margin-top: 5px;"></p>
                 </div>
                 <div class="handbook-footer">
@@ -760,3 +875,4 @@
 </body>
 
 </html>
+

@@ -1,12 +1,10 @@
 import WebSocket from 'ws';
-import YahooFinance from 'yahoo-finance2';
-import { LiquidityEngine } from '../logic/liquidity-engine.js';
 import { InstitutionalAlgorithm } from '../logic/institutional-algorithm.js';
+import { LiquidityEngine } from '../logic/liquidity-engine.js';
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
-
-const yahooFinance = new YahooFinance();
+import { sourceManager } from './data-sources.js';
 
 export class RealDataManager {
     constructor() {
@@ -96,24 +94,22 @@ export class RealDataManager {
 
     async refreshQuote(symbol) {
         try {
-            const quote = await yahooFinance.quote(symbol);
+            const quote = await sourceManager.getQuote(symbol);
             if (quote) {
                 const stock = this.stocks[symbol];
-                stock.currentPrice = quote.regularMarketPrice;
-                stock.previousClose = quote.regularMarketPreviousClose || quote.regularMarketOpen || quote.regularMarketPrice;
-                stock.dailyChangePercent = quote.regularMarketChangePercent || 0;
-                stock.bloomberg = this.calculateBloombergMetrics(quote);
+                stock.currentPrice = quote.price;
+                stock.previousClose = quote.prevClose || stock.previousClose || quote.price;
+                stock.dailyChangePercent = quote.change || 0;
+                stock.dataSource = quote.source; // Track where the data is coming from
                 
                 // Sanity check for PDH/PDL fallback
                 if (!stock.pdh || isNaN(stock.pdh)) {
-                    stock.pdh = quote.regularMarketDayHigh || stock.previousClose;
-                    stock.pdl = quote.regularMarketDayLow || stock.previousClose;
+                    stock.pdh = quote.high || stock.previousClose;
+                    stock.pdl = quote.low || stock.previousClose;
                 }
             }
         } catch (error) {
-            if (error.message.includes('429')) {
-                console.warn(`[RATE LIMIT] Quote fetch for ${symbol}`);
-            }
+            console.error(`[DATA ERROR] Failed to refresh quote for ${symbol}:`, error.message);
         }
     }
 
@@ -165,13 +161,10 @@ export class RealDataManager {
                 if (tf === '1h') daysBack = 15;
                 else if (tf === '1d') daysBack = 365;
 
-                const p1 = new Date();
-                p1.setDate(p1.getDate() - daysBack);
-
                 try {
-                    const chart = await yahooFinance.chart(symbol, { period1: p1, interval: tf });
-                    if (chart && chart.quotes) {
-                        const candles = chart.quotes
+                    const quotes = await sourceManager.getHistory(symbol, tf, daysBack);
+                    if (quotes && quotes.length > 0) {
+                        const candles = quotes
                             .filter(q => q.open != null && q.open > 0)
                             .map(q => ({
                                 timestamp: q.date.getTime(),
