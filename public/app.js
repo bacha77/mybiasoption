@@ -90,7 +90,7 @@ initAuth();
 
 socket.on('whale_alert', (block) => {
     audioHooter.playWhale();
-    showToast(`=ƒÉï WHALE ALERT: ${block.symbol} | $${(block.value / 1000000).toFixed(2)}M Block!`);
+    showToast(`🐋 WHALE ALERT: ${block.symbol} | $${(block.value / 1000000).toFixed(2)}M Block!`);
     const card = document.querySelector('.sidebar section:nth-child(4)'); // Block Feed card
     if (card) {
         card.classList.add('whale-flash');
@@ -162,7 +162,7 @@ socket.on('scalper_pulse', (data) => {
 });
     const newsEl = document.getElementById('news-ticker-render');
     if (newsEl && data.news && data.news.length > 0) {
-        const newsString = data.news.map(n => `[${n.source}] ${n.title}`).join(' GÇó ');
+        const newsString = data.news.map(n => `[${n.source}] ${n.title}`).join(' • ');
         newsEl.innerText = newsString;
     }
 });
@@ -354,7 +354,7 @@ class VoiceNarrator {
         if (btn && icon) {
             btn.style.color = this.enabled ? '#38bdf8' : 'var(--text-dim)';
             btn.style.borderColor = this.enabled ? '#38bdf8' : 'var(--border)';
-            icon.innerText = this.enabled ? '=ƒÄÖn+Å' : '=ƒöç';
+            icon.innerText = this.enabled ? '🔊' : '🔇';
         }
         if (this.enabled) {
             this.speak("SQUAWK ACTIVATED. MONITORING FOR ELITE SIGNALS.");
@@ -385,13 +385,13 @@ document.getElementById('btn-audio-toggle')?.addEventListener('click', () => {
     const icon = document.getElementById('audio-icon');
     if (audioHooter.enabled) {
         audioHooter.init();
-        icon.innerText = '=ƒöè';
+        icon.innerText = '🔔';
         btn.style.color = 'var(--gold)';
         btn.style.borderColor = 'var(--gold)';
         audioHooter.playSignal();
         showToast("INSTITUTIONAL HOOTER: ARMED");
     } else {
-        icon.innerText = '=ƒöç';
+        icon.innerText = '🔇';
         btn.style.color = 'var(--text-dim)';
         btn.style.borderColor = 'var(--border)';
         showToast("INSTITUTIONAL HOOTER: SILENCED");
@@ -711,9 +711,13 @@ function updateInstitutionalRadar(data) {
                 const color = isBull ? 'var(--bullish)' : (item.bias.includes('BEARISH') ? 'var(--bearish)' : 'var(--gold)');
                 
                 const pill = document.createElement('div');
+                pill.className = 'pulse-pill';
                 pill.style.cssText = `font-size: 0.5rem; font-weight: 900; background: ${color}22; border: 1px solid ${color}; color: #fff; padding: 2px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s; white-space: nowrap;`;
                 pill.innerHTML = `${item.symbol} <span style="color:${color};">🔥 ${item.alignedCount}TF</span>`;
-                pill.onclick = () => socket.emit('switch_symbol', item.symbol);
+                pill.onclick = () => {
+                    socket.emit('switch_symbol', item.symbol);
+                    if (typeof showToast === 'function') showToast(`Switching to setup: ${item.symbol}`);
+                };
                 pill.onmouseover = () => pill.style.background = `${color}44`;
                 pill.onmouseleave = () => pill.style.background = `${color}22`;
                 pulseContainer.appendChild(pill);
@@ -1430,13 +1434,59 @@ function updateUI(data) {
             });
         }
 
-        // Symbol Display
+        // --- INSTITUTIONAL HUD REFINEMENTS ---
+        const hudDxy = document.getElementById('hud-dxy-status');
+        const hudSmt = document.getElementById('hud-smt-status');
+        const hud = document.getElementById('institutional-hud');
+        if (hudDxy && data.forexRadar) {
+            const valEl = hudDxy.querySelector('.val');
+            if (valEl) {
+                valEl.innerText = data.forexRadar.isInverseDxy ? 'MAX SYNC (INVERSE)' : 'UNSTABLE';
+                valEl.style.color = data.forexRadar.isInverseDxy ? 'var(--bullish)' : 'var(--text-dim)';
+            }
+        }
+        if (hudSmt && data.institutionalRadar) {
+            const smt = data.institutionalRadar.smt;
+            const valEl = hudSmt.querySelector('.val');
+            if (valEl) {
+                valEl.innerText = smt ? `${smt.symbol} (${smt.type})` : 'STABLE';
+                valEl.style.color = smt ? 'var(--gold)' : 'var(--text-dim)';
+            }
+        }
+        if (hud) {
+            const isFX_HUD = data.symbol.includes('=X') || data.symbol.includes('USD');
+            const hasSmt = data.institutionalRadar && data.institutionalRadar.smt;
+            hud.style.display = (isFX_HUD || hasSmt) ? 'flex' : 'none';
+        }
+
+        const kzCountdown = document.getElementById('killzone-countdown');
+        if (kzCountdown && data.session) {
+            const now = new Date();
+            const nyTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            const currentMin = (nyTime.getHours() * 60) + nyTime.getMinutes();
+            const targets = [ { name: 'LONDON', min: 180 }, { name: 'NY OPEN', min: 570 }, { name: 'SILVER', min: 600 }, { name: 'NY PM', min: 810 }, { name: 'ASIA', min: 1140 } ];
+            let next = targets.find(t => t.min > currentMin);
+            if (!next) next = targets[0];
+            let diff = next.min - currentMin;
+            if (diff < 0) diff += 1440;
+            kzCountdown.innerText = `NEXT: ${next.name} (${Math.floor(diff / 60)}h ${diff % 60}m)`;
+        }
+
+        const btnFocus = document.getElementById('btn-focus-mode');
+        if (btnFocus && !btnFocus.onclick) {
+            btnFocus.onclick = () => {
+                document.body.classList.toggle('focus-desk');
+                const isF = document.body.classList.contains('focus-desk');
+                btnFocus.innerText = isF ? 'FOCUS: ON' : 'FOCUS: OFF';
+            };
+        }
+
+        if (typeof updateBlueprint === 'function') updateBlueprint(data);
+        if (typeof updateSpiderMatrix === 'function') updateSpiderMatrix(data);
         const symbolDisplay = document.getElementById('symbol-display');
         if (symbolDisplay) symbolDisplay.innerText = data.symbol || 'SPY';
 
-
-
-        // --- WHALE TAPE REAL-TIME FEED ---
+        // --- WHALE TAPE REAL-TIME FEED (RESTORED) ---
         if (whaleTickerScroll && data.blockTrades && data.blockTrades.length > 0) {
             const newestBlock = data.blockTrades[0];
             const newestId = `${newestBlock.symbol}_${newestBlock.value}_${newestBlock.time}`;
@@ -1453,7 +1503,7 @@ function updateUI(data) {
                 `).join(' <span style="opacity:0.2;">GÇó</span> ');
             }
         }
-
+ 
         // Market Status
         if (data.session) {
             const sessionText = document.getElementById('market-session-text');
@@ -2225,6 +2275,13 @@ function updateWatchlist(data) {
             const card = document.createElement('div');
             card.className = `ticker-card ${pulseClass} ${data.symbol === stock.symbol ? 'active-symbol' : ''} ${isReady ? 'ready-signal' : ''}`;
             card.setAttribute('data-symbol', stock.symbol);
+            card.style.cursor = 'pointer';
+            card.onclick = () => {
+                socket.emit('switch_symbol', stock.symbol);
+                if (typeof showToast === 'function') showToast(`Switching to ${stock.symbol}...`);
+                card.style.transform = 'scale(0.98)';
+                setTimeout(() => { card.style.transform = 'scale(1)'; }, 100);
+            };
 
             const precision = isFX ? 4 : 2;
             const biasText = (stock.bias && stock.bias.bias) ? stock.bias.bias : (stock.bias || 'NEUTRAL');
@@ -2410,5 +2467,46 @@ function updateIntelTicker(data) {
         });
         
         intelTicker.innerHTML = intelHistory.map(msg => `<span>${msg}</span>`).join(' &nbsp; | &nbsp; ');
+    }
+}
+
+function updateSpiderMatrix(data) {
+    const grid = document.getElementById('spider-grid');
+    const status = document.getElementById('basket-alignment');
+    if (!grid || !data.basket) return;
+
+    const basket = data.basket;
+    
+    Object.keys(basket).forEach(cur => {
+        const node = grid.querySelector(`[data-cur="${cur}"]`);
+        if (node) {
+            const valEl = node.querySelector('.val');
+            const perf = basket[cur].perf || 0;
+            
+            valEl.innerText = (perf >= 0 ? '+' : '') + perf.toFixed(2) + '%';
+            
+            // Color Coding Logic
+            if (perf > 0) {
+                valEl.style.color = 'var(--bullish)';
+                node.style.background = 'rgba(16, 185, 129, 0.05)';
+            } else if (perf < 0) {
+                valEl.style.color = 'var(--bearish)';
+                node.style.background = 'rgba(244, 63, 94, 0.05)';
+            } else {
+                valEl.style.color = 'var(--text-dim)';
+                node.style.background = 'rgba(255, 255, 255, 0.02)';
+            }
+            
+            // Institutional Shift Highlight
+            const isMegaMove = Math.abs(perf) > 0.45;
+            node.style.borderColor = isMegaMove ? 'var(--gold)' : 'rgba(255, 255, 255, 0.05)';
+            node.style.boxShadow = isMegaMove ? '0 0 15px rgba(212, 175, 55, 0.15)' : 'none';
+        }
+    });
+
+    if (status) {
+        const isAligned = data.isBasketAligned;
+        status.innerText = isAligned ? 'BASKET: ALIGNED' : 'BASKET: DISCORDANT';
+        status.style.color = isAligned ? 'var(--gold)' : 'var(--bearish)';
     }
 }

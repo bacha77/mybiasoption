@@ -279,11 +279,19 @@ async function startServer() {
     });
 
     // Safe recursive update loop (Prevents overlapping execution)
+    let lastWatchlistEmit = 0;
     const runUpdateLoop = async () => {
         try {
             await simulator.updateAll();
             const currentUpdate = processData();
-            const watchlistUpdate = processWatchlist();
+            
+            // Throttle watchlist processing to every 10 seconds to save CPU
+            const now = Date.now();
+            let watchlistUpdate = null;
+            if (now - lastWatchlistEmit > 10000) {
+                watchlistUpdate = processWatchlist();
+                lastWatchlistEmit = now;
+            }
 
             // --- GLOBAL SCALPER BACKGROUND SCANNER ---
             const activeSignals = [];
@@ -305,7 +313,6 @@ async function startServer() {
                 }
             });
             if (activeSignals.length > 0) {
-                console.log(`[SCALPER] Pulse detected ${activeSignals.length} signals.`);
                 io.emit('scalper_pulse', { updates: activeSignals });
             }
 
@@ -359,19 +366,7 @@ async function startServer() {
                 const rec = stockData.recommendation;
                 
                 const isFX = symbol.includes('=X') || symbol.includes('USD');
-                const isAlertWindow = isFX || (nyHour >= 6 && nyHour < 20);
-
-                if (rec) {
-                    if (rec.action !== 'WAIT') {
-                        console.log(`[${symbol}] ACTION: ${rec.action} | Stable: ${rec.isStable} | Bias: ${stockData.bias.score}`);
-                    } else {
-                        // Periodic debug for first few symbols to see why they WAIT
-                        // if (symbol === 'SPY' || symbol === 'NVDA') {
-                        //     const m = stockData.markers;
-                        //     console.log(`[DEBUG ${symbol}] Price: ${stockData.currentPrice} | VWAP: ${m.vwap.toFixed(2)} | POC: ${m.poc.toFixed(2)} | Rationale: ${rec.rationale}`);
-                        // }
-                    }
-                }
+                const isAlertWindow = isFX || (nyHour >= 3 && nyHour < 21); // Include London (3 AM) through NY After-Hours (9 PM)
 
                 // --- WALL & STDEV PROXIMITY ALERTS ---
                 if (stockData && stockData.markers && stockData.currentPrice) {
@@ -421,9 +416,7 @@ async function startServer() {
                 // --- VOLATILITY SQUEEZE ALERT (DE-PRIORITIZED) ---
                 if (stockData.bias && stockData.bias.squeeze && stockData.bias.squeeze.status === 'SQUEEZING') {
                     const squeezeKey = `SQUEEZE_${symbol}_${new Date().getHours()}`;
-                    // Intensity must be > 0.85 and only once per day per symbol for squeals
                     if (isAlertWindow && !lastAlerts.has(squeezeKey) && stockData.bias.squeeze.intensity > 0.85 && canSendGlobal()) { 
-                        console.log(`[SQUEEZE] ${symbol} is coiling... Intensity: ${stockData.bias.squeeze.intensity}`);
                         telegram.sendSqueezeAlert(symbol, stockData.bias.squeeze.intensity).catch(() => {});
                         lastAlerts.set(squeezeKey, Date.now());
                         globalLastAlertTime = Date.now();
@@ -434,252 +427,83 @@ async function startServer() {
                 if (stockData && stockData.markers && stockData.markers.smt) {
                     const smt = stockData.markers.smt;
                     const smtKey = `${symbol}_SMT_${smt.type}_${new Date().getHours()}`;
-                    // SMT cooldown increased to 8 hours
                     const lastSmt = lastAlerts.get(smtKey) || 0;
                     if (isAlertWindow && (Date.now() - lastSmt > 28800000) && canSendGlobal()) { 
-                        console.log(`[SMT] ${symbol} vs ${smt.symbol} | ${smt.type} Divergence!`);
                         telegram.sendSmtAlert(symbol, smt.symbol, smt.type, smt.message).catch(() => {});
                         lastAlerts.set(smtKey, Date.now());
                         globalLastAlertTime = Date.now();
                     }
                 }
 
-                // --- TELEGRAM ALERT LOGIC (GOLD STANDARD FILTER) ---
-                // Requirement for Sellable Signals:
-                // 1. Stable Signal (40+ seconds of consistent confluence)
-                // 2. Trend Alignment (1m, 5m, 15m agreeing)
-                // 3. High Confidence Score (80+)
-                // 4. HOLY GRAIL: Macro Internals Aligned (DXY/VIX)
-
+                // --- GOLD STANDARD SIGNAL LOGIC (Simplified for loop) ---
                 const internals = simulator.internals;
                 const dxyPrev = simulator.stocks['UUP']?.previousClose || 0;
                 const isCall = rec && rec.action.includes('CALL');
                 const isPut = rec && rec.action.includes('PUT');
-
-                // Macro Filter:
-                // Calls: VIX < 22 and DXY not soaring
-                // Puts: VIX > 15 and DXY not crashing
                 const macroAligned = isCall ? (internals.vix < 22 && internals.dxy <= dxyPrev * 1.002) :
                     isPut ? (internals.vix > 15 && internals.dxy >= dxyPrev * 0.998) : false;
 
-                const sectors = simulator.sectors.map(s => ({
-                    symbol: s,
-                    change: simulator.stocks[s]?.dailyChangePercent || 0
-                }));
-                const techSector = sectors.find(s => s.symbol === 'XLK')?.change || 0;
-                const techHeavy = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'MSFT', 'AMD', 'SMH'];
-
-                // --- INSTITUTIONAL HEALTH MATRIX AGREEMENT ---
-                // We only signal if the specific sub-sectors for the ticker are aligned
-                const smhSector = sectors.find(s => s.symbol === 'SMH')?.change || 0;
-                const semiStock = ['NVDA', 'AMD', 'MU', 'TSM', 'ASML', 'AVGO'];
-
-                let matrixAgreement = true;
-                if (techHeavy.includes(symbol)) {
-                    // Tech/Semis: XLK must be in trend and SMH must be aligned if it's a chip stock
-                    const techAligned = isCall ? techSector > 0.1 : isPut ? techSector < -0.1 : true;
-                    const semiAligned = semiStock.includes(symbol) ? (isCall ? smhSector > 0.1 : isPut ? smhSector < -0.1 : true) : true;
-                    matrixAgreement = techAligned && semiAligned;
-                }
-
-                // The Golden Filter: 
-                // 1. All standard confluence (Stable + Trend)
-                // 2. High Confidence (90+)
-                // 3. MASTER HEALTH SCORE (The 92%+ threshold)
-                // 4. Macro & Matrix Agreement
                 const isGoldStandard = stockData && !stockData.loading && rec && rec.isStable &&
                     stockData.checklist?.trendAlign && (rec.confidence >= 90) &&
-                    (stockData.confluenceScore >= 92) && // Extreme threshold for professional alerts
-                    macroAligned && matrixAgreement;
+                    (stockData.confluenceScore >= 92) && macroAligned;
 
                 if (isGoldStandard && rec.action !== 'WAIT') {
                     const symbolKey = `${symbol}_LAST_ACTION`;
-                    const lastActionData = lastAlerts.get(symbolKey); // { action, time }
+                    const lastActionData = lastAlerts.get(symbolKey);
+                    let canSend = !lastActionData || (Date.now() - lastActionData.time > 14400000);
 
-                    console.log(`--- [PRIME] SIGNAL DETECTED: ${symbol} ${rec.action} (Confidence: ${rec.confidence}) ---`);
-
-                    let canSend = false;
-                    if (!lastActionData) {
-                        canSend = canSendGlobal(true);
-                    } else {
-                        const timeSinceLast = Date.now() - lastActionData.time;
-                        const isOpposite = (lastActionData.action.includes('CALL') && rec.action.includes('PUT')) ||
-                            (lastActionData.action.includes('PUT') && rec.action.includes('CALL'));
-
-                        // Block opposite signals for 4 hours (Prevent Flip-Flopping)
-                        if (isOpposite && timeSinceLast < 14400000) {
-                            console.log(`[${symbol}] Alert Blocked: Direction flip cooldown (Wait 4h).`);
-                            canSend = false;
-                        }
-                        // Block same-direction signals for 4 hours (Professional Frequency)
-                        else if (!isOpposite && timeSinceLast < 14400000) {
-                            console.log(`[${symbol}] Alert Blocked: Cooldown period (Wait 4h).`);
-                            canSend = false;
-                        }
-                        else {
-                            canSend = canSendGlobal(true);
-                        }
-                    }
-
-                    if (canSend && isAlertWindow) {
-                        console.log(`[${symbol}] >>> FIRING PREMIUM TELEGRAM ALERT: ${rec.action} (Acc: ${rec.confidence}%) <<<`);
-                        telegram.sendSignalAlert(
-                            symbol,
-                            stockData.bias.bias,
-                            stockData.currentPrice,
-                            rec.action,
-                            rec.rationale,
-                            rec.strike,
-                            rec.trim,
-                            rec.target,
-                            rec.sl,
-                            rec.duration,
-                            rec.session,
-                            {
-                                institutionalRadar: {
-                                    irScore: stockData.bias.irScore,
-                                    multiTfBias: stockData.multiTfBias,
-                                    alignedCount: stockData.checklist?.alignedCount,
-                                    draws: stockData.markers?.draws,
-                                    fvgs: stockData.markers?.fvgs,
-                                    heatmap: stockData.markers?.heatmap,
-                                    absorption: stockData.markers?.absorption,
-                                    sweeps: stockData.markers?.sweeps,
-                                    killzone: stockData.session,
-                                    gex: stockData.markers?.gex
-                                }
-                            }
-                        ).catch(() => { });
+                    if (canSend && isAlertWindow && canSendGlobal(true)) {
+                        telegram.sendSignalAlert(symbol, stockData.bias.bias, stockData.currentPrice, rec.action, rec.rationale, rec.strike, rec.trim, rec.target, rec.sl, rec.duration, rec.session, { institutionalRadar: stockData.institutionalRadar }).catch(() => { });
                         lastAlerts.set(symbolKey, { action: rec.action, time: Date.now() });
                         globalLastAlertTime = Date.now();
                     }
-                } else if (rec && rec.action !== 'WAIT') {
-                    // LOG why we didn't send
-                    if (symbol === 'SPY' || symbol === 'NVDA') {
-                        console.log(`[DEBUG ${symbol}] Potential signal bypassed: Stable=${rec.isStable} | TrendAlign=${stockData.checklist?.trendAlign} | Conf=${rec.confidence}`);
-                    }
                 }
 
-                // Exit Alert Logic
-                if (rec && rec.exit) {
-                    const exitKey = `${symbol}_EXIT_${rec.exit.action}_${Math.floor(Date.now() / 3600000)}`;
-                    if (isAlertWindow && !lastAlerts.has(exitKey)) {
-                        console.log(`--- EXIT DETECTED: ${symbol} ${rec.exit.action} ---`);
-                        telegram.sendExitAlert(symbol, rec.exit).catch(() => { });
-                        lastAlerts.set(exitKey, Date.now());
-                    }
-                }
-
-                // --- EXPERT UPGRADE: SIMULATED PAPER TRADING ---
-
-                // --- IR-REALITY ALIGNMENT ALERT (3-4 Light Check) ---
-                const bullCount = Object.values(stockData.multiTfBias || {}).filter(b => b.includes('BULLISH')).length;
-                const bearCount = Object.values(stockData.multiTfBias || {}).filter(b => b.includes('BEARISH')).length;
-                const alignedCount = Math.max(bullCount, bearCount);
-
-                if (alignedCount >= 3) {
-                    const irKey = `${symbol}_IR_ALIGN_${alignedCount}_${Math.floor(Date.now() / 3600000)}`;
-                    const lastIrTime = lastAlerts.get(irKey) || 0;
-
-                    if (isAlertWindow && (Date.now() - lastIrTime > 14400000)) { // 4 Hour cooldown per level
-                        console.log(`[${symbol}] >>> FIRING IR-REALITY ALIGNMENT: ${alignedCount} TFs ALIGNED <<<`);
-                        telegram.sendIrRealityAlert(
-                            symbol,
-                            stockData.currentPrice,
-                            bullCount > bearCount ? 'BULLISH' : 'BEARISH',
-                            alignedCount
-                        ).catch(() => { });
-                        lastAlerts.set(irKey, Date.now());
-                    }
-                }
                 // --- THE HOLY GRAIL DETECTOR (ULTIMATE CONFLUENCE) ---
-                const isHolyGrail = (score >= 95 && alignedCount >= 4 && stockData.markers?.radar?.smt && stockData.session?.active);
+                const radar = stockData.institutionalRadar;
+                const isKillzone = stockData.session && !['OFF_HOURS', 'WEEKEND', 'FOREX_QUIET'].includes(stockData.session.session);
+                const isHolyGrail = (stockData.confluenceScore >= 95 && radar?.alignedCount >= 4 && radar?.smt && isKillzone);
+
                 if (isHolyGrail) {
                     const grailKey = `${symbol}_HOLY_GRAIL_${Math.floor(Date.now() / 3600000)}`;
                     if (!lastAlerts.has(grailKey)) {
-                        console.log(`[${symbol}] >>> 🔥 HOLY GRAIL SIGNAL DETECTED 🔥 <<<`);
-                        io.emit('holy_grail', { symbol, price: stockData.currentPrice, bias: stockData.bias.bias });
-                        telegram.sendMessage(`🔥 *HOLY GRAIL SIGNAL DETECTED: ${symbol}* 🔥\n----------------------------\n*Score:* 100% PERFECT ALIGNMENT\n*Status:* INSTITUTIONAL UNFAIRNESS\n*Action:* ${stockData.recommendation.action}\n\n_All institutional engines have reached maximum synchronization. This is a high-conviction event._`).catch(() => {});
+                        console.log(`[GRAIL] 🔥 HOLY GRAIL SIGNAL: ${symbol} at ${stockData.currentPrice}`);
+                        io.emit('holy_grail', { 
+                            symbol, 
+                            price: stockData.currentPrice, 
+                            bias: stockData.bias.bias,
+                            confluence: stockData.confluenceScore,
+                            alignment: radar.alignedCount
+                        });
+                        telegram.sendMessage(`🔥 *HOLY GRAIL SIGNAL: ${symbol}* 🔥\nExtreme Institutional Synchronicity identified.\n\nScore: ${stockData.confluenceScore}%\nAlignment: ${radar.alignedCount}TF\nBias: ${stockData.bias.bias}\nSession: ${stockData.session.session}`).catch(() => {});
                         lastAlerts.set(grailKey, Date.now());
                     }
                 }
             });
 
-
-            // --- MACRO PULSE MONITORING (VIX Velocity & RORO Shift) ---
-            const vix = simulator.internals.vix;
-            const vixPrev = simulator.internals.vixPrev;
-            const roro = engine.calculateRORO(simulator.internals, 'SPY');
-            
-            // RORO Shift Alert
-            const roroKey = `RORO_SHIFT_${roro.label}`;
-            if ((nyHour >= 6 && nyHour < 20) && !lastAlerts.has(roroKey)) {
-                console.log(`[RORO] Macro sentiment shifted to ${roro.label}`);
-                telegram.sendRoroAlert(roro).catch(() => {});
-                lastAlerts.set(roroKey, Date.now());
-                // Clear other RORO keys to allow switching back
-                ['HEAVY RISK-ON', 'RISK-ON', 'NEUTRAL', 'RISK-OFF', 'HEAVY RISK-OFF'].forEach(l => {
-                    if (l !== roro.label) lastAlerts.delete(`RORO_SHIFT_${l}`);
-                });
-            }
-
-            if (vix > 0 && vixPrev > 0) {
-                const velocity = (vix - vixPrev) / vixPrev;
-                if ((nyHour >= 6 && nyHour < 20) && velocity > 0.03) { // 3% spike in a single pulse
-                    const alertKey = `VIX_SPIKE_${Math.floor(Date.now() / 3600000)}`;
-                    if (!lastAlerts.has(alertKey)) {
-                        telegram.sendMacroAlert('VIX VOLATILITY SPIKE', `VIX jumped ${(velocity * 100).toFixed(1)}% rapidly. Institutional risk-off in effect.`, 'HIGH').catch(() => {});
-                        lastAlerts.set(alertKey, Date.now());
-                    }
-                }
-            }
-
             // --- MIDNIGHT OPEN REPORT (DAILY AT 00:00 EST) ---
-            const now = new Date();
-            const nyTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+            const nyTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
             const dateStr = nyTime.toDateString();
-            const hour = nyTime.getHours();
-
-            if (lastAlerts.get('MIDNIGHT_REPORT') !== dateStr) {
-                console.log(`[${new Date().toLocaleTimeString()}] 🟢 Triggering Midnight Open Report for ${dateStr}...`);
+            if (lastAlerts.get('MIDNIGHT_REPORT') !== dateStr && nyTime.getHours() === 0) {
                 const reportData = simulator.watchlist.map(symbol => {
                     const m = simulator.getInstitutionalMarkers(symbol);
                     if (m.midnightOpen === 0) return null;
-
-                    // Simple Bias Prediction:
-                    // If Midnight Open is above the midpoint of previous day's range, we lean Bullish.
-                    const midpoint = (m.pdh + m.pdl) / 2;
-                    let bias = 'NEUTRAL';
-                    if (m.midnightOpen > midpoint) bias = 'BULLISH';
-                    if (m.midnightOpen < midpoint) bias = 'BEARISH';
-
-                    // Extra weight: If we are already above PDH, very bullish.
-                    if (m.midnightOpen > m.pdh) bias = 'STRONG_BULLISH';
-                    if (m.midnightOpen < m.pdl) bias = 'STRONG_BEARISH';
-
-                    return {
-                        symbol,
-                        midnightOpen: m.midnightOpen,
-                        pdh: m.pdh,
-                        pdl: m.pdl,
-                        bias
-                    };
+                    return { symbol, midnightOpen: m.midnightOpen, pdh: m.pdh, pdl: m.pdl, bias: m.midnightOpen > (m.pdh + m.pdl)/2 ? 'BULLISH' : 'BEARISH' };
                 }).filter(i => i !== null);
 
                 if (reportData.length > 0) {
-                    await telegram.sendMidnightOpenReport(reportData).catch(err => {
-                        console.error("❌ Failed to send Midnight Report:", err.message);
-                    });
+                    telegram.sendMidnightOpenReport(reportData).catch(() => {});
                     lastAlerts.set('MIDNIGHT_REPORT', dateStr);
                 }
             }
-
-            io.emit('update', {
+            
+            const payload = {
                 ...currentUpdate,
-                watchlist: watchlistUpdate,
                 blockTrades: simulator.blockTrades,
                 sectors: processSectors()
-            });
+            };
+            if (watchlistUpdate) payload.watchlist = watchlistUpdate;
+            io.emit('update', payload);
         } catch (err) {
             console.error("Update Loop Error:", err.message);
         } finally {
@@ -810,10 +634,13 @@ function processData(symbol = simulator.currentSymbol) {
     const bloomberg = stock.bloomberg;
     const markers = simulator.getInstitutionalMarkers(normalizedSymbol, activeTf);
 
-    // Calculate Relative Strength vs SPY
-    const spy = simulator.stocks['SPY'];
-    const relativeStrength = (spy && symbol !== 'SPY') ?
-        engine.calculateRelativeStrength(candles, spy.candles[activeTf] || spy.candles['5m'] || []) : 0;
+    // Calculate Relative Strength: Use SPY for Stocks, DXY for Forex
+    const isFX = normalizedSymbol.includes('=X') || normalizedSymbol.includes('USD');
+    const benchmarkSymbol = isFX ? 'DX-Y.NYB' : 'SPY';
+    const benchmark = simulator.stocks[benchmarkSymbol];
+    
+    const relativeStrength = (benchmark && normalizedSymbol !== benchmarkSymbol) ?
+        engine.calculateRelativeStrength(candles, benchmark.candles[activeTf] || benchmark.candles['5m'] || [], normalizedSymbol) : 0;
 
     const internals = simulator.internals;
     const bias = engine.calculateBias(stock.currentPrice, fvgs, draws, bloomberg, markers, relativeStrength, internals, symbol, candles);
@@ -900,8 +727,27 @@ function processData(symbol = simulator.currentSymbol) {
             smt: markers.radar?.smt,
             session: engine.getSessionInfo(symbol),
             globalSessions: engine.getGlobalForexSessions(),
-            midnightOpen: markers.midnightOpen
+            midnightOpen: markers.midnightOpen,
         } : null,
+        basket: {
+            'EUR': { perf: simulator.stocks['EURUSD=X']?.dailyChangePercent || 0 },
+            'GBP': { perf: simulator.stocks['GBPUSD=X']?.dailyChangePercent || 0 },
+            'JPY': { perf: simulator.stocks['USDJPY=X']?.dailyChangePercent || 0 },
+            'AUD': { perf: simulator.stocks['AUDUSD=X']?.dailyChangePercent || 0 },
+            'CAD': { perf: simulator.stocks['USDCAD=X']?.dailyChangePercent || 0 },
+            'NZD': { perf: simulator.stocks['NZDUSD=X']?.dailyChangePercent || 0 },
+            'CHF': { perf: simulator.stocks['USDCHF=X']?.dailyChangePercent || 0 },
+            'DXY': { perf: simulator.stocks['DX-Y.NYB']?.dailyChangePercent || 0 }
+        },
+        isBasketAligned: (() => {
+            const majors = ['EUR', 'GBP', 'AUD', 'NZD'];
+            const dxyPerf = simulator.stocks['DX-Y.NYB']?.dailyChangePercent || 0;
+            const alignedCount = majors.filter(m => {
+                const mPerf = simulator.stocks[`${m}USD=X`]?.dailyChangePercent || 0;
+                return (dxyPerf > 0 && mPerf < 0) || (dxyPerf < 0 && mPerf > 0);
+            }).length;
+            return alignedCount >= 3;
+        })(),
         institutionalRadar: markers.radar,
         whaleTape: engine.generateOrderFlowTape(symbol, stock.currentPrice, candles),
         po3: engine.detectPO3Phase(candles, markers, engine.getSessionInfo(symbol)),

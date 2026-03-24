@@ -201,21 +201,24 @@ export class LiquidityEngine {
         return ranges.reduce((a, b) => a + b, 0) / period;
     }
 
-    calculateRelativeStrength(symbolCandles, spyCandles) {
-        if (!symbolCandles.length || !spyCandles.length) return 0;
-        const count = Math.min(symbolCandles.length, spyCandles.length, 15);
+    calculateRelativeStrength(symbolCandles, comparisonCandles, symbol = 'SPY') {
+        if (!symbolCandles.length || !comparisonCandles.length) return 0;
+        const count = Math.min(symbolCandles.length, comparisonCandles.length, 15);
         if (count < 2) return 0;
 
         const symStart = symbolCandles[symbolCandles.length - count].close;
         const symEnd = symbolCandles[symbolCandles.length - 1].close;
-        const spyStart = spyCandles[spyCandles.length - count].close;
-        const spyEnd = spyCandles[spyCandles.length - 1].close;
+        const compStart = comparisonCandles[comparisonCandles.length - count].close;
+        const compEnd = comparisonCandles[comparisonCandles.length - 1].close;
 
-        if (symStart === 0 || spyStart === 0) return 0; // Protection against division by zero
+        if (symStart === 0 || compStart === 0) return 0;
 
         const symPerf = (symEnd - symStart) / symStart;
-        const spyPerf = (spyEnd - spyStart) / spyStart;
-        return (symPerf - spyPerf) * 100;
+        const compPerf = (compEnd - compStart) / compStart;
+        
+        // Inverse correlation for USD-quoted pairs vs DXY
+        const isInverse = symbol.includes('USD') && (symbol.indexOf('USD') > 0);
+        return isInverse ? (symPerf + compPerf) * 100 : (symPerf - compPerf) * 100;
     }
 
     /**
@@ -248,15 +251,16 @@ export class LiquidityEngine {
             if (totalMinutes > 810 && totalMinutes <= 960) return { session: 'NY_PM', status: 'EOD DRIVE', color: '#00f2ff', isMarketOpen: true };
             if (totalMinutes > 960 && totalMinutes <= 1200) return { session: 'POST_MARKET', status: 'LOW LIQUIDITY', color: '#6366f1', isMarketOpen: true };
 
-            // If it's a weekday but outside the above windows
             return { session: 'OFF_HOURS', status: 'MARKET CLOSED', color: '#334155', isMarketOpen: false };
         } else {
-            // Forex-specific session logic
+            // Forex-specific Follow-The-Sun Session logic
             if (hour >= 3 && hour < 4) return { session: 'LONDON_BULLET', status: 'ALGO EXPANSION', color: '#f59e0b', isMarketOpen: true };
-            if (hour >= 3 && hour < 11) return { session: 'LONDON', status: 'HIGH VOLUME', color: '#00f2ff', isMarketOpen: true };
-            if (hour >= 8 && hour < 17) return { session: 'NY_FX', status: 'OVERLAP/LIQUIDITY', color: '#00ff88', isMarketOpen: true };
-            if (hour >= 19 || hour < 4) return { session: 'ASIA', status: 'STEADY', color: '#94a3b8', isMarketOpen: true };
-            return { session: 'FOREX_QUIET', status: 'LOW VOLUME', color: '#334155', isMarketOpen: true };
+            if (hour >= 2 && hour < 5) return { session: 'LONDON_OPEN', status: 'HIGH VOLUME', color: '#00f2ff', isMarketOpen: true };
+            if (hour >= 5 && hour < 11) return { session: 'LONDON_DRIVE', status: 'TRENDING', color: '#00ff88', isMarketOpen: true };
+            if (hour >= 8 && hour < 12) return { session: 'NY_OVERLAP', status: 'PEAK LIQUIDITY', color: '#f59e0b', isMarketOpen: true };
+            if (hour >= 18 || hour < 20) return { session: 'ASIA_OPEN', status: 'ACCUMULATION', color: '#94a3b8', isMarketOpen: true };
+            if (hour >= 20 || hour < 3) return { session: 'TOKYO_DRIVE', status: 'STEADY', color: '#6366f1', isMarketOpen: true };
+            return { session: 'GLOBAL_FLOW', status: 'STEADY', color: '#334155', isMarketOpen: true };
         }
     }
 

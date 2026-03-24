@@ -73,8 +73,10 @@ export class InstitutionalAlgorithm {
 
         // Windows (in minutes from midnight EST)
         const windows = [
-            { name: 'ASIA_ACCUMULATION', start: 0, end: 120, color: '#38bdf8', isKillzone: false }, // 12 AM - 2 AM
-            { name: 'LONDON_OPEN', start: 120, end: 300, color: '#3b82f6', isKillzone: true },    // 2 AM - 5 AM
+            { name: 'ASIA_OPEN', start: 1140, end: 1260, color: '#38bdf8', isKillzone: false },    // 7 PM - 9 PM
+            { name: 'ASIA_ACCUMULATION', start: 1260, end: 1440, color: '#0ea5e9', isKillzone: true }, // 9 PM - 12 AM
+            { name: 'LONDON_PRE', start: 0, end: 120, color: '#3b82f6', isKillzone: false },      // 12 AM - 2 AM
+            { name: 'LONDON_OPEN', start: 120, end: 300, color: '#2563eb', isKillzone: true },    // 2 AM - 5 AM
             { name: 'LONDON_EXPANSION', start: 300, end: 510, color: '#60a5fa', isKillzone: false }, // 5 AM - 8:30 AM
             { name: 'NY_OPEN', start: 510, end: 660, color: '#f59e0b', isKillzone: true },        // 8:30 AM - 11 AM
             { name: 'SILVER_BULLET', start: 600, end: 660, color: '#ef4444', isKillzone: true },  // 10 AM - 11 AM (Overlap)
@@ -82,7 +84,7 @@ export class InstitutionalAlgorithm {
             { name: 'LUNCH_RANGE', start: 720, end: 810, color: '#94a3b8', isKillzone: false },   // 12 PM - 1:30 PM
             { name: 'NY_PM_MACRO', start: 810, end: 870, color: '#10b981', isKillzone: true },    // 1:30 PM - 2:30 PM
             { name: 'EOD_DRIVE', start: 870, end: 960, color: '#0ea5e9', isKillzone: true },      // 2:30 PM - 4 PM
-            { name: 'POST_MARKET', start: 960, end: 1200, color: '#6366f1', isKillzone: false }   // 4 PM - 8 PM
+            { name: 'POST_MARKET', start: 960, end: 1140, color: '#6366f1', isKillzone: false }   // 4 PM - 7 PM
         ];
 
         // Find the active window (last one that has started)

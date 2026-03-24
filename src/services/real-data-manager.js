@@ -11,13 +11,17 @@ export class RealDataManager {
         this.apiKey = process.env.FINNHUB_API_KEY;
         this.configPath = path.join(process.cwd(), 'watchlist.json');
         this.watchlist = this.loadWatchlist();
-        this.sectors = ['XLK', 'XLY', 'XLF', 'XLC', 'SMH', 'NVDA', 'AMD', 'META', 'GOOGL', 'KRE', 'XBI', 'IYT', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', '^TNX', 'UUP'];
+        this.sectors = ['XLK', 'XLY', 'XLF', 'XLC', 'SMH', 'NVDA', 'AMD', 'META', 'GOOGL', 'KRE', 'XBI', 'IYT', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'NZDUSD=X', 'USDCAD=X', 'USDCHF=X', '^TNX', 'UUP'];
         this.symbolMap = {
             'EURUSD=X': 'OANDA:EUR_USD',
             'GBPUSD=X': 'OANDA:GBP_USD',
             'USDJPY=X': 'OANDA:USD_JPY',
             'AUDUSD=X': 'OANDA:AUD_USD',
+            'NZDUSD=X': 'OANDA:NZD_USD',
+            'USDCAD=X': 'OANDA:USD_CAD',
+            'USDCHF=X': 'OANDA:USD_CHF',
             'BTC-USD': 'BINANCE:BTCUSDT',
+            'DX-Y' : 'DX-Y',
             'DX-Y.NYB': 'DX-Y'
         };
         this.revMap = Object.fromEntries(Object.entries(this.symbolMap).map(([k, v]) => [v, k]));
@@ -156,7 +160,7 @@ export class RealDataManager {
                 }
             } catch (err) { }
 
-            for (const tf of this.timeframes) {
+            const tfPromises = this.timeframes.map(async (tf) => {
                 let daysBack = 5;
                 if (tf === '1h') daysBack = 15;
                 else if (tf === '1d') daysBack = 365;
@@ -174,24 +178,28 @@ export class RealDataManager {
                                 close: q.close,
                                 volume: q.volume
                             }));
-                            let cleanedCandles = [];
-                            for (let i = 0; i < candles.length; i++) {
-                                let c = candles[i];
-                                // Clean up massive anomalous wicks (common with Yahoo Finance pre/post market data)
-                                const bodyMax = Math.max(c.open, c.close);
-                                const bodyMin = Math.min(c.open, c.close);
-                                const bodySize = Math.max(bodyMax - bodyMin, c.open * 0.0005);
-                                
-                                if (c.high - bodyMax > bodySize * 4) c.high = bodyMax + bodySize;
-                                if (bodyMin - c.low > bodySize * 4) c.low = bodyMin - bodySize;
-                                
-                                cleanedCandles.push(c);
-                            }
-                            stock.candles[tf] = cleanedCandles;
+                        let cleanedCandles = [];
+                        for (let i = 0; i < candles.length; i++) {
+                            let c = candles[i];
+                            // Clean up massive anomalous wicks
+                            const bodyMax = Math.max(c.open, c.close);
+                            const bodyMin = Math.min(c.open, c.close);
+                            const bodySize = Math.max(bodyMax - bodyMin, c.open * 0.0005);
+                            
+                            if (c.high - bodyMax > bodySize * 4) c.high = bodyMax + bodySize;
+                            if (bodyMin - c.low > bodySize * 4) c.low = bodyMin - bodySize;
+                            
+                            cleanedCandles.push(c);
+                        }
+                        stock.candles[tf] = cleanedCandles;
                     }
-                } catch (err) { }
-            }
-            console.log(`[${symbol}] Candles loaded.`);
+                } catch (err) { 
+                    console.warn(`[FETCH] History failed for ${symbol} @ ${tf}`);
+                }
+            });
+
+            await Promise.all(tfPromises);
+            console.log(`[${symbol}] All candles loaded in parallel.`);
         } catch (error) {
             console.error(`Historical fetch failed for ${symbol}:`, error.message);
         }
@@ -205,7 +213,7 @@ export class RealDataManager {
         this.ws.on('open', () => {
             console.log('--- FINNHUB WEBSOCKET CONNECTED ---');
             // Subscribe to all in watchlist + macro proxies + sectors
-            const instruments = [...this.watchlist, '^VIX', 'UUP', ...this.sectors];
+            const instruments = Object.keys(this.stocks);
             instruments.forEach(symbol => {
                 const subSymbol = this.symbolMap[symbol] || symbol;
                 this.ws.send(JSON.stringify({ type: 'subscribe', symbol: subSymbol }));
@@ -704,7 +712,13 @@ export class RealDataManager {
             'SPY': 'QQQ',
             'QQQ': 'SPY',
             'EURUSD=X': 'GBPUSD=X',
-            'GBPUSD=X': 'EURUSD=X'
+            'GBPUSD=X': 'EURUSD=X',
+            'AUDUSD=X': 'NZDUSD=X',
+            'NZDUSD=X': 'AUDUSD=X',
+            'USDJPY=X': 'USDCAD=X',
+            'USDCAD=X': 'USDJPY=X',
+            'BTC-USD': 'ETH-USD',
+            'ETH-USD': 'BTC-USD'
         };
 
         const other = pairs[symbol];
