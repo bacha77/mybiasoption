@@ -732,11 +732,11 @@ function processData(symbol = simulator.currentSymbol) {
         basket: {
             'EUR': { perf: simulator.stocks['EURUSD=X']?.dailyChangePercent || 0 },
             'GBP': { perf: simulator.stocks['GBPUSD=X']?.dailyChangePercent || 0 },
-            'JPY': { perf: simulator.stocks['USDJPY=X']?.dailyChangePercent || 0 },
+            'JPY': { perf: (simulator.stocks['USDJPY=X']?.dailyChangePercent || 0) * -1 },
             'AUD': { perf: simulator.stocks['AUDUSD=X']?.dailyChangePercent || 0 },
-            'CAD': { perf: simulator.stocks['USDCAD=X']?.dailyChangePercent || 0 },
+            'CAD': { perf: (simulator.stocks['USDCAD=X']?.dailyChangePercent || 0) * -1 },
             'NZD': { perf: simulator.stocks['NZDUSD=X']?.dailyChangePercent || 0 },
-            'CHF': { perf: simulator.stocks['USDCHF=X']?.dailyChangePercent || 0 },
+            'CHF': { perf: (simulator.stocks['USDCHF=X']?.dailyChangePercent || 0) * -1 },
             'DXY': { perf: simulator.stocks['DX-Y.NYB']?.dailyChangePercent || 0 }
         },
         isBasketAligned: (() => {
@@ -752,8 +752,7 @@ function processData(symbol = simulator.currentSymbol) {
         whaleTape: engine.generateOrderFlowTape(symbol, stock.currentPrice, candles),
         po3: engine.detectPO3Phase(candles, markers, engine.getSessionInfo(symbol)),
         scalpScan: { velocity: ((Math.abs(markers.cvd || 0) / 1000).toFixed(1)), signal: (Math.abs(markers.cvd || 0) > 500 ? 'INSTITUTIONAL RELOAD' : 'SEARCHING...'), color: (markers.cvd > 0 ? '#10b981' : markers.cvd < 0 ? '#f43f5e' : '#94a3b8') },
-        whaleTape: engine.generateOrderFlowTape(symbol, stock.currentPrice, candles),
-        po3: engine.detectPO3Phase(candles, markers, engine.getSessionInfo(symbol))
+        blockTrades: simulator.blockTrades || []
     };
 
     return finalData;

@@ -1270,8 +1270,12 @@ socket.on('tf_updated', (data) => {
     if (data.watchlist) updateWatchlist(data);
         if (typeof updateIntelTicker === "function") updateIntelTicker(data);
 });
-
-socket.on('symbol_updated', (data) => {
+socket.on('tf_updated', (data) => {
+    console.log(`[SOCKET] Timeframe Updated: ${data.timeframe}`);
+    if (data.candles) setChartData(data.candles);
+    updateUI(data);
+});
+socket.on('symbol_updated', (data) => {
     console.log(`[SOCKET] Symbol Updated: ${data.symbol}`);
     setChartData(data.candles || []);
     updateUI(data);

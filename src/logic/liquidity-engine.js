@@ -306,325 +306,155 @@ export class LiquidityEngine {
     }
 
     calculateBias(currentPrice, fvgs, liquidityDraws, bloombergMetrics = {}, markers = {}, relativeStrength = 0, internals = { vix: 0, dxy: 0, newsImpact: 'LOW', sectors: [] }, symbol = 'SPY', candles = []) {
+        const isForex = symbol.includes('=X') || symbol === 'BTC-USD' || symbol.includes('USD');
+        
+        if (isForex) {
+            return this.calculateForexBias(currentPrice, fvgs, liquidityDraws, bloombergMetrics, markers, internals, symbol, candles);
+        } else {
+            return this.calculateStockBias(currentPrice, fvgs, liquidityDraws, bloombergMetrics, markers, relativeStrength, internals, symbol, candles);
+        }
+    }
+
+    /**
+     * Institutional Stock Algorithm
+     * Focus: Sector Health, VIX Fear, and Market Breadth.
+     */
+    calculateStockBias(currentPrice, fvgs, draws, bloomberg, markers, relativeStrength, internals, symbol, candles) {
         let bullishScore = 0;
         let bearishScore = 0;
-        const isForex = symbol.includes('=X') || symbol === 'BTC-USD';
-        const isUSDQuote = symbol.includes('USD') && !symbol.startsWith('USD'); // e.g., EURUSD
 
-        // --- DXY CORRELATION (Critical for Forex) ---
-        if (isForex && internals.dxy > 0) {
-            const dxyStrength = internals.dxy > 102.5; // Institutional base
-            const dxyBullish = internals.dxyChange > 0;
-            
-            if (isUSDQuote) {
-                // If EURUSD/GBPUSD: DXY UP = BEARISH, DXY DOWN = BULLISH
-                if (dxyBullish) bearishScore += 4.0;
-                else bullishScore += 3.0;
-            } else if (symbol.startsWith('USD')) {
-                // If USDJPY/USDCAD: DXY UP = BULLISH, DXY DOWN = BEARISH
-                if (dxyBullish) bullishScore += 4.0;
-                else bearishScore += 3.0;
-            }
-        }
+        // 1. VIX & FEAR DYNAMICS
+        const vix = internals.vix || 0;
+        const vixPrev = internals.vixPrev || vix;
+        const vixVelocity = vixPrev > 0 ? (vix - vixPrev) / vixPrev : 0;
+        if (vix > 22) bearishScore += 4;
+        if (vixVelocity > 0.03) { bearishScore += 7; bullishScore -= 5; }
 
-        // --- VIX DYNAMIC SENSITIVITY (Fear Gauge) ---
-        if (!isForex) {
-            const vix = internals.vix || 0;
-            const vixPrev = internals.vixPrev || vix;
-            const vixVelocity = vixPrev > 0 ? (vix - vixPrev) / vixPrev : 0;
-
-            if (vix > 20) bearishScore += 2;
-            if (vix > 30) { bearishScore += 5; bullishScore -= 3; }
-
-            // Fear Spike: If VIX jumps > 2% rapidly, suppress longs
-            if (vixVelocity > 0.02) {
-                bearishScore += 4;
-                bullishScore -= 5;
-            }
-        }
-
-        // --- DXY & YIELD HEADWINDS (Macro Filters) ---
-        if (!isForex) {
-            const dxy = internals.dxy || 0;
-            const tnx = internals.tnx || 0; // 10Y Yield
-            
-            // Strong Dollar = Headwind for Stocks
-            if (dxy > 104.5) bearishScore += 2; 
-
-            // Rising Yields = Headwind for Tech
-            const isTech = ['QQQ', 'NVDA', 'AAPL', 'MSFT', 'AMD', 'SMH'].includes(symbol);
-            if (isTech && tnx > 4.2) bearishScore += 3; // Yields above 4.2% pressure tech
-        }
-
-        // --- SECTOR UNDER THE HOOD CHECK ---
+        // 2. SECTOR ALPHA (XLK for Tech)
         if (internals.sectors && internals.sectors.length > 0) {
             const tech = internals.sectors.find(s => s.symbol === 'XLK');
-            const cons = internals.sectors.find(s => s.symbol === 'XLY');
-            const fin = internals.sectors.find(s => s.symbol === 'XLF');
-
-            // If Technology is strong, it's a tailwind for SPY/QQQ/Tech stocks
-            const techHeavy = ['SPY', 'QQQ', 'NVDA', 'AAPL', 'MSFT', 'AMD', 'SMH'];
-            if (techHeavy.includes(symbol) && tech) {
-                if (tech.change > 0.3) bullishScore += 3; // Increased impact
-                else if (tech.change < -0.3) bearishScore += 3;
+            if (tech && ['SPY', 'QQQ', 'NVDA', 'AAPL', 'MSFT'].includes(symbol)) {
+                if (tech.change > 0.4) bullishScore += 5;
+                else if (tech.change < -0.4) bearishScore += 5;
             }
-
-            // Market Breadth (Percentage of watchlist trending)
-            const breadth = internals.breadth || 0;
-            if (breadth > 70) bullishScore += 2; // 70%+ of market is bullish
-            else if (breadth < 30) bearishScore += 2; // 70%+ of market is bearish
         }
 
+        // 3. CORE INSTITUTIONAL LEVELS
         const vwap = markers.vwap || 0;
-        const poc = markers.poc || 0;
-        const cvd = markers.cvd || 0;
-        const midnightOpen = markers.midnightOpen || 0;
-        const londonOpen = markers.londonOpen || 0;
-        const nyOpen = markers.nyOpen || 0;
-        let confPoints = 0;
+        const midnight = markers.midnightOpen || 0;
+        if (currentPrice > vwap && vwap > 0) bullishScore += 3;
+        else if (currentPrice < vwap && vwap > 0) bearishScore += 3;
+        if (currentPrice > midnight && midnight > 0) bullishScore += 3;
+        else if (currentPrice < midnight && midnight > 0) bearishScore += 3;
 
-        if (bloombergMetrics.wei === 'BULLISH') bullishScore += 3;
-        if (bloombergMetrics.wei === 'BEARISH') bearishScore += 3;
-        if (bloombergMetrics.omon === 'CALL_BUYING') bullishScore += 2;
-        if (bloombergMetrics.omon === 'PUT_BUYING') bearishScore += 2;
-        if (bloombergMetrics.btm === 'SELL_BLOCKS') bearishScore += 2;
-        if (bloombergMetrics.btm === 'BUY_BLOCKS') bullishScore += 2;
+        // 4. BLOOMBERG FLOWS
+        if (bloomberg.wei === 'BULLISH') bullishScore += 4;
+        if (bloomberg.wei === 'BEARISH') bearishScore += 4;
 
-        // VWAP & POC Confluence
-        if (vwap > 0 && currentPrice > vwap) bullishScore += 1.5;
-        if (vwap > 0 && currentPrice < vwap) bearishScore += 1.5;
-        if (poc > 0 && currentPrice > poc) bullishScore += 1;
-        if (poc > 0 && currentPrice < poc) bearishScore += 1;
+        // 5. MOMENTUM & TRAPS
+        const result = this.applyMomentumFilters(bullishScore, bearishScore, currentPrice, candles, draws, markers, false);
+        bullishScore = result.bullish;
+        bearishScore = result.bearish;
 
-        // Midnight Open Strategy
-        if (midnightOpen > 0) {
-            if (currentPrice > midnightOpen) bullishScore += 2;
-            else if (currentPrice < midnightOpen) bearishScore += 2;
-        }
+        return this.assembleFinalBias(bullishScore, bearishScore, currentPrice, markers, internals, symbol, candles, bloomberg);
+    }
 
-        // London Open (03:00 EST) Confluence
-        if (londonOpen > 0) {
-            if (currentPrice > londonOpen) bullishScore += 1;
-            else if (currentPrice < londonOpen) bearishScore += 1;
-        }
+    /**
+     * Institutional Forex Algorithm
+     * Focus: DXY Alignment, SMT Divergence, and Killzone Timing.
+     */
+    calculateForexBias(currentPrice, fvgs, draws, bloomberg, markers, internals, symbol, candles) {
+        let bullishScore = 0;
+        let bearishScore = 0;
+        const isUSDQuote = symbol.includes('USD') && !symbol.startsWith('USD');
 
-        // NY Open (09:30 EST) Confluence
-        if (nyOpen > 0) {
-            const nyDiff = Math.abs(currentPrice - nyOpen) / nyOpen;
-            if (currentPrice > nyOpen) bullishScore += 3;
-            else if (currentPrice < nyOpen) bearishScore += 3;
-
-            // NY Rejection (Trap) logic
-            if (nyDiff < 0.0005) {
-                if (cvd > 500) bullishScore += 2;
-                if (cvd < -500) bearishScore += 2;
-            }
-        }
-
-        if (relativeStrength > 0.05) bullishScore += 2;
-        if (relativeStrength < -0.05) bearishScore += 2;
-
-        // CVD Logic & Divergence
-        if (cvd > 1000) bullishScore += 2;
-        if (cvd < -1000) bearishScore += 2;
-
-        if (markers.pdh && currentPrice > markers.pdh * 0.998 && cvd < -500) bearishScore += 4;
-
-        // --- Gamma Wall & Psychological Magnet Logic ---
-        const gammaWalls = this.getGammaWalls(currentPrice, symbol);
-        gammaWalls.forEach(wall => {
-            const distance = Math.abs(currentPrice - wall) / currentPrice;
-            if (distance < 0.001) { // Within 0.1% of a major level
-                // If approaching from below, it's a resistance/magnet
-                if (currentPrice < wall) {
-                    bearishScore += 1; // Anticipate rejection/consolidation
-                    bullishScore += 1; // Attracted as magnet
-                } else {
-                    bullishScore += 1; // Support/magnet
-                    bearishScore += 1; // Rejection probability
-                }
-            }
-        });
-        if (markers.pdl && currentPrice < markers.pdl * 1.002 && cvd > 500) bullishScore += 4;
-
-        // Fair Value Gaps (FVGs)
-        let bullishFvgCount = 0;
-        let bearishFvgCount = 0;
-        fvgs.forEach(fvg => {
-            if (fvg.type === 'bullish_fvg' && currentPrice < fvg.bottom && bullishFvgCount < 10) {
-                bullishScore += 2;
-                bullishFvgCount++;
-            }
-            if (fvg.type === 'bearish_fvg' && currentPrice > fvg.top && bearishFvgCount < 10) {
-                bearishScore += 2;
-                bearishFvgCount++;
-            }
-        });
-
-        if (bloombergMetrics.sentiment > 2) bullishScore += 2.5;
-        if (bloombergMetrics.sentiment < -2) bearishScore += 2.5;
-
-        if (markers.pdh > 0 && currentPrice < markers.pdh) bullishScore += 1.5;
-        if (markers.pdl > 0 && currentPrice > markers.pdl) bearishScore += 1.5;
-
-        // --- ELITE: HOLY GRAIL SIGNALS ---
-        // 1. SMT Divergence (+5 pts)
-        if (markers.smt) {
-            if (markers.smt.type === 'BULLISH') bullishScore += 5;
-            else if (markers.smt.type === 'BEARISH') bearishScore += 5;
-        }
-
-        // 2. Institutional Absorption (+3 pts)
-        const absorption = this.detectAbsorption(candles, markers);
-        if (absorption) {
-            if (absorption.type.includes('BULLISH')) bullishScore += 3;
-            else bearishScore += 3;
-        }
-
-        // 3. Institutional Displacement (FVG) (+5 pts)
-        const fvg = this.detectFVG(candles);
-        if (fvg) {
-            if (fvg.type.includes('BULLISH')) bullishScore += 5;
-            else bearishScore += 5;
-        }
-
-        // 4. Whale Imbalance skewing (+2 pts for over 70% imbalance)
-        if (markers.whaleImbalance > 70) bullishScore += 2;
-        if (markers.whaleImbalance < -70) bearishScore += 2;
-
-        // --- ELITE: DOLLAR SENSITIVITY (FX WEIGHTING) ---
-        if (isForex && internals && typeof internals.dxyChange === 'number') {
-            const dxyChange = internals.dxyChange;
+        // 1. DXY ANCHOR SYNC
+        if (internals.dxy > 0) {
+            const dxyBullish = internals.dxyChange > 0;
             if (isUSDQuote) {
-                if (dxyChange > 0) bearishScore += 5.0; // Heavy negative correlation
-                else bullishScore += 4.0;
-            } else if (symbol.startsWith('USD')) {
-                if (dxyChange > 0) bullishScore += 5.0; // Positive correlation
-                else bearishScore += 4.0;
-            }
-        }
-
-        // --- RETAIL CONTRARIAN WEIGHTING ---
-        const retailSentiment = this.calculateRetailSentiment(currentPrice, markers, candles);
-        if (retailSentiment > 75) bearishScore += 5; // Extreme bullish retail = Institutional Sell
-        if (retailSentiment < 25) bullishScore += 5; // Extreme bearish retail = Institutional Buy
-
-        // --- FOREX KILLZONE INTENSITY ---
-        const session = this.getSessionInfo(symbol);
-        if (isForex) {
-            if (session.session.includes('LONDON') || session.session.includes('NY')) {
-                bullishScore *= 1.5;
-                bearishScore *= 1.5;
+                if (dxyBullish) bearishScore += 6.0;
+                else bullishScore += 5.0;
             } else {
-                // Outside Killzones, dampen signals to avoid range chop
-                bullishScore *= 0.5;
-                bearishScore *= 0.5;
+                if (dxyBullish) bullishScore += 6.0;
+                else bearishScore += 5.0;
             }
         }
 
-        // --- PROFESSIONAL UPGRADE: SETUP-BASED BIAS WEIGHTING ---
-        // Trap detection (Now influences Bias Score)
-        const trap = this.detectDeltaTrap(currentPrice, markers.cvd || 0, candles);
-        if (trap) {
-            if (trap.type.includes('BEAR_TRAP')) bullishScore += 12; // Powerful reversal logic
-            else if (trap.type.includes('BULL_TRAP')) bearishScore += 12;
+        // 2. KILLZONE INTENSITY (Timing is everything in FX)
+        const session = this.getSessionInfo(symbol);
+        const isKillzone = session.session.includes('LONDON') || session.session.includes('NY');
+        const multiplier = isKillzone ? 1.5 : 0.5;
+
+        // 3. SMT DIVERGENCE (The Holy Grail of FX)
+        if (markers.smt) {
+            if (markers.smt.type === 'BULLISH') bullishScore += 8;
+            else if (markers.smt.type === 'BEARISH') bearishScore += 8;
         }
 
-        // Bullish/Bearish Divergence (Now influences Bias Score)
-        const isBullishDiv = (markers.pdl > 0 && currentPrice < markers.pdl * 1.002 && (markers.cvd || 0) > 500);
-        const isBearishDiv = (markers.pdh > 0 && currentPrice > markers.pdh * 0.998 && (markers.cvd || 0) < -500);
+        // 4. CORE INSTITUTIONAL LEVELS
+        const vwap = markers.vwap || 0;
+        const midnight = markers.midnightOpen || 0;
+        if (currentPrice > vwap && vwap > 0) bullishScore += 2;
+        else if (currentPrice < vwap && vwap > 0) bearishScore += 2;
+        if (currentPrice > midnight && midnight > 0) bullishScore += 4; // Midnight Open is critical in FX
+        else if (currentPrice < midnight && midnight > 0) bearishScore += 4;
 
-        if (isBullishDiv) bullishScore += 15;
-        if (isBearishDiv) bearishScore += 15;
+        // 5. MOMENTUM & TRAPS
+        const result = this.applyMomentumFilters(bullishScore, bearishScore, currentPrice, candles, draws, markers, true);
+        bullishScore = result.bullish * multiplier;
+        bearishScore = result.bearish * multiplier;
 
-        // --- NEW: ASIA RANGE & LIQUIDITY MAGNETS ---
-        const asiaRange = this.calculateAsiaRange(candles);
-        if (asiaRange) {
-            // Judas Swing Detection: Sweep high then dive
-            if (currentPrice > asiaRange.high) bearishScore += 2; // Potential fakeout high
-            if (currentPrice < asiaRange.low) bullishScore += 2;  // Potential fakeout low
-            
-            // Above Asia Mid = Bullish Control
-            if (currentPrice > asiaRange.mid) bullishScore += 1.5;
-            else bearishScore += 1.5;
+        return this.assembleFinalBias(bullishScore, bearishScore, currentPrice, markers, internals, symbol, candles, bloomberg);
+    }
+
+    /**
+     * Shared Momentum & structural Filtering
+     */
+    applyMomentumFilters(bullish, bearish, currentPrice, candles, draws, markers, isForex) {
+        if (!candles || candles.length < 10) return { bullish, bearish };
+        
+        let bull = bullish;
+        let bear = bearish;
+        const last5 = candles.slice(-5);
+        const trend5 = last5[4].close - last5[0].open;
+        const thresh = isForex ? 0.0003 : 0.001;
+
+        if (trend5 < -thresh) { bull *= 0.3; bear += 6.0; }
+        if (trend5 > thresh) { bear *= 0.3; bull += 6.0; }
+
+        const mss = this.detectMSS(candles, draws, markers);
+        if (mss) {
+            if (mss.type === 'BEARISH_MSS') { bear += 10; bull -= 5; }
+            if (mss.type === 'BULLISH_MSS') { bull += 10; bear -= 5; }
         }
 
-        const eLiquidity = this.detectEqualHighsLows(candles);
-        if (eLiquidity) {
-            // Magnets draw price
-            if (eLiquidity.eqh && currentPrice < eLiquidity.eqh.price) bullishScore += 2; // Draws price UP
-            if (eLiquidity.eql && currentPrice > eLiquidity.eql.price) bearishScore += 2; // Draws price DOWN
+        const disp = this.detectDisplacement(candles);
+        if (disp) {
+            if (disp.direction === 'BEARISH') { bear += 12; bull = 0; }
+            if (disp.direction === 'BULLISH') { bull += 12; bear = 0; }
         }
 
-        // --- NEW: CBDR PROJECTIONS ---
-        const cbdr = this.calculateCBDR(candles);
-        if (cbdr) {
-            // Price at SD2 (Standard Deviation 2) of CBDR is an extreme reversal zone
-            if (currentPrice > cbdr.sd2_high) bearishScore += 3;
-            if (currentPrice < cbdr.sd2_low) bullishScore += 3;
-        }
+        return { bullish: bull, bearish: bear };
+    }
 
-        // --- NEW: OPTIMAL TRADE ENTRY (OTE) ---
-        const ote = this.calculateOTE(candles);
-        if (ote) {
-            if (ote.type === 'BULLISH_OTE' && currentPrice >= ote.fib79 && currentPrice <= ote.fib62) {
-                bullishScore += 4; // High conviction entry zone
-            } else if (ote.type === 'BEARISH_OTE' && currentPrice <= ote.fib79 && currentPrice >= ote.fib62) {
-                bearishScore += 4;
-            }
-        }
-
-        const flout = this.calculateCBDRFlout(candles);
-
+    /**
+     * Assemble the final shared metrics object
+     */
+    assembleFinalBias(bullishScore, bearishScore, currentPrice, markers, internals, symbol, candles, bloomberg) {
         const finalMultiplier = (internals && internals.newsImpact === 'HIGH') ? 0.5 : 1;
         const totalScore = (bullishScore * finalMultiplier) - (bearishScore * finalMultiplier);
 
         let biasLabel = 'NEUTRAL';
-        if (totalScore >= 10) biasLabel = 'STRONG BULLISH';
-        else if (totalScore >= 3) biasLabel = 'BULLISH';
-        else if (totalScore <= -10) biasLabel = 'STRONG BEARISH';
-        else if (totalScore <= -3) biasLabel = 'BEARISH';
+        if (totalScore >= 12) biasLabel = 'STRONG BULLISH';
+        else if (totalScore >= 4) biasLabel = 'BULLISH';
+        else if (totalScore <= -12) biasLabel = 'STRONG BEARISH';
+        else if (totalScore <= -4) biasLabel = 'BEARISH';
 
-        // ADR Extended check: Only override to CONSOLIDATION if not strongly trending
-        const dayRange = (markers.todayHigh && markers.todayLow) ? markers.todayHigh - markers.todayLow : 0;
-        if (markers.adr > 0 && dayRange > markers.adr * 1.4 && Math.abs(totalScore) < 10) {
-            biasLabel = 'CONSOLIDATION';
-            confPoints = Math.max(0, confPoints - 20);
-        }
-
-        // Accuracy Booster: Confidence Logic
-        if (midnightOpen > 0) {
-            if (biasLabel === 'BULLISH' && currentPrice < midnightOpen) confPoints += 15;
-            if (biasLabel === 'BEARISH' && currentPrice > midnightOpen) confPoints += 15;
-            if (biasLabel === 'BULLISH' && currentPrice > midnightOpen) confPoints += 10;
-            if (biasLabel === 'BEARISH' && currentPrice < midnightOpen) confPoints += 10;
-        }
-
-        if (vwap > 0 && Math.abs(currentPrice - vwap) / vwap < 0.002) confPoints += 20;
-        if (Math.abs(cvd) > 800) confPoints += 20;
-        if (internals.newsImpact === 'LOW') confPoints += 20;
-        if (Math.abs(totalScore) >= 10) confPoints += 40;
-
-        // --- INSTITUTIONAL NARRATIVE ENGINE ---
-        let narrative = "Synchronizing institutional pulse...";
-        const reasons = [];
-        if (biasLabel.includes('BULLISH')) {
-            if (currentPrice > midnightOpen) reasons.push("Price holding above Midnight Open structure.");
-            if (currentPrice > vwap) reasons.push("Institutional VWAP accumulation detected.");
-            if (isBullishDiv) reasons.push("Bullish SMT/Delta divergence confirmed.");
-            if (trap && trap.type.includes('BEAR_TRAP')) reasons.push("Cleverly engineered Bear Trap liquidated early sellers.");
-            if (cvd > 500) reasons.push("Aggressive whale buying (CVD) detected.");
-            narrative = "BULLISH BIAS: " + (reasons[0] || "Expanding toward liquidity ceiling.") + " " + (reasons[1] || "");
-        } else if (biasLabel.includes('BEARISH')) {
-            if (currentPrice < midnightOpen) reasons.push("Institutional selling below Midnight Open.");
-            if (currentPrice < vwap) reasons.push("VWAP distribution confirmed.");
-            if (isBearishDiv) reasons.push("Bearish SMT/Delta divergence detected.");
-            if (trap && trap.type.includes('BULL_TRAP')) reasons.push("Retail Bull Trap successfully triggered.");
-            if (cvd < -500) reasons.push("Significant institutional liquidation pressure.");
-            narrative = "BEARISH BIAS: " + (reasons[0] || "Diving toward sell-side liquidity pools.") + " " + (reasons[1] || "");
-        } else {
-            narrative = "NEUTRAL: Market is hunting for a clear liquidity draw. Expect range chop.";
-        }
+        let confPoints = 0;
+        const vwap = markers.vwap || 0;
+        if (vwap > 0 && Math.abs(currentPrice - vwap) / vwap < 0.002) confPoints += 25;
+        if (Math.abs(markers.cvd || 0) > 1000) confPoints += 25;
+        if (Math.abs(totalScore) >= 12) confPoints += 50;
 
         return {
             bias: biasLabel,
@@ -632,38 +462,26 @@ export class LiquidityEngine {
             confidence: Math.min(100, Math.max(0, confPoints)),
             bullScore: bullishScore,
             bearScore: bearishScore,
-            isDisplacement: this.detectDisplacement(candles),
-            narrative: narrative.trim(),
-            metrics: bloombergMetrics,
+            narrative: `Institutional ${biasLabel} bias confirmed by ${Math.abs(totalScore).toFixed(1)}pts of confluence.`,
+            metrics: bloomberg,
             vwap,
-            poc,
-            cvd,
-            internals,
-            trap,
+            midnightOpen: markers.midnightOpen,
+            cvd: markers.cvd,
+            isDisplacement: this.detectDisplacement(candles),
+            mss: this.detectMSS(candles, null, markers),
             smt: markers.smt,
             amdPhase: this.getAMDPhase(),
-            mss: this.detectMSS(candles, liquidityDraws, markers),
-            fundingCandle: this.detectFundingCandle(candles, markers),
+            retailSentiment: this.calculateRetailSentiment(currentPrice, markers, candles),
+            internals: internals,
             absorption: this.detectAbsorption(candles, markers),
-            fvg: this.detectFVG(candles),
-            volumeImbalance: this.detectVolumeImbalance(candles),
             squeeze: this.detectSqueeze(candles),
-            roro: this.calculateRORO(internals, symbol),
-            orderBlock: this.detectOrderBlocks(candles),
-            whaleImbalance: markers.whaleImbalance,
-            asiaRange: asiaRange,
-            cbdr: cbdr,
-            flout: flout,
-            ote: ote,
-            restingLiquidity: eLiquidity,
-            bloombergSentiment: this.getBloombergSentiment(markers, internals),
-            intermarketCorrelation: this.getIntermarketCorrelation(symbol, markers),
-            retailSentiment: retailSentiment,
-            judas: this.detectJudasSwing(candles, markers, session)
+            ote: this.calculateOTE(candles),
+            cbdr: this.calculateCBDR(candles),
+            fvg: this.detectFVG(candles)
         };
     }
 
-    getAMDPhase() {
+    getSessionInfo(symbol) {
         // --- ELITE CALIBRATION: Algorithmic Timing Windows (NY TIME) ---
         const nyTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
         const hour = nyTime.getHours();
@@ -673,6 +491,7 @@ export class LiquidityEngine {
         // 1. ASIA ACCUMULATION (20:00 - 02:00)
         if (timeVal >= 20 || timeVal < 2) {
             return {
+                session: 'ASIA',
                 label: 'ACCUMULATION (ASIA)',
                 color: '#38bdf8',
                 desc: 'Setting the Liquidity Anchor',
@@ -684,6 +503,7 @@ export class LiquidityEngine {
         // 2. LONDON PRE-OPEN / MIDNIGHT RESET (02:00 - 03:00)
         if (timeVal >= 2 && timeVal < 3) {
             return {
+                session: 'LONDON_PRE',
                 label: 'LON PRE-OPEN (RESET)',
                 color: '#818cf8',
                 desc: 'Institutional Re-Pricing',
@@ -696,6 +516,7 @@ export class LiquidityEngine {
         if (timeVal >= 3 && timeVal < 5) {
             const isBullet = (hour === 3);
             return {
+                session: 'LONDON',
                 label: isBullet ? 'LON SILVER BULLET 🎯' : 'MANIPULATION (LONDON)',
                 color: '#f59e0b',
                 desc: isBullet ? 'High-Priority Algo Window' : 'Judas Swing in Progress',
@@ -707,6 +528,7 @@ export class LiquidityEngine {
         // 4. LONDON EXPANSION (05:00 - 08:30)
         if (timeVal >= 5 && timeVal < 8.5) {
             return {
+                session: 'LONDON',
                 label: 'LONDON EXPANSION',
                 color: '#10b981',
                 desc: 'Institutional Trend Realization',
@@ -718,6 +540,7 @@ export class LiquidityEngine {
         // 5. NY PRE-OPEN / MACRO WINDOW (08:30 - 09:30)
         if (timeVal >= 8.5 && timeVal < 9.5) {
             return {
+                session: 'NY_PRE',
                 label: 'NY PRE-OPEN (MACRO)',
                 color: '#ec4899',
                 desc: 'Economic Data/Macro Pulse',
@@ -730,6 +553,7 @@ export class LiquidityEngine {
         if (timeVal >= 9.5 && timeVal < 13.5) {
             const isBullet = (hour === 10);
             return {
+                session: 'NY',
                 label: isBullet ? 'NY SILVER BULLET 🎯' : 'DISTRIBUTION (NY)',
                 color: '#10b981',
                 desc: isBullet ? 'High-Priority Algo Window' : 'Institutional Trend Expansion',
@@ -741,6 +565,7 @@ export class LiquidityEngine {
         // 7. NY PM SESSION (13:30 - 16:00)
         if (timeVal >= 13.5 && timeVal < 16) {
             return {
+                session: 'NY',
                 label: 'NY PM SESSION',
                 color: '#06b6d4',
                 desc: 'Afternoon Trend/Reversal',
@@ -751,6 +576,7 @@ export class LiquidityEngine {
 
         // 8. MARKET CLOSE / CBDR (16:00 - 20:00)
         return {
+            session: 'OFF',
             label: 'OFF-SESSION / RESET',
             color: '#64748b',
             desc: 'Monitoring CBDR Range',
@@ -775,8 +601,8 @@ export class LiquidityEngine {
         if (!candles || candles.length < 20) return null;
         // MSS (Market Structure Shift) = Swept Liquidity + Break of Last Swing Point + FVG/Displacement
         const lastCandle = candles[candles.length - 1];
-        const lastSwingHigh = draws?.bsl ? draws.bsl[0] : 0;
-        const lastSwingLow = draws?.ssl ? draws.ssl[0] : 0;
+        const lastSwingHigh = (draws?.highs && draws.highs.length > 0) ? draws.highs[draws.highs.length - 1].price : 0;
+        const lastSwingLow = (draws?.lows && draws.lows.length > 0) ? draws.lows[draws.lows.length - 1].price : 0;
 
         // Bullish MSS: Price swept liquidity, then broke original swing high
         if (lastCandle.close > lastSwingHigh && lastSwingHigh > 0) {
@@ -1207,12 +1033,31 @@ export class LiquidityEngine {
             }
         }
 
+        // --- ELITE CALIBRATION: CONTRARIAN ABSORPTION GUARD ---
+        const isBullishAbsorption = (rawAction === 'BUY CALL' && markers.cvd < -1500); // Massive selling being absorbed
+        const isBearishAbsorption = (rawAction === 'BUY PUT' && markers.cvd > 1500);  // Massive buying being absorbed
+        if (isBullishAbsorption || isBearishAbsorption) {
+            rawAction = 'WAIT';
+            rawRationale = "⚠️ ABSORPTION DETECTED: Large institutional orders opposing price action. Wait for confirmation.";
+        }
+
+        // --- ELITE CALIBRATION: OVEREXTENSION GUARD (STOCKS) ---
+        const isStock = !symbol.includes('=X') && symbol !== 'BTC-USD';
+        const midOpen = markers.midnightOpen || 0;
+        if (isStock && midOpen > 0) {
+            const dev = Math.abs(currentPrice - midOpen) / midOpen;
+            if (dev > 0.018 && rawAction !== 'WAIT') { // Over 1.8% from True Open
+                rawAction = 'WAIT';
+                rawRationale = "⚠️ OVEREXTENDED: Price too far from Midnight Open. Awaiting mean reversion touch.";
+            }
+        }
+
         if (!this.signalState[stateKey]) {
             this.signalState[stateKey] = { action: rawAction, strike: rawStrike, target: rawTarget, trim: rawTrim, rationale: newsWarning + rawRationale, count: 1 };
         } else {
             const state = this.signalState[stateKey];
             if (state.action === rawAction) {
-                state.count = Math.min(state.count + 1, 10); // Increased cap to 10
+                state.count = Math.min(state.count + 1, 15); // Increased stability cap
             } else {
                 state.count--;
                 if (state.count <= 0) {
@@ -1229,16 +1074,22 @@ export class LiquidityEngine {
         let exitSignal = null;
 
         // --- EXPERT UPGRADE: KILL ZONE FILTER ---
-        const isKillZone = (session.session === 'NY_OPEN' || session.session === 'NY_PM');
+        const isKillZone = (session.session.includes('LONDON') || session.session.includes('NY'));
+        const isForexPair = symbol.includes('=X') || symbol.includes('USD');
         const killZoneWarning = !isKillZone ? '⚠️ OFF-HOURS: Low Institutional Volume. ' : '';
 
         if (stable.action !== 'WAIT') {
             const isCall = stable.action.includes('CALL');
-            const isForex = symbol.includes('=X') || symbol === 'BTC-USD';
+            const isForex = isForexPair || symbol === 'BTC-USD';
             
+            // --- ELITE CALIBRATION: SESSION LOCK (FOREX) ---
+            if (isForexPair && !isKillZone && stable.count < 5) {
+                return { action: 'WAIT', rationale: "⚠️ SESSION LOCK: Institutional Forex volume is thin. Wait for London/NY Open.", isStable: true };
+            }
+
             if (isForex) {
                 // Forex SL: Use ATR-based pips (usually 20-50 pips)
-                const pips = atr * 2.0;
+                const pips = atr * 2.2; // Slightly wider room for FX volatility
                 sl = isCall ? (currentPrice - pips).toFixed(5) : (currentPrice + pips).toFixed(5);
             } else {
                 sl = isCall ? (currentPrice - (atr * 1.8)).toFixed(2) : (currentPrice + (atr * 1.8)).toFixed(2);
@@ -1251,13 +1102,13 @@ export class LiquidityEngine {
             const potentialRisk = Math.abs(currentPrice - slPrice);
             rrRatioValue = potentialRisk > 0 ? potentialProfit / potentialRisk : 0;
 
-            // Block low R:R trades (Must be at least 1.5:1)
-            if (rrRatioValue < 1.5) {
+            // Block low R:R trades (Must be at least 1.8:1 for Elite Signal)
+            if (rrRatioValue < 1.8) {
                 return {
                     action: 'WAIT',
                     strike: '-',
                     target: '-',
-                    rationale: `Low R:R Ratio (${rrRatioValue.toFixed(1)}:1). Reward doesn't justify risk.`,
+                    rationale: `Low R:R Ratio (${rrRatioValue.toFixed(1)}:1). Minimizing retail trash setups.`,
                     isStable: true,
                     rrRatio: rrRatioValue.toFixed(1)
                 };

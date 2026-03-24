@@ -103,8 +103,18 @@ export class RealDataManager {
                 const stock = this.stocks[symbol];
                 stock.currentPrice = quote.price;
                 stock.previousClose = quote.prevClose || stock.previousClose || quote.price;
-                stock.dailyChangePercent = quote.change || 0;
-                stock.dataSource = quote.source; // Track where the data is coming from
+                
+                // --- FAIL-SAFE PERFORMANCE CALCULATION ---
+                // Ensure dailyChangePercent is ALWAYS calculated if we have both prices
+                if (quote.change !== undefined && quote.change !== 0) {
+                    stock.dailyChangePercent = quote.change;
+                } else if (stock.previousClose > 0) {
+                    stock.dailyChangePercent = ((stock.currentPrice - stock.previousClose) / stock.previousClose) * 100;
+                } else {
+                    stock.dailyChangePercent = 0;
+                }
+
+                stock.dataSource = quote.source;
                 
                 // Sanity check for PDH/PDL fallback
                 if (!stock.pdh || isNaN(stock.pdh)) {
@@ -446,7 +456,7 @@ export class RealDataManager {
             // VIX and DXY are now updated in real-time via updatePriceFromTrade, 
             // but we keep a fallback here for robustness.
             if (this.stocks['^VIX']?.currentPrice > 0) this.internals.vix = this.stocks['^VIX'].currentPrice;
-            if (this.stocks['UUP']?.currentPrice > 0) this.internals.dxy = this.stocks['UUP'].currentPrice;
+            if (this.stocks['DX-Y.NYB']?.currentPrice > 0) this.internals.dxy = this.stocks['DX-Y.NYB'].currentPrice;
             if (this.stocks['^TNX']?.currentPrice > 0) this.internals.tnx = this.stocks['^TNX'].currentPrice;
 
             // --- CALCULATE MARKET BREADTH ---
