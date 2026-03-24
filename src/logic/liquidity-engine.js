@@ -477,7 +477,8 @@ export class LiquidityEngine {
             squeeze: this.detectSqueeze(candles),
             ote: this.calculateOTE(candles),
             cbdr: this.calculateCBDR(candles),
-            fvg: this.detectFVG(candles)
+            fvg: this.detectFVG(candles),
+            dxyAnchor: this.calculateDXYAnchorPulse(symbol, biasLabel, internals)
         };
     }
 
@@ -1034,11 +1035,21 @@ export class LiquidityEngine {
         }
 
         // --- ELITE CALIBRATION: CONTRARIAN ABSORPTION GUARD ---
-        const isBullishAbsorption = (rawAction === 'BUY CALL' && markers.cvd < -1500); // Massive selling being absorbed
-        const isBearishAbsorption = (rawAction === 'BUY PUT' && markers.cvd > 1500);  // Massive buying being absorbed
-        if (isBullishAbsorption || isBearishAbsorption) {
+        const abs = bias.absorption;
+        if (abs) {
+            if (rawAction === 'BUY CALL' && abs.type === 'BEARISH_ABSORPTION') {
+                rawAction = 'WAIT';
+                rawRationale = "⚠️ ABSORPTION DETECTED: Institutions are quietly selling into this move. Wait for rejection.";
+            } else if (rawAction === 'BUY PUT' && abs.type === 'BULLISH_ABSORPTION') {
+                rawAction = 'WAIT';
+                rawRationale = "⚠️ ABSORPTION DETECTED: Institutions are quietly buying this dip. Wait for reversal.";
+            }
+        }
+
+        // --- ELITE CALIBRATION: DXY POWER ANCHOR (THE MASTER FILTER) ---
+        if (bias.dxyAnchor && bias.dxyAnchor.alignment === 'CORRELATION_TRAP') {
             rawAction = 'WAIT';
-            rawRationale = "⚠️ ABSORPTION DETECTED: Large institutional orders opposing price action. Wait for confirmation.";
+            rawRationale = "⚠️ DXY CORRELATION TRAP: Move decoupled from Global Dollar Trend. Institutional Fake-out Likely.";
         }
 
         // --- ELITE CALIBRATION: OVEREXTENSION GUARD (STOCKS) ---
@@ -1466,20 +1477,13 @@ export class LiquidityEngine {
      */
     detectDisplacement(candles) {
         if (!candles || candles.length < 5) return null;
-        
-        // Displacement is a large, high-volume candle that leaves an FVG
         for (let i = candles.length - 1; i >= 3; i--) {
             const current = candles[i];
             const prev = candles[i - 1];
-            const root = candles[i - 2];
-
             const body = Math.abs(prev.close - prev.open);
             const avgBody = candles.slice(i - 10, i - 1).reduce((s, c) => s + Math.abs(c.close - c.open), 0) / 9;
             const isHighVolume = prev.volume > (candles.slice(i - 10, i - 1).reduce((s, c) => s + c.volume, 0) / 9) * 1.5;
-
-            // Large Body + High Volume usually = Displacement
             if (body > avgBody * 2 && isHighVolume) {
-                // If it also created an FVG, it's confirmed
                 if (prev.high < current.low || prev.low > current.high) {
                     return {
                         direction: prev.close > prev.open ? 'BULLISH' : 'BEARISH',
@@ -1490,5 +1494,103 @@ export class LiquidityEngine {
             }
         }
         return null;
+    }
+
+    /**
+     * Institutional Absorption Engine
+     * Detects when high volume is being "absorbed" by institutions at a level.
+     */
+    detectAbsorption(candles, markers = {}) {
+        if (!candles || candles.length < 10) return null;
+        
+        const lastCandle = candles[candles.length - 1];
+        const avgVol = candles.slice(-10).reduce((s, c) => s + (c.volume || 0), 0) / 10;
+        const bodySize = Math.abs(lastCandle.close - lastCandle.open);
+        const wickSize = Math.max(lastCandle.high - Math.max(lastCandle.open, lastCandle.close), Math.min(lastCandle.open, lastCandle.close) - lastCandle.low);
+
+        // Absorption Signature: High Volume + Small Body + Large Wick or rejection
+        if (lastCandle.volume > avgVol * 1.8 && bodySize < (avgVol * 0.0001)) {
+            const isBullish = lastCandle.close > lastCandle.low + (wickSize * 0.7);
+            return {
+                type: isBullish ? 'BULLISH_ABSORPTION' : 'BEARISH_ABSORPTION',
+                intensity: (lastCandle.volume / avgVol).toFixed(1),
+                level: lastCandle.close
+            };
+        }
+        return null;
+    }
+
+    /**
+     * DXY Power Anchor (Master Signal)
+     * Validates current symbol direction against the Master Dollar Pulse.
+     */
+    calculateDXYAnchorPulse(symbol, currentBias, dxyInternals) {
+        if (!dxyInternals || dxyInternals.dxy === 0) return { status: 'SYNCING', alignment: 'NEUTRAL' };
+        
+        const isForex = symbol.includes('=X') || symbol.includes('USD');
+        const isInverseSymbol = isForex && symbol.includes('USD') && !symbol.startsWith('USD');
+        
+        const dxyBullish = dxyInternals.dxyChange > 0 || (dxyInternals.dxy > dxyInternals.dxyPrev);
+        const biasBullish = currentBias.includes('BULLISH');
+        const biasBearish = currentBias.includes('BEARISH');
+
+        let alignment = 'NEUTRAL';
+        if (isInverseSymbol) {
+            // If EURUSD is BULLISH, DXY should be BEARISH
+            if (biasBullish && !dxyBullish) alignment = 'INSTITUTIONAL_SYNC';
+            else if (biasBullish && dxyBullish) alignment = 'CORRELATION_TRAP';
+            else if (biasBearish && dxyBullish) alignment = 'INSTITUTIONAL_SYNC';
+        } else {
+            // Normal correlation (USDJPY, SPY usually inverse but complex)
+            if (biasBullish && dxyBullish) alignment = 'CONCORDANT';
+            else if (biasBearish && !dxyBullish) alignment = 'CONCORDANT';
+        }
+
+        return {
+            status: dxyBullish ? 'DXY_BULLISH' : 'DXY_BEARISH',
+            alignment,
+            warning: alignment === 'CORRELATION_TRAP' ? '⚠️ DXY DECOUPLING: Institutional Fake-out Likely.' : null
+        };
+    }
+
+    /**
+     * Central Bank Dealers Range (CBDR)
+     * Monitors the algorithmic "True Range" defined between 14:00 - 20:00 NY.
+     */
+    calculateCBDR(candles) {
+        if (!candles || candles.length < 100) return null;
+        // Simplified CBDR: Peak High/Low of the reset period
+        const cbdrCandles = candles.filter(c => {
+            const d = new Date(c.timestamp);
+            const h = d.getUTCHours() - 4; // Approx NY
+            return h >= 14 && h < 20;
+        });
+        if (cbdrCandles.length === 0) return null;
+        
+        const high = Math.max(...cbdrCandles.map(c => c.high));
+        const low = Math.min(...cbdrCandles.map(c => c.low));
+        return { high, low, range: high - low };
+    }
+
+    /**
+     * Institutional Squeeze Detector
+     * Identifies Volatility Contraction before High-Velocity displacement.
+     */
+    detectSqueeze(candles) {
+        if (!candles || candles.length < 20) return null;
+        const last20 = candles.slice(-20);
+        const ranges = last20.map(c => c.high - c.low);
+        const avgRange = ranges.reduce((s, r) => s + r, 0) / 20;
+        const currentRange = ranges[19];
+        
+        if (currentRange < avgRange * 0.45) {
+            return { type: 'VOLATILITY_SQUEEZE', intensity: (avgRange / currentRange).toFixed(1) };
+        }
+        return null;
+    }
+
+    detectFVG(candles) {
+        const found = this.findFVGs(candles.slice(-20));
+        return found.length > 0 ? found[found.length - 1] : null;
     }
 }

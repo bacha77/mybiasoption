@@ -1389,6 +1389,15 @@ function updateUI(data) {
         }
         if (data.watchlist) updateWatchlist(data);
 
+        // --- ELITE: DXY MASTER ANCHOR SYNC ---
+        const dxyBadge = document.getElementById('dxy-anchor-badge');
+        if (dxyBadge && data.bias && data.bias.dxyAnchor) {
+            const anchor = data.bias.dxyAnchor;
+            const al = anchor.alignment || 'NEUTRAL';
+            dxyBadge.innerText = `DXY ANCHOR: ${al.replace('_', ' ')}`;
+            dxyBadge.style.color = (al === 'INSTITUTIONAL_SYNC' || al === 'CONCORDANT') ? '#10b981' : (al === 'CORRELATION_TRAP' ? '#f43f5e' : '#94a3b8');
+        }
+
         // Protocol Update
         updateProtocolStatus(data);
 

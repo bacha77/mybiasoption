@@ -456,7 +456,11 @@ export class RealDataManager {
             // VIX and DXY are now updated in real-time via updatePriceFromTrade, 
             // but we keep a fallback here for robustness.
             if (this.stocks['^VIX']?.currentPrice > 0) this.internals.vix = this.stocks['^VIX'].currentPrice;
-            if (this.stocks['DX-Y.NYB']?.currentPrice > 0) this.internals.dxy = this.stocks['DX-Y.NYB'].currentPrice;
+            if (this.stocks['DX-Y.NYB']?.currentPrice > 0) {
+                this.internals.dxyPrev = this.internals.dxy || this.stocks['DX-Y.NYB'].previousClose;
+                this.internals.dxy = this.stocks['DX-Y.NYB'].currentPrice;
+                this.internals.dxyChange = this.stocks['DX-Y.NYB'].dailyChangePercent;
+            }
             if (this.stocks['^TNX']?.currentPrice > 0) this.internals.tnx = this.stocks['^TNX'].currentPrice;
 
             // --- CALCULATE MARKET BREADTH ---
