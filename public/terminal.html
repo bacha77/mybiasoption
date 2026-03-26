@@ -299,7 +299,10 @@
                             </div>
                         </div>
                         <div class="macro-item" data-tooltip="Risk-On / Risk-Off Index. Consolidated macro sentiment from DXY, VIX, Yields, and Breadth.">
-                            <div class="macro-label">RORO SENTIMENT INDEX</div>
+                            <div class="macro-label" style="display:flex; justify-content:space-between; align-items:center;">
+                                <span>RORO SENTIMENT INDEX</span>
+                                <span id="roro-flash" style="opacity:0.8; color:var(--gold); transition: all 0.2s; font-size: 0.6rem; font-weight: 900; letter-spacing: 0.5px; text-shadow: 0 0 5px rgba(212,175,55,0.3);">⚡ PULSE: SCANNING</span>
+                            </div>
                             <div class="roro-container" style="display:flex; flex-direction:column; align-items:center; gap:5px; margin-top:10px;">
                                 <div id="roro-label" class="roro-label" style="font-weight:900; font-size:0.8rem; color:var(--gold);">NEUTRAL</div>
                                 <div style="width:100%; height:8px; background:rgba(255,255,255,0.05); border-radius:4px; overflow:hidden;">
@@ -447,6 +450,12 @@
                 <section class="card accent-border reveal-1" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(20, 20, 20, 0) 100%); border: 1px solid rgba(16, 185, 129, 0.2);">
                     <div class="card-header-flex">
                         <div class="card-title" style="color: var(--bullish); text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);">Institutional Intelligence Radar</div>
+                        <div id="confidence-glow" class="confidence-indicator" title="Pyth Institutional Confidence Meter">
+                            <span class="c-label">PRECISION</span>
+                            <div class="c-bar-wrap">
+                                <div id="confidence-bar" class="c-bar"></div>
+                            </div>
+                        </div>
                         <span class="card-info-trigger" data-card="radar">ⓘ</span>
                     </div>
                     
@@ -902,6 +911,17 @@
                 <div class="check-row">
                     <input type="checkbox" id="check-blocks" class="trigger-check">
                     <label for="check-blocks"><b>Whale Tape Sync?</b> ($1M+ block detected in your direction)</label>
+                </div>
+
+                <!-- Improvement 3: Pyth Slippage Guard -->
+                <div id="slippage-guard-item" style="margin-top: 1.5rem; padding: 1rem; background: rgba(0,0,0,0.4); border-radius: 4px; border: 1px dashed rgba(255,255,255,0.1);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                        <span style="font-size:0.5rem; font-weight:900; color:var(--text-dim);">PYTH LIQUIDITY GUARD</span>
+                        <span id="slippage-status" style="font-size:0.55rem; font-weight:900; color:var(--bullish);">OPTIMAL LIQUIDITY</span>
+                    </div>
+                    <div id="slippage-warning-box" style="display:none; color:var(--bearish); font-size:0.6rem; font-weight:900; text-align:center; animation:pulse-red 1s infinite;">
+                        ⚠️ HIGH SLIPPAGE RISK: WIDE INSTITUTIONAL SPREADS
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">

@@ -1,7 +1,8 @@
 import YahooFinance from 'yahoo-finance2';
 import axios from 'axios';
+import { pythService } from './pyth-service.js';
 
-const yahooFinance = new YahooFinance();
+export const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
 export class DataSourceManager {
     constructor() {
@@ -11,9 +12,25 @@ export class DataSourceManager {
     }
 
     async getQuote(symbol) {
-        // Source 1: Yahoo Finance (Priority)
+        // Source 0: Pyth Network (Ultra-High Speed Institutional Oracle)
         try {
-            const quote = await yahooFinance.quote(symbol);
+            const pyth = await pythService.getLatestPrice(symbol);
+            if (pyth && pyth.price > 0) {
+                this.lastSourceUsed = 'PYTH';
+                // Try to get prevClose from Yahoo for % change, but return Pyth price immediately
+                return {
+                    price: pyth.price,
+                    prevClose: null, // Will be filled by fallback logic if needed
+                    confidence: pyth.confidence,
+                    source: 'PYTH-HERMES'
+                };
+            }
+        } catch (e) {}
+
+        // Source 1: Yahoo Finance (Legacy Priority / History)
+        try {
+            const quote = await yahooFinance.quote(symbol, {}, { validate: false });
+
             if (quote && quote.regularMarketPrice > 0) {
                 this.lastSourceUsed = 'YAHOO';
                 return {
@@ -26,20 +43,22 @@ export class DataSourceManager {
                 };
             }
         } catch (err) {
-            console.warn(`[DATA SOURCE] Yahoo quote failed for ${symbol}, trying fallback...`);
+            // Silence common background pipe errors
+            if (!err.message?.includes('EPIPE')) {
+                console.warn(`[DATA SOURCE] Yahoo quote failed for ${symbol}, trying fallback...`);
+            }
         }
 
         // Source 2: Polygon.io (Fallback for Stocks)
         if (this.polygonKey && !symbol.includes('=X') && !symbol.includes('^')) {
             try {
-                // Polygon Ticker format: SPY, TSLA (no changes needed for most)
                 const url = `https://api.polygon.io/v2/aggs/ticker/${symbol}/prev?adjusted=true&apiKey=${this.polygonKey}`;
-                const res = await axios.get(url);
+                const res = await axios.get(url, { timeout: 10000 });
                 if (res.data && res.data.results && res.data.results[0]) {
                     const r = res.data.results[0];
                     this.lastSourceUsed = 'POLYGON';
                     return {
-                        price: r.c, // Close of previous day as starting point if real-time fails
+                        price: r.c,
                         prevClose: r.c,
                         change: 0,
                         high: r.h,
@@ -48,7 +67,9 @@ export class DataSourceManager {
                     };
                 }
             } catch (err) {
-                console.warn(`[DATA SOURCE] Polygon fallback failed for ${symbol}`);
+                if (!err.message?.includes('EPIPE')) {
+                    console.warn(`[DATA SOURCE] Polygon fallback failed for ${symbol}`);
+                }
             }
         }
 
@@ -56,7 +77,7 @@ export class DataSourceManager {
         if (this.fhubKey) {
             try {
                 const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${this.fhubKey}`;
-                const res = await axios.get(url);
+                const res = await axios.get(url, { timeout: 10000 });
                 if (res.data && res.data.c > 0) {
                     this.lastSourceUsed = 'FINNHUB';
                     return {
@@ -69,7 +90,9 @@ export class DataSourceManager {
                     };
                 }
             } catch (err) {
-                console.warn(`[DATA SOURCE] Finnhub fallback failed for ${symbol}`);
+                if (!err.message?.includes('EPIPE')) {
+                    console.warn(`[DATA SOURCE] Finnhub fallback failed for ${symbol}`);
+                }
             }
         }
 
@@ -81,7 +104,8 @@ export class DataSourceManager {
         try {
             const p1 = new Date();
             p1.setDate(p1.getDate() - daysBack);
-            const chart = await yahooFinance.chart(symbol, { period1: p1, interval });
+            const chart = await yahooFinance.chart(symbol, { period1: p1, interval }, { validate: false });
+
             if (chart && chart.quotes) {
                 return chart.quotes.filter(q => q.open != null && q.open > 0);
             }

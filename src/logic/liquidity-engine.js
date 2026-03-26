@@ -456,12 +456,15 @@ export class LiquidityEngine {
         if (Math.abs(markers.cvd || 0) > 1000) confPoints += 25;
         if (Math.abs(totalScore) >= 12) confPoints += 50;
 
+        const dxyAnchor = this.calculateDXYAnchorPulse(symbol, biasLabel, internals, totalScore);
+        
         return {
             bias: biasLabel,
             score: totalScore,
             confidence: Math.min(100, Math.max(0, confPoints)),
             bullScore: bullishScore,
             bearScore: bearishScore,
+            dxyAnchor: dxyAnchor,
             narrative: `Institutional ${biasLabel} bias confirmed by ${Math.abs(totalScore).toFixed(1)}pts of confluence.`,
             metrics: bloomberg,
             vwap,
@@ -470,7 +473,7 @@ export class LiquidityEngine {
             isDisplacement: this.detectDisplacement(candles),
             mss: this.detectMSS(candles, null, markers),
             smt: markers.smt,
-            amdPhase: this.getAMDPhase(),
+            amdPhase: this.calculateAMDPhase(),
             retailSentiment: this.calculateRetailSentiment(currentPrice, markers, candles),
             internals: internals,
             absorption: this.detectAbsorption(candles, markers),
@@ -480,6 +483,20 @@ export class LiquidityEngine {
             fvg: this.detectFVG(candles),
             dxyAnchor: this.calculateDXYAnchorPulse(symbol, biasLabel, internals)
         };
+    }
+
+    /**
+     * Identifies the current Institutional Cycle phase (Accumulation, Manipulation, Distribution).
+     * Based on NY Session time brackets.
+     */
+    calculateAMDPhase() {
+        const nyTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const hour = nyTime.getHours();
+        
+        if (hour >= 0 && hour < 8) return 'ACCUMULATION';
+        if (hour >= 8 && hour < 11) return 'MANIPULATION';
+        if (hour >= 11 && hour < 16) return 'DISTRIBUTION';
+        return 'ACCUMULATION';
     }
 
     getSessionInfo(symbol) {
@@ -1524,32 +1541,39 @@ export class LiquidityEngine {
      * DXY Power Anchor (Master Signal)
      * Validates current symbol direction against the Master Dollar Pulse.
      */
-    calculateDXYAnchorPulse(symbol, currentBias, dxyInternals) {
-        if (!dxyInternals || dxyInternals.dxy === 0) return { status: 'SYNCING', alignment: 'NEUTRAL' };
+    calculateDXYAnchorPulse(symbol, currentBiasLabel, dxyInternals, numericScore) {
+        if (!dxyInternals || dxyInternals.dxy === 0) {
+            return { status: 'SYNCING', alignment: 'NEUTRAL' };
+        }
         
         const isForex = symbol.includes('=X') || symbol.includes('USD');
         const isInverseSymbol = isForex && symbol.includes('USD') && !symbol.startsWith('USD');
         
+        // Use numeric score if label is Neutral but there's a trend
+        const isBullish = currentBiasLabel.includes('BULLISH') || (numericScore && numericScore >= 0.5);
+        const isBearish = currentBiasLabel.includes('BEARISH') || (numericScore && numericScore <= -0.5);
         const dxyBullish = dxyInternals.dxyChange > 0 || (dxyInternals.dxy > dxyInternals.dxyPrev);
-        const biasBullish = currentBias.includes('BULLISH');
-        const biasBearish = currentBias.includes('BEARISH');
-
+        
         let alignment = 'NEUTRAL';
+        
         if (isInverseSymbol) {
-            // If EURUSD is BULLISH, DXY should be BEARISH
-            if (biasBullish && !dxyBullish) alignment = 'INSTITUTIONAL_SYNC';
-            else if (biasBullish && dxyBullish) alignment = 'CORRELATION_TRAP';
-            else if (biasBearish && dxyBullish) alignment = 'INSTITUTIONAL_SYNC';
+            // Inverse mapping (e.g. EURUSD vs DXY)
+            if (isBullish && !dxyBullish) alignment = 'CONCORDANT';
+            if (isBearish && dxyBullish) alignment = 'CONCORDANT';
+            if (isBullish && dxyBullish) alignment = 'CORRELATION_TRAP';
+            if (isBearish && !dxyBullish) alignment = 'CORRELATION_TRAP';
         } else {
-            // Normal correlation (USDJPY, SPY usually inverse but complex)
-            if (biasBullish && dxyBullish) alignment = 'CONCORDANT';
-            else if (biasBearish && !dxyBullish) alignment = 'CONCORDANT';
+            // Positive mapping (USDJPY, Stock indices)
+            if (isBullish && dxyBullish) alignment = 'CONCORDANT';
+            if (isBearish && !dxyBullish) alignment = 'CONCORDANT';
+            if (isBullish && !dxyBullish) alignment = 'CORRELATION_TRAP';
+            if (isBearish && dxyBullish) alignment = 'CORRELATION_TRAP';
         }
 
         return {
             status: dxyBullish ? 'DXY_BULLISH' : 'DXY_BEARISH',
             alignment,
-            warning: alignment === 'CORRELATION_TRAP' ? '⚠️ DXY DECOUPLING: Institutional Fake-out Likely.' : null
+            warning: alignment === 'CORRELATION_TRAP' ? '⚠️ INSTITUTIONAL TRAP: DXY Decoupling detected.' : null
         };
     }
 
@@ -1569,7 +1593,15 @@ export class LiquidityEngine {
         
         const high = Math.max(...cbdrCandles.map(c => c.high));
         const low = Math.min(...cbdrCandles.map(c => c.low));
-        return { high, low, range: high - low };
+        const range = high - low;
+        
+        return { 
+            high, low, range,
+            sd1_high: high + range,
+            sd1_low: low - range,
+            sd2_high: high + (2 * range),
+            sd2_low: low - (2 * range)
+        };
     }
 
     /**

@@ -4,7 +4,7 @@ import { LiquidityEngine } from '../logic/liquidity-engine.js';
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
-import { sourceManager } from './data-sources.js';
+import { sourceManager, yahooFinance } from './data-sources.js';
 
 export class RealDataManager {
     constructor() {
@@ -67,13 +67,23 @@ export class RealDataManager {
 
         const allSymbols = [...this.watchlist, '^VIX', 'DX-Y.NYB', ...this.sectors];
         
-        // Step 1: Sequential Quote Fetch (Essential for current state)
-        console.log("Fetching current quotes and market state...");
-        for (const symbol of allSymbols) {
-            try {
-                await this.refreshQuote(symbol);
-            } catch (err) { }
+        // Step 1: Parallel Quote Fetch in Batches (Faster boot)
+        console.log(`Fetching current quotes for ${allSymbols.length} systems...`);
+        const batchSize = 6;
+        for (let i = 0; i < allSymbols.length; i += batchSize) {
+            const batch = allSymbols.slice(i, i + batchSize);
+            await Promise.all(batch.map(symbol => 
+                Promise.race([
+                    this.refreshQuote(symbol),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+                ]).catch(err => {
+                    console.warn(`[INIT] Parallel quote warning for ${symbol}: ${err.message}`);
+                })
+            ));
+            // Tiny delay between batches to respect API limits if any
+            if (i + batchSize < allSymbols.length) await new Promise(r => setTimeout(r, 500));
         }
+
 
         // Step 2: Fetch history only for current symbol (to start UI immediately)
         console.log(`Loading initial history for ${this.currentSymbol}...`);
@@ -89,10 +99,11 @@ export class RealDataManager {
 
         // Load thermal/history for sector matrix + macro in background
         const priorityList = ['^VIX', 'DX-Y.NYB', ...this.sectors];
+        // Batch historical fetch to populate dashboard faster
         priorityList.forEach((s, idx) => {
             setTimeout(() => {
                 this.refreshHistoricalData(s).catch(() => {});
-            }, 3000 + (idx * 2000));
+            }, 500 + (idx * 500)); // Faster 0.5s pace
         });
     }
 
@@ -116,15 +127,57 @@ export class RealDataManager {
 
                 stock.dataSource = quote.source;
                 
-                // Sanity check for PDH/PDL fallback
-                if (!stock.pdh || isNaN(stock.pdh)) {
-                    stock.pdh = quote.high || stock.previousClose;
-                    stock.pdl = quote.low || stock.previousClose;
+                if (quote.confidence !== undefined) {
+                    stock.pythConfidence = quote.confidence;
+                    stock.priceDiscordance = (quote.confidence / quote.price) * 10000; // bps
                 }
+
+                // --- HOLY GRAIL: Real-Time Macro Sync ---
+                if (symbol === 'DX-Y.NYB' || symbol === 'DX-Y' || symbol === 'UUP') {
+                    this.internals.dxyPrev = this.internals.dxy || stock.previousClose;
+                    this.internals.dxy = quote.price;
+                    this.internals.dxyChange = stock.dailyChangePercent;
+                }
+                if (symbol === '^VIX') {
+                    this.internals.vixPrev = this.internals.vix;
+                    this.internals.vix = quote.price;
+                }
+                if (symbol === '^TNX') this.internals.tnx = quote.price;
+
+                // --- SUB-SECOND RORO ENGINE (Improvement 2) ---
+                this.updateROROStatus();
+            }
+
+            // --- SAFETY SYNC ---
+            // If price is still 0 but we have candles, sync to last candle
+            const stock = this.stocks[symbol];
+            if (stock && stock.currentPrice === 0 && stock.candles['5m'] && stock.candles['5m'].length > 0) {
+                stock.currentPrice = stock.candles['5m'][stock.candles['5m'].length - 1].close;
             }
         } catch (error) {
             console.error(`[DATA ERROR] Failed to refresh quote for ${symbol}:`, error.message);
         }
+    }
+
+    updateROROStatus() {
+        const dxy = this.internals.dxy || 104;
+        const vix = this.internals.vix || 15;
+        
+        // Dynamic baseline sync (institutional proxy)
+        const dxyBase = 104; 
+        const vixBase = 15;
+        
+        const dxyRel = (dxyBase - dxy) * 10; // Positive if DXY is dropping (Risk ON)
+        const vixRel = (vixBase - vix) * 2;  // Positive if VIX is dropping (Risk ON)
+        
+        const score = Math.max(0, Math.min(100, 50 + dxyRel + vixRel));
+        
+        this.internals.prevRoro = this.internals.roro || 50;
+        this.internals.roro = score;
+        
+        // FLASH DETECTION: Change of > 5 points in a single tick
+        this.internals.isRoroFlash = Math.abs(this.internals.roro - this.internals.prevRoro) > 5;
+        this.internals.roroDirection = this.internals.roro > this.internals.prevRoro ? 'ON' : 'OFF';
     }
 
     async refreshHistoricalData(symbol) {
@@ -138,7 +191,7 @@ export class RealDataManager {
             const p1String = date10d.toISOString().split('T')[0];
             
             try {
-                const dailyRes = await yahooFinance.chart(symbol, { period1: p1String, interval: '1d' });
+                const dailyRes = await yahooFinance.chart(symbol, { period1: p1String, interval: '1d' }, { validate: false });
                 if (dailyRes && dailyRes.quotes && dailyRes.quotes.length > 0) {
                     const nyNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
                     const currentNYDate = nyNow.toISOString().split('T')[0];
@@ -165,7 +218,6 @@ export class RealDataManager {
                             stock.pdl = targetDay.low;
                         }
                         stock.dailyQuotes = dailyRes.quotes.filter(q => q.high != null);
-                        console.log(`[${symbol}] Anchored Daily Levels.`);
                     }
                 }
             } catch (err) { }
@@ -202,6 +254,9 @@ export class RealDataManager {
                             cleanedCandles.push(c);
                         }
                         stock.candles[tf] = cleanedCandles;
+                        console.log(`[FETCH] Success: ${symbol} @ ${tf} (${cleanedCandles.length} candles)`);
+                    } else {
+                        console.warn(`[FETCH] No candles returned for ${symbol} @ ${tf}`);
                     }
                 } catch (err) { 
                     console.warn(`[FETCH] History failed for ${symbol} @ ${tf}`);
@@ -209,7 +264,6 @@ export class RealDataManager {
             });
 
             await Promise.all(tfPromises);
-            console.log(`[${symbol}] All candles loaded in parallel.`);
         } catch (error) {
             console.error(`Historical fetch failed for ${symbol}:`, error.message);
         }
@@ -224,10 +278,29 @@ export class RealDataManager {
             console.log('--- FINNHUB WEBSOCKET CONNECTED ---');
             // Subscribe to all in watchlist + macro proxies + sectors
             const instruments = Object.keys(this.stocks);
-            instruments.forEach(symbol => {
-                const subSymbol = this.symbolMap[symbol] || symbol;
-                this.ws.send(JSON.stringify({ type: 'subscribe', symbol: subSymbol }));
-            });
+            
+            // THRESHOLD: Spreading out subscriptions to prevent anti-spam disconnection
+            let index = 0;
+            const batchInterval = setInterval(() => {
+                const batch = instruments.slice(index, index + 10); // 10 per tick
+                if (batch.length === 0) {
+                    clearInterval(batchInterval);
+                    return;
+                }
+                
+                batch.forEach(symbol => {
+                    // SkipIndices which Finnhub doesn't support on free tier websocket
+                    if (symbol.startsWith('^') && !this.symbolMap[symbol]) return;
+                    
+                    const subSymbol = this.symbolMap[symbol] || symbol;
+                    try {
+                        if (this.ws.readyState === WebSocket.OPEN) {
+                            this.ws.send(JSON.stringify({ type: 'subscribe', symbol: subSymbol }));
+                        }
+                    } catch (e) { }
+                });
+                index += 10;
+            }, 100); // Pulse every 100ms (100 symbols per second)
         });
 
         this.ws.on('message', (data) => {
@@ -318,12 +391,16 @@ export class RealDataManager {
                 stock.dailyChangePercent = ((price - stock.previousClose) / stock.previousClose) * 100;
             }
 
-            // HOLY GRAIL: Real-time update of macro internals
+            // HOLY GRAIL: Real-time Macro Sync
             if (symbol === '^VIX') {
                 this.internals.vixPrev = this.internals.vix;
                 this.internals.vix = price;
             }
-            if (symbol === 'UUP') this.internals.dxy = price;
+            if (symbol === 'DX-Y.NYB' || symbol === 'DX-Y' || symbol === 'UUP') {
+                this.internals.dxyPrev = this.internals.dxy || stock.previousClose || price;
+                this.internals.dxy = price;
+                this.internals.dxyChange = stock.dailyChangePercent;
+            }
             if (symbol === '^TNX') this.internals.tnx = price;
 
             // Update current candles for all timeframes
@@ -581,7 +658,10 @@ export class RealDataManager {
         const stock = this.stocks[symbol];
         if (!stock) return { pdh: 0, pdl: 0, midnightOpen: 0, vwap: 0, poc: 0, cvd: 0 };
         const candles = stock.candles[tf];
-        if (!candles || candles.length === 0) return { pdh: 0, pdl: 0, midnightOpen: 0, vwap: 0, poc: 0, cvd: 0 };
+        if (!candles || candles.length === 0) {
+            // SILENT: Symbol likely still in background fetch queue
+            return { pdh: 0, pdl: 0, midnightOpen: 0, vwap: 0, poc: 0, cvd: 0 };
+        }
 
         // Find POC (Price with highest volume cluster)
         let poc = 0;
@@ -609,17 +689,30 @@ export class RealDataManager {
         lonOpenTime.setHours(3, 0, 0, 0);
         const lonOpenTs = lonOpenTime.getTime();
 
-        // Helper to find candle closest to a timestamp
+        // Optimized Binary Search to find candle closest to a timestamp (Critical for high-frequency Pyth updates)
         const findCandleAt = (ts) => {
+            if (!candles.length) return null;
+            let low = 0;
+            let high = candles.length - 1;
             let best = candles[0];
             let minDiff = Math.abs(candles[0].timestamp - ts);
-            for (const c of candles) {
-                const diff = Math.abs(c.timestamp - ts);
+
+            while (low <= high) {
+                const mid = Math.floor((low + high) / 2);
+                const diff = Math.abs(candles[mid].timestamp - ts);
+                
                 if (diff < minDiff) {
                     minDiff = diff;
-                    best = c;
+                    best = candles[mid];
                 }
-                if (c.timestamp > ts && diff > minDiff) break;
+
+                if (candles[mid].timestamp < ts) {
+                    low = mid + 1;
+                } else if (candles[mid].timestamp > ts) {
+                    high = mid - 1;
+                } else {
+                    return candles[mid];
+                }
             }
             return best;
         };
@@ -656,20 +749,20 @@ export class RealDataManager {
         const callWall = Math.ceil(stock.currentPrice / interval) * interval;
         const putWall = Math.floor(stock.currentPrice / interval) * interval;
 
-        return {
+        const result = {
             pdh: stock.pdh || 0,
             pdl: stock.pdl || 0,
             pdc: stock.previousClose || 0,
             todayHigh,
             todayLow,
             midnightOpen,
-            nyOpen: findCandleAt(nyOpenTs).open,
-            londonOpen: findCandleAt(lonOpenTs).open,
+            nyOpen: findCandleAt(nyOpenTs)?.open || 0,
+            londonOpen: findCandleAt(lonOpenTs)?.open || 0,
             vwap: vwapMetrics.vwap,
             vwapStdev: vwapMetrics.stdev,
             callWall,
             putWall,
-            poc: poc || candles[0].close,
+            poc: poc || (candles[0] ? candles[0].close : 0),
             cvd: stock.cvd,
             netWhaleFlow: stock.netWhaleFlow || 0,
             whaleImbalance: (stock.whaleBuyVol + stock.whaleSellVol > 0) ?
@@ -678,6 +771,8 @@ export class RealDataManager {
             adr,
             radar: this.getInstitutionalRadar(symbol, tf)
         };
+        if (symbol === 'SPY') console.log(`[DATA] Markers for SPY @ ${tf}: MO: ${result.midnightOpen}, PDH: ${result.pdh}, VWAP: ${result.vwap}`);
+        return result;
     }
 
     getInstitutionalRadar(symbol, tf) {

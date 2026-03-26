@@ -22,7 +22,7 @@ export class NewsService {
         try {
             const results = await Promise.all(this.symbols.map(async (sym) => {
                 try {
-                    const result = await yahooFinance.search(sym, { newsCount: 2 });
+                    const result = await yahooFinance.search(sym, { newsCount: 2 }, { validate: false });
                     return result.news || [];
                 } catch (e) {
                     return [];

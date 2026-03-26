@@ -8,6 +8,20 @@ const logoutBtn = document.getElementById('logout-btn');
 const googleLoginBtn = document.getElementById('google-login-btn');
 
 async function initAuth() {
+    // SUPPRESS: Clock Sync for Institutional Terminal
+    setInterval(() => {
+        const nyClock = document.getElementById('ny-clock');
+        if (nyClock) {
+            nyClock.innerText = new Date().toLocaleTimeString('en-US', { 
+                timeZone: 'America/New_York', 
+                hour12: false, 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            }) + ' EST';
+        }
+    }, 1000);
+
     try {
         const response = await fetch('/api/config');
         const config = await response.json();
@@ -20,101 +34,81 @@ async function initAuth() {
         supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
 
         const { data: { session } } = await supabaseClient.auth.getSession();
-        
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-        // If no session and not on landing page, show login (bypass for localhost)
         if (!session && !window.location.pathname.includes('landing') && !isLocalhost) {
-            loginOverlay.style.display = 'flex';
+            if (loginOverlay) loginOverlay.style.display = 'flex';
             if (logoutBtn) logoutBtn.style.display = 'none';
-            document.body.style.overflow = 'hidden';
-        } else if (isLocalhost && !session) {
-            console.log("[AUTH] Running locally, bypassing login screen.");
-            loginOverlay.style.display = 'none';
-            if (logoutBtn) logoutBtn.style.display = 'none';
-            document.body.style.overflow = 'auto';
         } else if (session) {
-            console.log("[AUTH] Verified Identity:", session.user.email);
-            
-            // Verify Subscription Tier (DISABLED TEMPORARILY)
-            /*
-            if (!window.location.pathname.includes('index')) {
-                const { data: profile } = await supabaseClient.from('profiles').select('tier, subscription_status').eq('id', session.user.id).single();
-                if(!profile || profile.subscription_status !== 'active') {
-                    alert('You do not have an active institutional subscription. Please select a plan.');
-                    window.location.href = '/index.html#pricing';
-                    return;
-                }
-            }
-            */
-
-            loginOverlay.style.display = 'none';
+            if (loginOverlay) loginOverlay.style.display = 'none';
             if (logoutBtn) logoutBtn.style.display = 'block';
-            document.body.style.overflow = 'auto';
         }
 
         supabaseClient.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_IN') {
-                loginOverlay.style.display = 'none';
-                logoutBtn.style.display = 'block';
-                document.body.style.overflow = 'auto';
+                if (loginOverlay) loginOverlay.style.display = 'none';
+                if (logoutBtn) logoutBtn.style.display = 'block';
             } else if (session === null && !isLocalhost) {
-                loginOverlay.style.display = 'flex';
-                logoutBtn.style.display = 'none';
-                document.body.style.overflow = 'hidden';
+                if (loginOverlay) loginOverlay.style.display = 'flex';
+                if (logoutBtn) logoutBtn.style.display = 'none';
             }
         });
 
-        logoutBtn.onclick = async () => {
-            await supabaseClient.auth.signOut();
-            window.location.reload();
-        };
+        if (logoutBtn) {
+            logoutBtn.onclick = async () => {
+                await supabaseClient.auth.signOut();
+                window.location.reload();
+            };
+        }
 
-        googleLoginBtn.onclick = async () => {
-            console.log("[AUTH] Initiating Institutional Google Login...");
-            // Ensure we return specifically to the terminal after login
-            const redirectUrl = window.location.origin + '/terminal.html';
-            await supabaseClient.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: redirectUrl
-                }
-            });
-        };
-
+        if (googleLoginBtn) {
+            googleLoginBtn.onclick = async () => {
+                const redirectUrl = window.location.origin + '/terminal.html';
+                await supabaseClient.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: { redirectTo: redirectUrl }
+                });
+            };
+        }
     } catch (e) {
         console.error("[AUTH] Error initializing identity service:", e);
     }
 }
 initAuth();
 
+// Real-time Event Listeners
 socket.on('whale_alert', (block) => {
-    audioHooter.playWhale();
+    if (typeof audioHooter !== 'undefined' && audioHooter.playWhale) audioHooter.playWhale();
     showToast(`🐋 WHALE ALERT: ${block.symbol} | $${(block.value / 1000000).toFixed(2)}M Block!`);
-    const card = document.querySelector('.sidebar section:nth-child(4)'); // Block Feed card
+    const card = document.querySelector('.sidebar section:nth-child(4)');
     if (card) {
         card.classList.add('whale-flash');
         setTimeout(() => card.classList.remove('whale-flash'), 5000);
     }
 });
+
 socket.on('holy_grail', (data) => {
     showToast(`🔥 HOLY GRAIL SIGNAL: ${data.symbol} 🔥`, 'toast-grail');
-    if (typeof voiceNarrator !== 'undefined') voiceNarrator.speak(`Alert. Holy Grail signal detected on ${data.symbol}. All engines aligned.`);
+    if (typeof voiceNarrator !== 'undefined' && voiceNarrator.speak) voiceNarrator.speak(`Alert. Holy Grail signal detected on ${data.symbol}. All engines aligned.`);
 });
 
-
-// News Ticker Listener
 socket.on('news_update', (data) => {
+    const newsEl = document.getElementById('news-ticker-render');
+    if (newsEl && data.news && data.news.length > 0) {
+        newsEl.innerText = data.news.map(n => `[${n.source}] ${n.title}`).join(' • ');
+    }
+});
 
-// GLOBAL SCALPER PULSE LISTENER
-socket.on('scalper_pulse', (data) => {
-    console.log('[CLIENT] Scalper pulse received:', data);
+socket.on('scalper_pulse', (updData) => {
     const list = document.getElementById('scalper-scan-list');
-    if (!list || !data.updates) return;
-    data.updates.forEach(upd => {
-        let existing = document.getElementById('scan-' + upd.symbol);
+    if (!list || !updData.updates) return;
+    updData.updates.forEach(upd => {
+        const isReload = upd.isReload;
         const isHighConviction = upd.isHighConviction || upd.alignedCount >= 3;
-        const alignFlare = isHighConviction ? 'border-right: 3px solid #ff9d00; box-shadow: inset 0 0 10px rgba(255,157,0,0.05);' : '';
+        let styleStr = `padding: 0.6rem; border-bottom: 2px solid rgba(255,255,255,0.03); display: flex; justify-content: space-between; align-items: center; border-left: 3px solid ${upd.color}; transition: all 0.3s ease;`;
+        
+        if (isReload) styleStr += ' background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4); animation: pulse-opacity 1s infinite alternate;';
+        if (isHighConviction) styleStr += ' border-right: 3px solid #ff9d00; box-shadow: inset 0 0 10px rgba(255,157,0,0.1);';
 
         if (existing) {
             const velEl = existing.querySelector('.velocity-val');
@@ -122,37 +116,37 @@ socket.on('scalper_pulse', (data) => {
             if (velEl) { velEl.innerText = 'VEL: ' + upd.velocity; velEl.style.color = upd.color; }
             if (sigEl) { 
                 sigEl.innerText = upd.signal; 
-                sigEl.style.color = isHighConviction ? 'var(--gold)' : '#94a3b8';
+                sigEl.style.color = (isHighConviction || isReload) ? (isReload ? 'var(--bullish)' : 'var(--gold)') : '#94a3b8';
             }
-            existing.style.borderLeftColor = upd.color;
-            if (isHighConviction) existing.style.cssText += alignFlare;
+            existing.style.cssText = styleStr;
             return;
         }
         const row = document.createElement('div');
         row.id = 'scan-' + upd.symbol;
-        row.style.cssText = 'padding: 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; justify-content: space-between; align-items: center; cursor: pointer; border-left: 2px solid ' + upd.color + ';' + alignFlare;
+        row.style.cssText = styleStr;
         row.onclick = () => { socket.emit('switch_symbol', upd.symbol); };
         
         const leftDiv = document.createElement('div');
         const symDiv = document.createElement('div');
-        symDiv.style.cssText = 'font-size: 0.75rem; font-weight: 900; color: #fff;';
+        symDiv.style.cssText = 'font-size: 0.75rem; font-weight: 950; color: #fff; letter-spacing: 0.5px;';
         symDiv.innerText = upd.symbol;
-        if (isHighConviction) symDiv.innerHTML += ' <span style="color:var(--gold); font-size:0.5rem;">🔥</span>';
+        if (isHighConviction) symDiv.innerHTML += ' <span style="color:var(--gold); font-size:0.55rem;">⚡</span>';
+        if (isReload) symDiv.innerHTML += ' <span style="color:var(--bullish); font-size:0.45rem; background:rgba(0,0,0,0.4); padding: 1px 4px; border-radius: 2px;">RELOADING</span>';
         
         const sigDiv = document.createElement('div');
         sigDiv.className = 'signal-val';
-        sigDiv.style.cssText = 'font-size: 0.5rem; color: ' + (isHighConviction ? 'var(--gold)' : '#94a3b8') + '; font-weight: 700;';
+        sigDiv.style.cssText = 'font-size: 0.5rem; color: ' + (isHighConviction ? 'var(--gold)' : (isReload ? 'var(--bullish)' : '#94a3b8')) + '; font-weight: 700;';
         sigDiv.innerText = upd.signal;
         leftDiv.appendChild(symDiv); leftDiv.appendChild(sigDiv);
         const rightDiv = document.createElement('div');
         rightDiv.style.textAlign = 'right';
         const velDiv = document.createElement('div');
         velDiv.className = 'velocity-val';
-        velDiv.style.cssText = 'font-size: 0.6rem; font-weight: 900; color: ' + upd.color;
+        velDiv.style.cssText = 'font-size: 0.6rem; font-weight: 950; color: ' + upd.color;
         velDiv.innerText = 'VEL: ' + upd.velocity;
         const liveDiv = document.createElement('div');
-        liveDiv.style.cssText = 'font-size: 0.45rem; color: #94a3b8;';
-        liveDiv.innerText = 'LIVE';
+        liveDiv.style.cssText = 'font-size: 0.45rem; color: #94a3b8; font-weight: 800;';
+        liveDiv.innerText = isReload ? 'RELOADING...' : 'LIVE';
         rightDiv.appendChild(velDiv); rightDiv.appendChild(liveDiv);
         row.appendChild(leftDiv); row.appendChild(rightDiv);
         if (list.firstChild && list.firstChild.innerText && list.firstChild.innerText.includes('INITIALIZING')) { list.innerHTML = ''; }
@@ -160,14 +154,8 @@ socket.on('scalper_pulse', (data) => {
         if (list.children.length > 8) list.removeChild(list.lastChild);
     });
 });
-    const newsEl = document.getElementById('news-ticker-render');
-    if (newsEl && data.news && data.news.length > 0) {
-        const newsString = data.news.map(n => `[${n.source}] ${n.title}`).join(' • ');
-        newsEl.innerText = newsString;
-    }
-});
 
-// DOM elements
+// DOM pointers
 const priceEl = document.getElementById('current-price');
 const changeEl = document.getElementById('price-change');
 const biasLabel = document.getElementById('bias-label');
@@ -669,9 +657,50 @@ function updateInstitutionalRadar(data) {
         setTimeout(() => { pulseServerSync.style.opacity = 0; }, 500);
     }
 
-    const radar = data.institutionalRadar;
-    const bias = data.bias;
-    const po3 = data.po3;
+    const dxyAnchorBadge = document.getElementById('dxy-anchor-badge');
+    if (dxyAnchorBadge && data.markers?.dxy) {
+        try {
+            dxyAnchorBadge.innerText = `DXY ANCHOR: ${data.markers.dxy.toFixed(2)}`;
+            dxyAnchorBadge.style.color = data.markers.dxy > 103.5 ? 'var(--bearish)' : 'var(--bullish)';
+        } catch(e) {}
+    }
+
+    const hudDxy = document.getElementById('hud-dxy-status');
+    const hudSmt = document.getElementById('hud-smt-status');
+    if (hudDxy) hudDxy.querySelector('.val').innerText = (data.markers?.dxy || 0).toFixed(2);
+    if (hudSmt) hudSmt.querySelector('.val').innerText = data.institutionalRadar?.smt ? data.institutionalRadar.smt.type : 'STABLE';
+    
+    const radar = data.markers?.radar || data.institutionalRadar || {};
+    const bias = data.bias || {};
+
+    const radarIrScore = document.getElementById('radar-ir-score');
+    const radarSessionName = document.getElementById('radar-session-name');
+    const radarSessionTimer = document.getElementById('radar-session-timer');
+    const radarRealityText = document.getElementById('radar-reality-text');
+    const radarSmtStatus = document.getElementById('radar-smt-status');
+    const radarGammaStatus = document.getElementById('radar-gamma-status');
+
+    // 0. Pyth Precision Meter (Improvement 1)
+    const confBar = document.getElementById('confidence-bar');
+    const confGlow = document.getElementById('confidence-glow');
+    if (confBar && data.priceDiscordance !== undefined) {
+        const disc = data.priceDiscordance; // BPS
+        const precision = Math.max(5, 100 - (disc * 2.5)); // 0 bps = 100%, 40 bps = 0%
+        confBar.style.width = `${precision}%`;
+        
+        if (precision < 50) {
+            confBar.style.background = 'var(--bearish)';
+            confBar.style.boxShadow = '0 0 15px var(--bearish)';
+            confGlow?.classList.add('confidence-glow-red');
+        } else {
+            confBar.style.background = 'var(--bullish)';
+            confBar.style.boxShadow = '0 0 10px var(--bullish)';
+            confGlow?.classList.remove('confidence-glow-red');
+        }
+    }
+
+    const radarSessionBox = document.getElementById('radar-session-box');
+    const po3 = data.po3 || data.markers?.radar?.po3;
     const watchlist = data.watchlist || [];
     if (!radar) return;
 
@@ -729,9 +758,12 @@ function updateInstitutionalRadar(data) {
     }
 
     // 1. IR Score
-    if (radarIrScore) {
-        radarIrScore.innerText = Math.round(radar.irScore);
-        radarIrScore.style.color = radar.irScore > 75 ? 'var(--bullish)' : (radar.irScore < 40 ? 'var(--bearish)' : '#fff');
+    if (radarIrScore && radar) {
+        try {
+            const score = Math.round(radar.irScore || 0);
+            radarIrScore.innerText = score.toString().padStart(2, '0');
+            radarIrScore.style.color = score > 75 ? 'var(--bullish)' : (score < 40 ? 'var(--bearish)' : '#fff');
+        } catch(e) {}
     }
 
     // 2. Killzone
@@ -997,8 +1029,9 @@ function updateChartOverlays(data) {
     };
 
     // --- Institutional Priority System ---
-    addLevel(m.midnightOpen, '#38bdf8', 1, 'MID OPEN', 10);
-    addLevel(m.nyOpen, '#10b981', 2, 'NY OPEN', 9);
+    // Weights: 100 = Thickest/Most Important
+    addLevel(m.midnightOpen, '#38bdf8', 1, 'MID OPEN', 100);
+    addLevel(m.nyOpen, '#10b981', 1, 'NY OPEN', 90);
     addLevel(m.pdh, 'rgba(255, 255, 255, 0.7)', 1, 'PDH', 8);
     addLevel(m.pdl, 'rgba(255, 255, 255, 0.7)', 1, 'PDL', 8);
     addLevel(m.vwap, '#f59e0b', 0, 'VWAP', 7);
@@ -1111,7 +1144,7 @@ function updateChartOverlays(data) {
         const line = candleSeries.createPriceLine({
             price: lvl.price,
             color: lvl.color,
-            lineWidth: 1,
+            lineWidth: (lvl.weight && lvl.weight >= 90) ? 2 : 1,
             lineStyle: lvl.style,
             title: showLabel ? lvl.title : '',
             axisLabelVisible: showLabel,
@@ -1126,58 +1159,27 @@ function updateChartOverlays(data) {
     const nyTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 30, 0).getTime() / 1000;
 
     const allMarkers = [];
+    const scalperVelocity = document.getElementById('scalper-velocity-val');
+    const scalperResult = document.getElementById('scalper-scan-result');
 
-    // --- Time Markers (Kill Zones) ---
-    allMarkers.push({ time: midnightTs, position: 'belowBar', color: 'rgba(56, 189, 248, 0.4)', shape: 'arrowUp', text: 'MIDNIGHT' });
-    allMarkers.push({ time: londonTs, position: 'belowBar', color: 'rgba(139, 92, 246, 0.4)', shape: 'arrowUp', text: 'LONDON' });
-    allMarkers.push({ time: nyTs, position: 'belowBar', color: 'rgba(16, 185, 129, 0.4)', shape: 'arrowUp', text: 'NY OPEN' });
-
-    // --- Sweep Markers ---
-    if (data.sweeps && data.sweeps.length > 0) {
-        data.sweeps.forEach(s => {
-            allMarkers.push({
-                time: Math.floor(s.timestamp / 1000),
-                position: s.type.includes('BSL') ? 'aboveBar' : 'belowBar',
-                color: s.type.includes('BSL') ? '#ef4444' : '#22c55e',
-                shape: s.type.includes('BSL') ? 'arrowDown' : 'arrowUp',
-                text: 'SWEEP'
-            });
-        });
+    if (data.scalpScan && scalperOverlay) {
+        scalperOverlay.style.display = 'block';
+        if (scalperVelocity) scalperVelocity.innerText = data.scalpScan.velocity;
+        if (scalperResult) {
+            scalperResult.innerText = data.scalpScan.signal;
+            scalperResult.style.color = data.scalpScan.color;
+        }
+    } else if (scalperOverlay) {
+        scalperOverlay.style.display = 'none';
     }
-
-    // 5. MSS (Market Structure Shift)
-    if (data.bias && data.bias.mss) {
-        allMarkers.push({
-            time: Math.floor(data.bias.mss.timestamp / 1000),
-            position: data.bias.mss.type.includes('BULLISH') ? 'belowBar' : 'aboveBar',
-            color: '#a855f7',
-            shape: 'circle',
-            text: 'MSS'
-        });
-    }
-
-    // 6. FUNDING CANDLE (Institutional Injection)
-    if (data.bias && data.bias.fundingCandle) {
-        allMarkers.push({
-            time: Math.floor(data.bias.fundingCandle.timestamp / 1000),
-            position: 'inBar',
-            color: '#f43f5e',
-            shape: 'square',
-            text: 'FUND'
-        });
-    }
-
-    // Sort markers by time and apply
-    allMarkers.sort((a, b) => a.time - b.time);
-    candleSeries.setMarkers(allMarkers);
 }
 
-// Legacy initChart removed. Using initChartInstance and setChartData now.
 
 socket.on('init', (data) => {
     console.log(`[SOCKET] Received init for ${data.symbol}`);
     setChartData(data.candles || []);
     updateUI(data);
+    if (data.watchlist) updateWatchlist(data);
     const btnManualScan = document.getElementById('btn-manual-scan');
     if (btnManualScan) {
         btnManualScan.onclick = (e) => {
@@ -1196,8 +1198,8 @@ socket.on('init', (data) => {
 });
 
 socket.on('update', (data) => {
-    // console.log('[SOCKET] Update received:', data.symbol, data.institutionalRadar ? 'RADAR OK' : 'NO RADAR');
     updateUI(data);
+    if (data.watchlist) updateWatchlist(data);
     const btnManualScan = document.getElementById('btn-manual-scan');
     if (btnManualScan) {
         btnManualScan.onclick = (e) => {
@@ -1230,18 +1232,6 @@ socket.on('update', (data) => {
 
 socket.on('tf_updated', (data) => {
     console.log(`[SOCKET] TF Updated: ${data.timeframe}, candles: ${data.candles?.length}`);
-    updateUI(data); // CRITICAL: Update the whole HUD and overlays when TF changes
-    const btnManualScan = document.getElementById('btn-manual-scan');
-    if (btnManualScan) {
-        btnManualScan.onclick = (e) => {
-            console.log('[CLIENT] EMITTING manual_scan_trigger');
-            socket.emit('manual_scan_trigger');
-            e.stopPropagation();
-            btnManualScan.innerText = 'SCANNING...';
-            socket.emit('manual_scan');
-            setTimeout(() => { btnManualScan.innerText = 'SCAN NOW'; }, 2000);
-        };
-    }
     if (data.candles && candleSeries) {
         const seenTs = new Set();
         const formattedData = data.candles
@@ -1268,1075 +1258,315 @@ socket.on('tf_updated', (data) => {
         }
     }
     if (data.watchlist) updateWatchlist(data);
-        if (typeof updateIntelTicker === "function") updateIntelTicker(data);
 });
-socket.on('tf_updated', (data) => {
-    console.log(`[SOCKET] Timeframe Updated: ${data.timeframe}`);
-    if (data.candles) setChartData(data.candles);
-    updateUI(data);
-});
-socket.on('symbol_updated', (data) => {
-    console.log(`[SOCKET] Symbol Updated: ${data.symbol}`);
-    setChartData(data.candles || []);
-    updateUI(data);
-    const btnManualScan = document.getElementById('btn-manual-scan');
-    if (btnManualScan) {
-        btnManualScan.onclick = (e) => {
-            console.log('[CLIENT] EMITTING manual_scan_trigger');
-            socket.emit('manual_scan_trigger');
-            e.stopPropagation();
-            btnManualScan.innerText = 'SCANNING...';
-            socket.emit('manual_scan');
-            setTimeout(() => { btnManualScan.innerText = 'SCAN NOW'; }, 2000);
-        };
-    }
-});
-
-socket.on('watchlist_updated', (data) => {
-    console.log(`[SOCKET] Global Watchlist Updated: ${data.watchlist?.length || 0} symbols`);
-    updateWatchlist(data);
-});
-
-socket.on('price_update', (data) => {
-    if (data.symbol === document.getElementById('symbol-display')?.innerText) {
-        // Update Main Price
-        if (priceEl && data.price) {
-            const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
-            const newPrice = data.price;
-            
-            if (lastPrice > 0) {
-                const priceContainer = priceEl.parentElement;
-                priceContainer.classList.remove('flash-up', 'flash-down');
-                void priceContainer.offsetWidth;
-                if (newPrice > lastPrice) priceContainer.classList.add('flash-up');
-                else if (newPrice < lastPrice) priceContainer.classList.add('flash-down');
-            }
-            lastPrice = newPrice;
-            priceEl.innerText = newPrice.toLocaleString(undefined, {
-                minimumFractionDigits: isFX ? 4 : 2,
-                maximumFractionDigits: isFX ? 5 : 2
-            });
-        }
-        
-        // Update Change
-        if (changeEl && data.change != null) {
-            changeEl.innerText = `${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}%`;
-            changeEl.className = 'main-change ' + (data.change >= 0 ? 'bullish-text' : 'bearish-text');
-        }
-        
-        // Update Candle
-        if (candleSeries && data.candle) {
-            const c = data.candle;
-            try {
-                candleSeries.update({
-                    time: Math.floor(c.timestamp / 1000),
-                    open: Number(c.open),
-                    high: Number(c.high),
-                    low: Number(c.low),
-                    close: Number(c.close)
-                });
-            } catch (e) {}
-        }
-    }
-
-    // --- REAL-TIME WATCHLIST TICKER SYNC ---
-    const tickerItem = document.querySelector(`.ticker-card[data-symbol="${data.symbol}"]`);
-    if (tickerItem) {
-        const pEl = tickerItem.querySelector('.ticker-price');
-        const cEl = tickerItem.querySelector('.ticker-meta span:first-child');
-        const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
-        
-        if (pEl && data.price) {
-            const oldPriceText = pEl.innerText.replace('$', '').replace(',', '');
-            const oldPrice = parseFloat(oldPriceText);
-            pEl.innerText = `$${data.price.toFixed(isFX ? 4 : 2)}`;
-            
-            // Pulse effect
-            tickerItem.classList.remove('pulse-up', 'pulse-down');
-            void tickerItem.offsetWidth;
-            if (data.price > oldPrice) tickerItem.classList.add('pulse-up');
-            else if (data.price < oldPrice) tickerItem.classList.add('pulse-down');
-            setTimeout(() => tickerItem.classList.remove('pulse-up', 'pulse-down'), 800);
-        }
-        
-        if (cEl && data.change != null) {
-            cEl.innerText = `${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}%`;
-            cEl.style.color = data.change >= 0 ? 'var(--bullish)' : 'var(--bearish)';
-        }
-    }
-});
-
-// --- UI UPDATE CORE ---
 
 function updateUI(data) {
     if (!data) return;
+    window.latestInstitutionalData = data; // Global store for execution guard (Improvement 3)
     try {
-        // console.log('[UI] Updating components for', data.symbol);
+        const symbol = data.symbol || 'SPY';
+        const isFX = symbol.includes('=X') || symbol.includes('USD');
+        const precision = isFX ? 4 : 2;
 
-        const isFX = data.symbol?.includes('=X') || data.symbol?.includes('USD');
-        const precision = isFX ? 5 : 2;
-
-        const btnManualScan = document.getElementById('btn-manual-scan');
-        if (btnManualScan) {
-            btnManualScan.onclick = (e) => {
-                console.log('[CLIENT] EMITTING manual_scan_trigger');
-                socket.emit('manual_scan_trigger');
-                e.stopPropagation();
-                btnManualScan.innerText = 'SCANNING...';
-                socket.emit('manual_scan');
-                setTimeout(() => { btnManualScan.innerText = 'SCAN NOW'; }, 2000);
-            };
-        }
-        if (data.watchlist) updateWatchlist(data);
-
-        // --- ELITE: DXY MASTER ANCHOR SYNC ---
-        const dxyBadge = document.getElementById('dxy-anchor-badge');
-        if (dxyBadge && data.bias && data.bias.dxyAnchor) {
-            const anchor = data.bias.dxyAnchor;
-            const al = anchor.alignment || 'NEUTRAL';
-            dxyBadge.innerText = `DXY ANCHOR: ${al.replace('_', ' ')}`;
-            dxyBadge.style.color = (al === 'INSTITUTIONAL_SYNC' || al === 'CONCORDANT') ? '#10b981' : (al === 'CORRELATION_TRAP' ? '#f43f5e' : '#94a3b8');
-        }
-
-        // Protocol Update
-        updateProtocolStatus(data);
-
-        // ELITE SCALPER SCAN UPDATE
-        const scalperScanList = document.getElementById('scalper-scan-list');
-        if (scalperScanList && data.scalpScan) {
-            const row = document.createElement('div');
-            row.style.cssText = 'padding: 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; justify-content: space-between; align-items: center; border-left: 2px solid ' + data.scalpScan.color;
-
-            const left = document.createElement('div');
-            const ticker = document.createElement('div');
-            ticker.style.cssText = 'font-size: 0.75rem; font-weight: 900; color: #fff; font-family: var(--font-data);';
-            ticker.innerText = data.symbol;
-            const signal = document.createElement('div');
-            signal.style.cssText = 'font-size: 0.5rem; color: #94a3b8; font-weight: 700;';
-            signal.innerText = data.scalpScan.signal;
-            left.appendChild(ticker); left.appendChild(signal);
-
-            const right = document.createElement('div');
-            const velocity = document.createElement('div');
-            velocity.style.cssText = 'font-size: 0.6rem; text-align: right; font-weight: 900; color: ' + data.scalpScan.color;
-            velocity.innerText = 'VEL: ' + data.scalpScan.velocity;
-            const time = document.createElement('div');
-            time.style.cssText = 'font-size: 0.45rem; text-align: right; color: #94a3b8;';
-            time.innerText = new Date().toLocaleTimeString();
-            right.appendChild(velocity); right.appendChild(time);
-
-            row.appendChild(left); row.appendChild(right);
-
-            if (scalperScanList.firstChild && scalperScanList.firstChild.innerText && scalperScanList.firstChild.innerText.includes('INITIALIZING')) { scalperScanList.innerHTML = ''; }
-            scalperScanList.prepend(row);
-            if (scalperScanList.children.length > 5) scalperScanList.removeChild(scalperScanList.lastChild);
-        }
-
-        // Refresh Institutional Chart Overlays
-        updateChartOverlays(data);
-
-        // Update Chart Precision based on Asset Class
-        if (candleSeries) {
-            const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
-            candleSeries.applyOptions({
-                priceFormat: {
-                    type: 'price',
-                    precision: isFX ? 5 : 2,
-                    minMove: isFX ? 0.00001 : 0.01,
-                }
-            });
-        }
-
-        // --- INSTITUTIONAL HUD REFINEMENTS ---
-        const hudDxy = document.getElementById('hud-dxy-status');
-        const hudSmt = document.getElementById('hud-smt-status');
-        const hud = document.getElementById('institutional-hud');
-        if (hudDxy && data.forexRadar) {
-            const valEl = hudDxy.querySelector('.val');
-            if (valEl) {
-                valEl.innerText = data.forexRadar.isInverseDxy ? 'MAX SYNC (INVERSE)' : 'UNSTABLE';
-                valEl.style.color = data.forexRadar.isInverseDxy ? 'var(--bullish)' : 'var(--text-dim)';
-            }
-        }
-        if (hudSmt && data.institutionalRadar) {
-            const smt = data.institutionalRadar.smt;
-            const valEl = hudSmt.querySelector('.val');
-            if (valEl) {
-                valEl.innerText = smt ? `${smt.symbol} (${smt.type})` : 'STABLE';
-                valEl.style.color = smt ? 'var(--gold)' : 'var(--text-dim)';
-            }
-        }
-        if (hud) {
-            const isFX_HUD = data.symbol.includes('=X') || data.symbol.includes('USD');
-            const hasSmt = data.institutionalRadar && data.institutionalRadar.smt;
-            hud.style.display = (isFX_HUD || hasSmt) ? 'flex' : 'none';
-        }
-
-        const kzCountdown = document.getElementById('killzone-countdown');
-        if (kzCountdown && data.session) {
-            const now = new Date();
-            const nyTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-            const currentMin = (nyTime.getHours() * 60) + nyTime.getMinutes();
-            const targets = [ { name: 'LONDON', min: 180 }, { name: 'NY OPEN', min: 570 }, { name: 'SILVER', min: 600 }, { name: 'NY PM', min: 810 }, { name: 'ASIA', min: 1140 } ];
-            let next = targets.find(t => t.min > currentMin);
-            if (!next) next = targets[0];
-            let diff = next.min - currentMin;
-            if (diff < 0) diff += 1440;
-            kzCountdown.innerText = `NEXT: ${next.name} (${Math.floor(diff / 60)}h ${diff % 60}m)`;
-        }
-
-        const btnFocus = document.getElementById('btn-focus-mode');
-        if (btnFocus && !btnFocus.onclick) {
-            btnFocus.onclick = () => {
-                document.body.classList.toggle('focus-desk');
-                const isF = document.body.classList.contains('focus-desk');
-                btnFocus.innerText = isF ? 'FOCUS: ON' : 'FOCUS: OFF';
-            };
-        }
-
-        if (typeof updateBlueprint === 'function') updateBlueprint(data);
-        if (typeof updateSpiderMatrix === 'function') updateSpiderMatrix(data);
+        // 1. --- MAIN HUD UPDATES ---
+        const priceEl = document.getElementById('current-price');
+        const changeEl = document.getElementById('price-change');
+        const confluenceScoreEl = document.getElementById('master-confluence-score');
         const symbolDisplay = document.getElementById('symbol-display');
-        if (symbolDisplay) symbolDisplay.innerText = data.symbol || 'SPY';
 
-        // --- WHALE TAPE REAL-TIME FEED (RESTORED) ---
-        if (whaleTickerScroll && data.blockTrades && data.blockTrades.length > 0) {
-            const newestBlock = data.blockTrades[0];
-            const newestId = `${newestBlock.symbol}_${newestBlock.value}_${newestBlock.time}`;
-            if (whaleTickerScroll.dataset.lastId !== newestId) {
-                whaleTickerScroll.dataset.lastId = newestId;
-                whaleTickerScroll.innerHTML = data.blockTrades.map(b => `
-                    <div class="ticker-item">
-                        <span class="ticker-sym" style="font-size: 0.75rem;">${b.symbol}</span>
-                        <span class="${b.isElite ? 'ticker-val-gold' : b.type === 'BULLISH' ? 'ticker-val-bull' : 'ticker-val-bear'}" style="font-weight: 800; font-family: 'JetBrains Mono', monospace;">
-                            $${(b.value / 1000).toFixed(0)}k @ ${b.price.toFixed(b.symbol.includes('=X') ? 4 : 2)}
-                        </span>
-                        <span style="opacity: 0.4; font-size: 0.55rem; font-family: 'JetBrains Mono', monospace;">[${b.time}]</span>
-                    </div>
-                `).join(' <span style="opacity:0.2;">GÇó</span> ');
+        if (priceEl) {
+            const price = data.currentPrice || 0;
+            priceEl.innerText = price > 0 ? price.toFixed(precision) : '---';
+            
+            // 1a. --- SUB-SECOND TICK FLASH ---
+            if (typeof lastPrice !== 'undefined' && lastPrice !== price && price > 0) {
+                const container = priceEl.parentElement;
+                container.classList.remove('flash-up', 'flash-down');
+                void container.offsetWidth; 
+                container.classList.add(price > lastPrice ? 'flash-up' : 'flash-down');
             }
-        }
- 
-        // Market Status
-        if (data.session) {
-            const sessionText = document.getElementById('market-session-text');
-            const sessionDot = document.getElementById('market-status-dot');
-            if (sessionText) sessionText.innerText = `${data.session.session} SESSION: ${data.session.status}`;
-            if (sessionDot) sessionDot.style.background = data.session.color;
+
+            // 1b. --- DXY CORRELATION GLOW ---
+            const dxyFlash = (data.markers?.dxy || 0) - (data.markers?.dxyPrev || data.markers?.dxy || 0);
+            const priceContainer = priceEl.parentElement;
+            if (priceContainer && Math.abs(dxyFlash) > 0.001) {
+                priceContainer.classList.remove('dxy-glow-bull', 'dxy-glow-bear');
+                void priceContainer.offsetWidth; 
+                const glowClass = dxyFlash > 0 ? 'dxy-glow-bear' : 'dxy-glow-bull';
+                priceContainer.classList.add(glowClass);
+            }
+            
+            window.lastPrice = price;
         }
 
-        if (data.loading) {
-            if (priceEl) priceEl.innerText = 'FETCHING...';
-        } else {
-            // Price & Change
-            if (priceEl && data.currentPrice) {
-                const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
-                const newPrice = data.currentPrice;
+        if (changeEl) {
+            const dc = data.dailyChangePercent !== undefined ? data.dailyChangePercent : (data.priceChange || 0);
+            changeEl.innerText = `${dc >= 0 ? '+' : ''}${dc.toFixed(2)}%`;
+            changeEl.className = 'main-change ' + (dc >= 0 ? 'bullish-text' : 'bearish-text');
+        }
 
-                // Stale Data Check (visual only, alert if last update > 60s)
-                const isStale = data.timestamp && (Date.now() - data.timestamp > 60000);
-                priceEl.classList.toggle('stale-label', !!isStale);
+        if (confluenceScoreEl) {
+            const score = Math.round(data.confluenceScore || 0);
+            confluenceScoreEl.innerText = `${score}%`;
+            confluenceScoreEl.style.color = score >= 70 ? 'var(--bullish)' : (score <= 30 ? 'var(--bearish)' : 'var(--gold)');
+        }
 
-                // Flash effect
-                if (lastPrice > 0 && !isStale) {
-                    const priceContainer = priceEl.parentElement;
-                    priceContainer.classList.remove('flash-up', 'flash-down');
-                    void priceContainer.offsetWidth; // Trigger reflow
-                    if (newPrice > lastPrice) priceContainer.classList.add('flash-up');
-                    else if (newPrice < lastPrice) priceContainer.classList.add('flash-down');
-                }
-                lastPrice = newPrice;
+        if (symbolDisplay) symbolDisplay.innerText = symbol;
 
-                priceEl.innerText = newPrice.toLocaleString(undefined, {
-                    minimumFractionDigits: isFX ? 4 : 2,
-                    maximumFractionDigits: isFX ? 5 : 2
-                });
+        // 2. --- INSTITUTIONAL RADAR & BIAS ---
+        const radar = data.markers?.radar || data.institutionalRadar || {};
+        const radarIrScore = document.getElementById('radar-ir-score');
+        const radarSessionName = document.getElementById('radar-session-name');
+        const radarSessionTimer = document.getElementById('radar-session-timer');
+        const radarRealityText = document.getElementById('radar-reality-text');
+
+        if (radarIrScore) {
+            const score = Math.round(radar.irScore || 0);
+            radarIrScore.innerText = score.toString().padStart(2, '0');
+            radarIrScore.style.color = score >= 60 ? 'var(--bullish)' : (score <= 40 ? 'var(--bearish)' : '#fff');
+        }
+
+        if (radarSessionName) {
+            const kz = radar.killzone || { active: false, name: 'OFF-HOURS' };
+            radarSessionName.innerText = (kz.name || 'OFF-HOURS').replace('_', ' ');
+            radarSessionName.style.color = kz.active ? 'var(--gold)' : 'var(--text-dim)';
+            if (radarSessionTimer) radarSessionTimer.innerText = kz.active ? 'VOLATILITY ACTIVE' : 'NO VOLATILITY';
+        }
+
+        const biasData = data.bias || {};
+        const biasLabel = document.getElementById('bias-label');
+        if (biasLabel) {
+            const b = biasData.bias || 'NEUTRAL';
+            biasLabel.innerText = b;
+            biasLabel.className = 'bias-large ' + (b.includes('BULLISH') ? 'bullish-text' : b.includes('BEARISH') ? 'bearish-text' : '');
+        }
+
+        if (radarRealityText) {
+            radarRealityText.innerText = biasData.narrative || 'Synchronizing institutional pulse...';
+            const b = biasData.bias || '';
+            radarRealityText.style.borderLeftColor = b.includes('BULLISH') ? 'var(--bullish)' : (b.includes('BEARISH') ? 'var(--bearish)' : '#94a3b8');
+        }
+
+        // --- NEW: ADVANCED BADGE ENGINE ---
+        const b = biasData;
+        const m = data.markers || {};
+        const radar_active = m.radar || data.institutionalRadar || {};
+        
+        const toggleBadge = (id, show, text) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = show ? 'block' : 'none';
+                if (show && text) el.innerText = text;
             }
-            if (changeEl) {
-                const dailyChange = typeof data.dailyChangePercent === 'number' ? data.dailyChangePercent : 0;
-                changeEl.innerText = `${dailyChange >= 0 ? '+' : ''}${dailyChange.toFixed(2)}%`;
-                changeEl.className = 'main-change ' + (dailyChange >= 0 ? 'bullish-text' : 'bearish-text');
+        };
+
+        toggleBadge('amd-hud', true, radar_active.po3?.phase || b.amdPhase || 'ACCUMULATION');
+        toggleBadge('mss-badge', b.mss, 'MSS SHIFT');
+        toggleBadge('trap-badge', b.sweepDetected || b.trap || b.judas, '🔥 BEAR TRAP');
+        toggleBadge('smt-badge', m.radar?.smt || radar_active.smt, 'SMT DIVERGENCE');
+        toggleBadge('fvg-badge', b.fvg, 'BEARISH FVG');
+        toggleBadge('absorption-badge', data.absorption?.detected, 'ABSORPTION');
+        toggleBadge('squeeze-badge', m.vixStdev > 1.2, 'VOLATILITY SQUEEZE');
+        
+        const intermarket = document.getElementById('intermarket-badge');
+        if (intermarket) {
+            intermarket.style.display = 'block';
+            intermarket.innerText = `CORR: ${Math.round((data.confluenceScore || 0) * 0.8)}%`;
+        }
+
+
+        // 3. --- INSTITUTIONAL MARKERS ---
+        if (data.markers) {
+            const m = data.markers;
+            const pdhEl = document.getElementById('pdh-val');
+            const pdlEl = document.getElementById('pdl-val');
+            const midnightEl = document.getElementById('midnight-open-val');
+            const nyOpenEl = document.getElementById('ny-open-val');
+            const londonOpenEl = document.getElementById('london-open-val');
+            const vwapEl = document.getElementById('vwap-val');
+            const adrEl = document.getElementById('adr-val');
+            const callWallEl = document.getElementById('call-wall-val');
+            const putWallEl = document.getElementById('put-wall-val');
+            const cvdEl = document.getElementById('cvd-val');
+            const netWhaleVal = document.getElementById('net-whale-val');
+
+            if (pdhEl) pdhEl.innerText = (m.pdh || 0).toFixed(precision);
+            if (pdlEl) pdlEl.innerText = (m.pdl || 0).toFixed(precision);
+            if (midnightEl) midnightEl.innerText = (m.midnightOpen || 0).toFixed(precision);
+            if (nyOpenEl) nyOpenEl.innerText = (m.nyOpen || 0).toFixed(precision);
+            if (londonOpenEl) londonOpenEl.innerText = (m.londonOpen || 0).toFixed(precision);
+            if (vwapEl) vwapEl.innerText = (m.vwap || 0).toFixed(precision);
+            if (adrEl) adrEl.innerText = (m.adr || 0).toFixed(2);
+            if (callWallEl) callWallEl.innerText = (m.callWall || 0).toFixed(precision);
+            if (putWallEl) putWallEl.innerText = (m.putWall || 0).toFixed(precision);
+            if (cvdEl) {
+                const cvd = m.cvd || 0;
+                cvdEl.innerText = cvd.toLocaleString();
+                cvdEl.className = 'm-value ' + (cvd >= 0 ? 'bullish-text' : 'bearish-text');
             }
-
-            // Institutional Markers
-            if (data.markers) {
-                const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
-                const precision = isFX ? 4 : 2;
-                if (pdhEl) pdhEl.innerText = (data.markers.pdh || 0).toFixed(precision);
-                if (pdlEl) pdlEl.innerText = (data.markers.pdl || 0).toFixed(precision);
-                if (midnightEl) midnightEl.innerText = (data.markers.midnightOpen || 0).toFixed(precision);
-                if (nyOpenEl) nyOpenEl.innerText = (data.markers.nyOpen || 0).toFixed(precision);
-                if (londonOpenEl) londonOpenEl.innerText = (data.markers.londonOpen || 0).toFixed(precision);
-                if (callWallEl) callWallEl.innerText = (data.markers.callWall || 0).toFixed(precision);
-                if (putWallEl) putWallEl.innerText = (data.markers.putWall || 0).toFixed(precision);
-                if (vwapEl) vwapEl.innerText = (data.markers.vwap || 0).toFixed(precision);
-                if (pocEl) pocEl.innerText = (data.markers.poc || 0).toFixed(precision);
-                if (adrEl) adrEl.innerText = (data.markers.adr || 0).toFixed(precision);
-                if (cvdEl) {
-                    cvdEl.innerText = (data.markers.cvd || 0).toLocaleString();
-                    cvdEl.className = 'm-value ' + (data.markers.cvd >= 0 ? 'bullish-text' : 'bearish-text');
-                }
-
-                if (netWhaleVal) {
-                    const val = (data.markers.netWhaleFlow || 0) / 1000000;
-                    netWhaleVal.innerText = `$${val.toFixed(2)}M`;
-                    netWhaleVal.className = 'm-value ' + (val >= 0 ? 'bullish-text' : 'bearish-text');
-                }
-
-                // Update Whale Imbalance Bar
-                if (imbalanceBar && imbalanceText) {
-                    const imb = data.markers.whaleImbalance || 0;
-                    const buyPct = Math.round(50 + (imb / 2));
-                    const sellPct = 100 - buyPct;
-                    imbalanceBar.style.width = `${buyPct}%`;
-                    imbalanceText.innerText = `${buyPct}% BULL / ${sellPct}% BEAR`;
-                }
-
-                // Update SMT Badge
-                if (smtBadge) {
-                    if (data.markers.smt) {
-                        smtBadge.style.display = 'inline-block';
-                        smtBadge.innerText = `SMT: ${data.markers.smt.symbol} ${data.markers.smt.type}`;
-                        smtBadge.className = 'smt-badge ' + (data.markers.smt.type === 'BULLISH' ? 'success' : 'danger');
-                    } else {
-                        smtBadge.style.display = 'none';
-                    }
-                }
-
-                // Update Absorption Badge
-                if (absorptionBadge) {
-                    if (data.bias && data.bias.absorption) {
-                        absorptionBadge.style.display = 'inline-block';
-                        absorptionBadge.innerText = data.bias.absorption.type.replace('_', ' ');
-                    } else {
-                        absorptionBadge.style.display = 'none';
-                    }
-                }
-
-                // Update Market Breadth
-                if (breadthValEl && data.bias && data.bias.internals) {
-                    const breadth = data.bias.internals.breadth || 50;
-                    breadthValEl.innerText = `${breadth.toFixed(0)}%`;
-                    breadthValEl.className = 'm-value ' + (breadth > 60 ? 'bullish-text' : breadth < 40 ? 'bearish-text' : 'gold-text');
-                    if (broadTickerEl) broadTickerEl.innerText = `${breadth.toFixed(0)}%`;
-                }
-
-                // Update Macro HUD
-                const dxyValue = data.markers.dxy || (data.bias && data.bias.internals ? data.bias.internals.dxy : 0);
-                if (dxyHudEl) {
-                    dxyHudEl.innerText = (dxyValue || 0).toFixed(2);
-                    dxyHudEl.className = dxyValue > 103 ? 'bearish-text' : 'bullish-text';
-                }
-                if (dxyValEl) dxyValEl.innerText = (dxyValue || 0).toFixed(2);
-
-                const tnxValue = data.markers.tnx || (data.bias && data.bias.internals ? data.bias.internals.tnx : 0);
-                if (tnxHudEl) {
-                    tnxHudEl.innerText = `${(tnxValue || 0).toFixed(2)}%`;
-                    tnxHudEl.className = tnxValue > 4.2 ? 'bearish-text' : 'bullish-text';
-                }
+            if (netWhaleVal) {
+                const val = (m.netWhaleFlow || 0) / 1000000;
+                netWhaleVal.innerText = `$${val.toFixed(2)}M`;
+                netWhaleVal.className = 'm-value ' + (val >= 0 ? 'bullish-text' : 'bearish-text');
             }
+        }
 
-            // Market Internals (VIX)
-            if (data.bias && data.bias.internals && vixEl) {
-                const vix = data.bias.internals.vix;
-                vixEl.innerText = vix.toFixed(2);
-                vixEl.className = 'm-value ' + (vix > 20 ? 'bearish-text' : 'bullish-text');
-                if (vixTickerEl) vixTickerEl.innerText = vix.toFixed(2);
-                updateVixGauge(vix);
-
-                // Update VIX Regime Badge
-                if (vixRegimeBadge) {
-                    if (vix > 30) {
-                        vixRegimeBadge.innerText = 'CRISIS';
-                        vixRegimeBadge.className = 'regime-badge crisis';
-                    } else if (vix > 20) {
-                        vixRegimeBadge.innerText = 'VOLATILE';
-                        vixRegimeBadge.className = 'regime-badge volatile';
-                    } else {
-                        vixRegimeBadge.innerText = 'STABLE';
-                        vixRegimeBadge.className = 'regime-badge';
-                    }
-                }
-            }
-
-            // Global Confluence Score
-            if (data.confluenceScore !== undefined && confluenceScoreEl) {
-                confluenceScoreEl.innerText = `${data.confluenceScore}%`;
-                confluenceScoreEl.style.color = data.confluenceScore >= 80 ? 'var(--bullish)' :
-                    data.confluenceScore <= 20 ? 'var(--bearish)' : 'var(--gold)';
-            }
-
-            // Trap Detector
-            if (trapBadge) {
-                if (data.bias && data.bias.trap) {
-                    trapBadge.style.display = 'block';
-                    trapBadge.innerText = `GÜán+Å ${data.bias.trap.type.replace('_', ' ')}`;
-                } else {
-                    trapBadge.style.display = 'none';
-                }
-            }
-
-            // FVG Detector
-            if (fvgBadge) {
-                if (data.bias && data.bias.fvg) {
-                    fvgBadge.style.display = 'block';
-                    fvgBadge.innerText = data.bias.fvg.type.replace('_', ' ');
-                    fvgBadge.className = 'fvg-badge ' + (data.bias.fvg.type.includes('BULLISH') ? 'success' : 'danger');
-                } else {
-                    fvgBadge.style.display = 'none';
-                }
-            }
-
-            // --- NEW: VOLATILITY SQUEEZE ---
-            if (squeezeBadge) {
-                if (data.bias && data.bias.squeeze && data.bias.squeeze.status === 'SQUEEZING') {
-                    squeezeBadge.style.display = 'block';
-                    squeezeBadge.title = `Squeeze Intensity: ${(data.bias.squeeze.intensity * 100).toFixed(0)}%`;
-                } else {
-                    squeezeBadge.style.display = 'none';
-                }
-            }
-
-            // --- NEW: RORO INDEX ---
-            if (data.bias && data.bias.roro) {
-                const roro = data.bias.roro;
-                if (roroLabel) {
-                    roroLabel.innerText = roro.label;
-                    roroLabel.style.color = roro.color;
-                }
-                if (roroBar) {
-                    roroBar.style.width = `${roro.score}%`;
-                    roroBar.style.background = roro.color;
-                }
-                if (roroVal) roroVal.innerText = `RORO: ${roro.score.toFixed(0)}`;
-            }
-
-            // --- =ƒªä UNICORN DETECTOR UI UPDATES ---
-            if (amdHud && data.bias && data.bias.amdPhase) {
-                amdHud.innerText = data.bias.amdPhase.label;
-                amdHud.style.borderColor = data.bias.amdPhase.color;
-                amdHud.style.color = data.bias.amdPhase.color;
-                amdHud.setAttribute('title', data.bias.amdPhase.desc);
-
-                // Update Macro Narrative Card
-                const nPhase = document.getElementById('narrative-phase');
-                const nText = document.getElementById('narrative-text');
-                const nNext = document.getElementById('next-phase-forecast');
-                const nStatus = document.getElementById('current-amd-status');
-
-                if (nPhase) nPhase.innerText = data.bias.amdPhase.label;
-                if (nText) nText.innerText = data.bias.amdPhase.description || data.bias.amdPhase.narrative;
-                if (nNext) nNext.innerText = data.bias.amdPhase.next;
-                if (nStatus) {
-                    nStatus.style.color = data.bias.amdPhase.color;
-                    nStatus.classList.toggle('status-manipulation', data.bias.amdPhase.label === 'MANIPULATION');
-                }
-            }
-
-            if (mssBadge) {
-                if (data.bias && data.bias.mss) {
-                    mssBadge.style.display = 'block';
-                    mssBadge.innerText = `MSS ${data.bias.mss.type === 'BULLISH_MSS' ? 'BULL' : 'BEAR'}`;
-                } else {
-                    mssBadge.style.display = 'none';
-                }
-            }
-
-            if (displacementBadge) {
-                displacementBadge.style.display = (data.bias && data.bias.isDisplacement) ? 'block' : 'none';
-            }
-
-            if (intermarketBadge) {
-                if (data.bias && data.bias.intermarketCorrelation) {
-                    intermarketBadge.style.display = 'block';
-                    intermarketBadge.innerText = `CORR: ${data.bias.intermarketCorrelation.strength}%`;
-                } else {
-                    intermarketBadge.style.display = 'none';
-                }
-            }
-
-            // Bloomberg Sentiment Badge
-            if (bloombergBadge) {
-                if (data.bias && data.bias.bloombergSentiment) {
-                    bloombergBadge.style.display = 'block';
-                    bloombergBadge.innerText = data.bias.bloombergSentiment.label;
-                    bloombergBadge.style.color = data.bias.bloombergSentiment.color;
-                } else {
-                    bloombergBadge.style.display = 'none';
-                }
-            }
-
-            // --- FOREX INTELLIGENCE RADAR ---
-            const fxRadarContainer = document.getElementById('forex-radar-container');
-            if (data.forexRadar && fxRadarContainer) {
-                fxRadarContainer.style.display = 'block';
-                const dxyCorrEl = document.getElementById('fx-dxy-corr');
-                const smtSyncEl = document.getElementById('fx-smt-sync');
-                const inverseBadge = document.getElementById('fx-inverse-dxy-badge');
-
-                if (dxyCorrEl) {
-                    const corr = data.forexRadar.dxyCorr || 0;
-                    dxyCorrEl.innerText = `${corr.toFixed(0)}%`;
-                    dxyCorrEl.style.color = corr < -80 ? 'var(--bullish)' : (corr > 80 ? 'var(--bearish)' : 'var(--text-bright)');
-                }
-                if (smtSyncEl) {
-                    if (data.forexRadar.smt) {
-                        smtSyncEl.innerText = `SMT ${data.forexRadar.smt.type}`;
-                        smtSyncEl.style.color = data.forexRadar.smt.type === 'BULLISH' ? 'var(--bullish)' : 'var(--bearish)';
-                    } else {
-                        const sync = data.forexRadar.eurGbpCorr || 0;
-                        smtSyncEl.innerText = sync > 90 ? 'SYNC' : 'ALIGNING';
-                        smtSyncEl.style.color = sync > 90 ? 'var(--bullish)' : 'var(--gold)';
-                    }
-                }
-                if (inverseBadge) {
-                    inverseBadge.style.display = data.forexRadar.isInverseDxy ? 'block' : 'none';
-                }
-
-                // Global Session Matrix
-                if (data.forexRadar.globalSessions) {
-                    const sess = data.forexRadar.globalSessions;
-                    Object.keys(sess).forEach(key => {
-                        const el = document.getElementById(`gs-${key}`);
-                        if (el) {
-                            const status = el.querySelector('.gs-status');
-                            if (status) {
-                                status.innerText = sess[key].status;
-                                status.style.color = sess[key].color;
-                                el.style.borderColor = sess[key].status === 'OPEN' ? sess[key].color : 'transparent';
-                                if (sess[key].status === 'OPEN') el.style.background = `rgba(255,255,255,0.05)`;
-                                else el.style.background = `rgba(0,0,0,0.2)`;
-                            }
-                        }
-                    });
-                }
-
-                // --- ELITE FOREX OVERLAYS ---
-                const fxJudas = document.getElementById('fx-judas-alert');
-                if (fxJudas) {
-                    if (data.bias.judas) {
-                        fxJudas.style.display = 'block';
-                        fxJudas.innerText = data.bias.judas.label;
-                    } else {
-                        fxJudas.style.display = 'none';
-                    }
-                }
-
-                const fxRetailVal = document.getElementById('fx-retail-val');
-                const fxRetailFill = document.getElementById('fx-retail-fill');
-                if (data.bias.retailSentiment !== undefined) {
-                    const rs = data.bias.retailSentiment;
-                    if (fxRetailVal) fxRetailVal.innerText = `${rs.toFixed(0)}% LONG`;
-                    if (fxRetailFill) {
-                        fxRetailFill.style.width = `${rs}%`;
-                        fxRetailFill.style.background = rs >= 75 ? 'var(--bearish)' : (rs <= 25 ? 'var(--bullish)' : 'linear-gradient(90deg, var(--bearish) 0%, var(--bullish) 100%)');
-                    }
-                }
-
-                const fxTapeList = document.getElementById('fx-whale-tape-list');
-                if (fxTapeList && data.whaleTape) {
-                    if (fxTapeList.innerHTML.includes('Tracking order flow')) fxTapeList.innerHTML = '';
-                    const t = data.whaleTape;
-                    const c = t.type === 'BUY_BLOCK' ? 'var(--bullish)' : 'var(--bearish)';
-                    const row = document.createElement('div');
-                    row.style.display = 'flex';
-                    row.style.justifyContent = 'space-between';
-                    row.style.animation = 'slide-in-right 0.3s ease-out';
-                    row.innerHTML = `<span style="color:${c}; font-weight:900;">$${t.size} ${t.type === 'BUY_BLOCK' ? 'Gû¦' : 'Gû+'}</span> <span style="color:var(--text-dim); opacity:0.6;">${t.time}</span>`;
-                    fxTapeList.prepend(row);
-                    if (fxTapeList.children.length > 5) fxTapeList.removeChild(fxTapeList.lastChild);
-                }
-
-                // --- FX PO3 TRACKER ---
-                const fxPo3Phase = document.getElementById('fx-po3-phase');
-                const fxPo3Progress = document.getElementById('fx-po3-progress');
-                if (data.po3 && fxPo3Phase && fxPo3Progress) {
-                    fxPo3Phase.innerText = data.po3.phase;
-                    fxPo3Phase.style.color = data.po3.color;
-                    fxPo3Progress.style.width = `${data.po3.progress}%`;
-                    fxPo3Progress.style.background = data.po3.color;
-                }
-            } else if (fxRadarContainer) {
-                fxRadarContainer.style.display = 'none';
-            }
-
-            // Bias Gauge
-            if (data.bias) {
-                if (biasLabel) {
-                    biasLabel.innerText = data.bias.bias;
-                    biasLabel.className = 'bias-large ' + (data.bias.bias === 'BULLISH' ? 'bullish-text' : data.bias.bias === 'BEARISH' ? 'bearish-text' : '');
-                }
-                if (biasConfFill) {
-                    let score = data.bias.score || 0;
-                    let percent = 50 + (score * 5);
-                    biasConfFill.style.width = `${Math.max(5, Math.min(95, percent))}%`;
-                    biasConfFill.style.backgroundColor = score > 2 ? 'var(--bullish)' : score < -2 ? 'var(--bearish)' : 'var(--accent)';
-                }
-
-                // Neon Pulse Activation
-                if (biasGaugeWrapper) {
-                    if (data.bias.confidence >= 80) {
-                        biasGaugeWrapper.classList.add('bias-gauge-pulse');
-                    } else {
-                        biasGaugeWrapper.classList.remove('bias-gauge-pulse');
-                    }
-                }
-            }
-
-            // Recommendation
-            if (data.recommendation) {
-                const action = data.recommendation.action;
-                const isTrade = action.includes('CALL') || action.includes('PUT');
-
-                // Check if this is a new signal to trigger locking
-                const signalKey = `${data.symbol}_${action}`;
-                if (isTrade && lastSignalAction !== signalKey && action !== 'WAIT') {
-                    signalUnlocked = false; // Relock for new signal
-                    pendingSignalData = data;
-                }
-
-                if (recAction) {
-                    if (isTrade && !signalUnlocked) {
-                        recAction.innerText = "LOCKED (AUDIT REQ)";
-                        recAction.className = 'rec-action-text accent-text pulse-subtle';
-                        if (btnUnlockSignal) btnUnlockSignal.style.display = 'block';
-                    } else {
-                        recAction.innerText = action;
-                        recAction.className = 'rec-action-text ' + (action.includes('CALL') ? 'bullish-text' : action.includes('PUT') ? 'bearish-text' : '');
-                        if (btnUnlockSignal && !isTrade) btnUnlockSignal.style.display = 'none';
-                    }
-                }
-                if (recStrike) recStrike.innerText = data.recommendation.strike || '-';
-                if (recTarget) recTarget.innerText = data.recommendation.target || '-';
-                if (recRR) {
-                    const rr = data.recommendation.rrRatio || '0.0';
-                    recRR.innerText = `1:${rr}`;
-                    recRR.className = parseFloat(rr) >= 2 ? 'bullish-text' : 'bearish-text';
-                }
-
-                const trimEl = document.getElementById('rec-trim');
-                const targetElItem = document.getElementById('rec-target');
-                const slEl = document.getElementById('rec-sl');
-                const sizeEl = document.getElementById('rec-size');
-                const durEl = document.getElementById('rec-duration');
-                const confEl = document.getElementById('rec-confidence');
-
-                if (trimEl) trimEl.innerText = data.recommendation.trim || '-';
-                if (targetElItem) targetElItem.innerText = data.recommendation.target || '-';
-                if (slEl) slEl.innerText = data.recommendation.sl || '-';
-                if (sizeEl) sizeEl.innerText = data.recommendation.size || '-';
-                if (durEl) durEl.innerText = data.recommendation.duration || '-';
-                if (confEl) confEl.innerText = `${data.recommendation.confidence || 0}%`;
-
-                if (recRationale) recRationale.innerText = data.recommendation.rationale;
-
-                if (recBox) {
-                    recBox.className = 'rec-box ' + (data.recommendation.action.includes('CALL') ? 'rec-call' : data.recommendation.action.includes('PUT') ? 'rec-put' : '');
-                }
-
-                // MTF Grid Sync
-                if (data.multiTfBias) {
-                    ['1m', '5m', '15m', '1h'].forEach(tf => {
-                        const dot = document.getElementById(`mtf-dot-${tf}`);
-                        if (dot) {
-                            const b = data.multiTfBias[tf] || 'NEUTRAL';
-                            dot.className = 'mtf-dot ' + (b === 'BULLISH' || b === 'STRONG BULLISH' ? 'bullish' : b === 'BEARISH' || b === 'STRONG BEARISH' ? 'bearish' : 'neutral');
-                        }
-                    });
-                }
-
-                // Audio & Voice Alert - Strictly for PROTOCOL READY signals
-                const protocolReady = (data.recommendation.action !== 'WAIT' && (data.confluenceScore || 0) >= 75);
-                if (data.recommendation.isStable && protocolReady) {
-                    const signalKey = `${data.symbol}_${data.recommendation.action}`;
-                    if (lastSignalAction !== signalKey) {
-                        audioHooter.playSignal();
-                        voiceNarrator.speak(`Protocol Ready. ${data.symbol} elite signal found. Action. ${data.recommendation.action}. Confluence high.`);
-                        lastSignalAction = signalKey;
-                        showToast(`PROTOCOL READY: ${data.recommendation.action} on ${data.symbol}`);
-                    }
-                }
-            }
-
-            // Institutional Heatmap (Gravity Engine)
-            if (data.heatmap) {
-                heatmapContainer.innerHTML = `
-                    <div style="font-size: 0.6rem; color: var(--gold); margin-bottom: 5px; opacity: 0.8; letter-spacing: 1px;">
-                        INSTITUTIONAL GRAVITY ENGINE
-                    </div>
-                `;
-                const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
-                const precision = isFX ? 4 : 2;
-                
-                data.heatmap.slice(0, 8).forEach(h => {
-                    const div = document.createElement('div');
-                    div.className = 'metric-item';
-                    div.style.background = `linear-gradient(90deg, ${h.color} 0%, transparent ${h.gravity}%)`;
-                    div.style.borderLeft = `3px solid ${h.color}`;
-                    div.style.marginBottom = '6px';
-                    div.style.padding = '4px 8px';
-                    div.style.borderRadius = '2px';
-                    
-                    div.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                            <span style="font-weight:900; font-size:0.65rem; color:#fff;">${h.type}</span>
-                            <span style="font-family:'JetBrains Mono'; font-weight:800; color:var(--gold);">$${h.price.toFixed(precision)}</span>
-                            <div style="text-align:right;">
-                                <span style="display:block; font-size:0.5rem; color:var(--text-dim);">GRAVITY</span>
-                                <span style="font-weight:900; font-size:0.7rem; color:${h.gravity > 80 ? 'var(--bullish)' : '#fff'};">${h.gravity}%</span>
-                            </div>
-                        </div>
-                    `;
-                    heatmapContainer.appendChild(div);
-                });
-            }
-
-            // Ticker
-            if (data.news && data.news.length > 0) {
-                const ticker = document.getElementById('ticker-content');
-                if (ticker) ticker.innerText = data.news.map(n => ` GÇó ${n.text}`).join(' ');
-            }
-
-            // Sync Timeframe Buttons
-            document.querySelectorAll('.tf-btn').forEach(btn => {
-                if (btn.dataset.tf === data.timeframe) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-
-            updateChecklist(data);
-
-            // --- Dual Sector Health Matrix (SPY & QQQ) ---
+        // 4. --- SECTOR HEALTH MATRIX ---
+        if (data.sectors) {
             const spyGrid = document.getElementById('spy-sector-grid');
             const qqqGrid = document.getElementById('qqq-sector-grid');
+            const iwmGrid = document.getElementById('iwm-sector-grid');
+            const fxGrid = document.getElementById('fx-sector-grid');
 
-            if (data.sectors && spyGrid && qqqGrid) {
-                const sectorNames = {
-                    'XLK': { name: 'TECHNOLOGY', tip: 'Growth Leader. If XLK is green, SPY/QQQ have a tailwind.' },
-                    'XLY': { name: 'CONSUMER', tip: 'Discretionary Spending. Shows if consumers are confident.' },
-                    'XLF': { name: 'FINANCE', tip: 'Market Fuel. Bulls need banks to participate for a real move.' },
-                    'XLC': { name: 'COMMS', tip: 'Meta/Google/Netflix. Core QQQ driver for growth.' },
-                    'SMH': { name: 'CHIPS', tip: 'The Brain. Market cannot lead without Semiconductors.' },
-                    'META': { name: 'META', tip: 'Big Tech Driver. High correlation to QQQ.' },
-                    'GOOGL': { name: 'GOOGLE', tip: 'Ad Revenue Leader. Essential for growth stability.' },
-                    'NVDA': { name: 'NVIDIA', tip: 'The AI Anchor. Most critical sentiment driver in current market.' },
-                    'AMD': { name: 'AMD', tip: 'Chip Sentiment. Confirms SMH strength.' },
-                    'KRE': { name: 'REG. BANKS', tip: 'Risk-On/Off indicator. Red KRE = Market Fear.' },
-                    'XBI': { name: 'BIOTECH', tip: 'Speculative Growth. Institutions buying XBI = Risk is ON.' },
-                    'IYT': { name: 'TRANSPORTS', tip: 'Economic Reality. If goods aren\'t moving, the rally is fake.' },
-                    'UUP': { name: 'USD STRENGTH', tip: 'Inverse to Stocks. Strong Dollar = Bearish for SPY.' },
-                    'EURUSD=X': { name: 'EURO', tip: 'Global Liquidity. Strong Euro = Weak Dollar = Bullish Stocks.' },
-                    'GBPUSD=X': { name: 'POUND', tip: 'Currency Pulse. Aligned with European liquidity flow.' },
-                    'USDJPY=X': { name: 'YEN', tip: 'The Carry Trade. Falling Yen often forces market deleveraging.' },
-                    '^TNX': { name: '10Y YIELD', tip: 'Borrowing Costs. High yields kill tech valuations.' }
-                };
-
-                const spyDrivers = ['XLK', 'XLY', 'XLF'];
-                const qqqDrivers = ['XLK', 'XLC', 'SMH', 'AMD'];
-                const iwmDrivers = ['KRE', 'XBI', 'IYT'];
-                const fxDrivers = ['UUP', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', '^TNX'];
-
-                const renderGrid = (grid, symbols, suffix) => {
-                    if (!grid) return;
-                    const currentCount = grid.querySelectorAll('.sector-item').length;
-                    if (currentCount !== symbols.length || grid.querySelector('div[style*="grid-column"]')) {
-                        grid.innerHTML = '';
-                        symbols.forEach(sym => {
-                            const div = document.createElement('div');
-                            const sObj = sectorNames[sym] || { name: sym, tip: 'Market Driver' };
-                            div.className = 'sector-item';
-                            div.id = `sector-${sym}-${suffix}`;
-                            div.setAttribute('data-tooltip', sObj.tip); // Use custom data-tooltip for CSS
-                            const displaySym = sym.replace('=X', '').replace('^TNX', '10Y-YLD');
-                            div.innerHTML = `
-                                <div style="display:flex; flex-direction:column;">
-                                    <span class="sector-sym" style="font-size: ${displaySym.length > 4 ? '0.7rem' : '0.9rem'};">${displaySym}</span>
-                                    <span class="sector-institutional-status" style="font-size: 0.45rem; font-weight: 800; color: var(--gold); margin-top: 2px;">NEUTRAL</span>
-                                </div>
-                                <div style="text-align:right;">
-                                    <div class="sector-change" style="font-size: 0.7rem;">0.00%</div>
-                                    <div class="sector-name" style="font-size: 0.5rem; color: var(--text-dim); opacity: 0.7;">${sObj.name}</div>
-                                </div>
-                            `;
-                            grid.appendChild(div);
-                        });
-                    }
-
+            const renderSectorGrid = (grid, symbols, suffix) => {
+                if (!grid) return;
+                if (grid.children.length === 0) {
                     symbols.forEach(sym => {
-                        const sData = data.sectors.find(s => s.symbol === sym) || (sym === 'UUP' ? { symbol: 'UUP', change: (data.bias?.internals?.dxyChange || 0) } : null);
-                        const el = document.getElementById(`sector-${sym}-${suffix}`);
-                        if (sData && el) {
-                            const changeEl = el.querySelector('.sector-change');
-                            const statusEl = el.querySelector('.sector-institutional-status');
-
-                            if (changeEl) {
-                                changeEl.innerText = `${sData.change >= 0 ? '+' : ''}${sData.change.toFixed(2)}%`;
-                                changeEl.className = 'sector-change ' + (sData.change >= 0 ? 'bullish-text' : 'bearish-text');
-                            }
-
-                            if (statusEl) {
-                                let status = "NEUTRAL";
-                                let color = 'var(--text-dim)';
-
-                                if (sData.judas) {
-                                    status = "JUDAS TRAP";
-                                    color = 'var(--bearish)';
-                                } else if (sData.retail >= 75) {
-                                    status = "RETAIL TRAP";
-                                    color = 'var(--bearish)';
-                                } else if (sData.retail <= 25 && sData.retail !== undefined) {
-                                    status = "SHORT SQUEEZE";
-                                    color = 'var(--bullish)';
-                                } else if (sData.irScore >= 80) {
-                                    status = "SMART MONEY";
-                                    color = 'var(--bullish)';
-                                } else if (sData.irScore <= 20) {
-                                    status = "DISTRIBUTION";
-                                    color = 'var(--bearish)';
-                                } else {
-                                    status = sData.bias || "NEUTRAL";
-                                    color = status.includes('BULLISH') ? 'var(--bullish)' : (status.includes('BEARISH') ? 'var(--bearish)' : 'var(--text-dim)');
-                                }
-
-                                statusEl.innerText = status;
-                                statusEl.style.color = color;
-                            }
-
-                            el.classList.remove('bullish', 'bearish');
-                            if (sData.bias === 'BULLISH') el.classList.add('bullish');
-                            else if (sData.bias === 'BEARISH') el.classList.add('bearish');
-                        }
+                        const div = document.createElement('div');
+                        div.className = 'sector-item';
+                        div.id = `sector-${sym}-${suffix}`;
+                        div.innerHTML = `
+                            <div style="display:flex; flex-direction:column;">
+                                <span class="sector-sym">${sym.replace('=X','').replace('^TNX','10Y')}</span>
+                                <span class="sector-status" style="font-size:0.45rem; font-weight:800; color:var(--text-dim);">LOADING</span>
+                            </div>
+                            <div style="text-align:right;">
+                                <div class="sector-change" style="font-size:0.7rem;">0.00%</div>
+                            </div>
+                        `;
+                        grid.appendChild(div);
                     });
-                };
+                }
+                symbols.forEach(sym => {
+                    const sData = data.sectors.find(s => s.symbol === sym);
+                    const el = document.getElementById(`sector-${sym}-${suffix}`);
+                    if (sData && el) {
+                        const cEl = el.querySelector('.sector-change');
+                        const stEl = el.querySelector('.sector-status');
+                        if (cEl) {
+                            cEl.innerText = `${sData.change >= 0 ? '+' : ''}${sData.change.toFixed(2)}%`;
+                            cEl.className = 'sector-change ' + (sData.change >= 0 ? 'bullish-text' : 'bearish-text');
+                        }
+                        if (stEl) {
+                            stEl.innerText = sData.bias || 'NEUTRAL';
+                            stEl.style.color = (sData.bias?.includes('BULLISH')) ? 'var(--bullish)' : (sData.bias?.includes('BEARISH') ? 'var(--bearish)' : 'var(--text-dim)');
+                        }
+                    }
+                });
+            };
+            renderSectorGrid(spyGrid, ['XLK', 'XLY', 'XLF'], 'spy');
+            renderSectorGrid(qqqGrid, ['XLK', 'XLC', 'SMH', 'AMD'], 'qqq');
+            renderSectorGrid(iwmGrid, ['KRE', 'XBI', 'IYT'], 'iwm');
+            renderSectorGrid(fxGrid, ['UUP', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', '^TNX'], 'fx');
+        }
 
-                const iwmGrid = document.getElementById('iwm-sector-grid');
-                const fxGrid = document.getElementById('fx-sector-grid');
-                renderGrid(spyGrid, spyDrivers, 'spy');
-                renderGrid(qqqGrid, qqqDrivers, 'qqq');
-                renderGrid(iwmGrid, iwmDrivers, 'iwm');
-                renderGrid(fxGrid, fxDrivers, 'fx');
+        // 5. --- RECOMMENDATION ---
+        const recBox = document.getElementById('rec-box');
+        if (data.recommendation && recBox) {
+            const rec = data.recommendation;
+            const recAction = document.getElementById('rec-action');
+            const recStrike = document.getElementById('rec-strike');
+            const recTarget = document.getElementById('rec-target');
+            const recRationale = document.getElementById('rec-rationale');
+            if (recAction) recAction.innerText = rec.action || 'WAIT';
+            if (recStrike) recStrike.innerText = rec.strike || '-';
+            if (recTarget) recTarget.innerText = rec.target || '-';
+            if (recRationale) recRationale.innerText = rec.rationale || 'SCANNING...';
+            recBox.className = 'rec-box ' + (rec.action?.includes('CALL') ? 'rec-call' : (rec.action?.includes('PUT') ? 'rec-put' : ''));
+        }
+
+        // 6. --- EXTERNAL CALLS (HARDENED) ---
+        const executeUpdate = (fn, name) => {
+            if (typeof fn === 'function') {
+                try { fn(data); } catch (e) { console.warn(`[UI] ${name} failed:`, e); }
             }
+        };
 
-            // --- Holy Grail Macro Updates ---
-            if (data.bias && data.bias.internals) {
-                const internals = data.bias.internals;
+        executeUpdate(updateMacroCorrelation, 'Macro Correlation');
+        executeUpdate(updateInstitutionalRadar, 'Radar');
+        executeUpdate(updateStrikeZones, 'StrikeZones');
+        executeUpdate(updateBlockFeed, 'BlockFeed');
+        executeUpdate(updateWatchlist, 'Watchlist');
+        executeUpdate(updateIntelTicker, 'IntelTicker');
+        executeUpdate(updateSpiderMatrix, 'SpiderMatrix');
+        executeUpdate(updateProtocolStatus, 'ProtocolStatus');
+        executeUpdate(updateChartOverlays, 'ChartOverlays');
+        executeUpdate(updateChecklist, 'Checklist');
 
-                // DXY Pulse
-                if (dxyValEl) {
-                    const dxyVal = internals.dxy || 0;
-                    dxyValEl.innerText = dxyVal > 0 ? dxyVal.toFixed(2) : '--';
-                    const dxyPercent = dxyVal > 50 ? ((dxyVal - 100) / (110 - 100)) * 100 : ((dxyVal - 24) / (30 - 24)) * 100;
-                    dxyBarEl.style.width = `${Math.max(5, Math.min(95, dxyPercent))}%`;
-                }
-
-                // VIX Pulse
-                if (vixBarEl) {
-                    const vixVal = internals.vix || 0;
-                    const vixPercent = ((vixVal - 10) / (40 - 10)) * 100;
-                    vixBarEl.style.width = `${Math.max(5, Math.min(95, vixPercent))}%`;
-                    vixBarEl.style.backgroundColor = vixVal > 20 ? 'var(--bearish)' : 'var(--bullish)';
-                    if (vixValEl) {
-                        vixValEl.innerText = vixVal > 0 ? vixVal.toFixed(2) : '--';
-                    }
-                }
-
-                // News Timer (Fake for demo if no real time available, but using status)
-                if (eventTimerEl) {
-                    if (internals.newsImpact === 'HIGH') {
-                        eventTimerEl.innerText = 'IMPACTING NOW';
-                        eventTimerEl.parentElement.classList.add('flash-down');
-                    } else {
-                        eventTimerEl.innerText = '34:12'; // Placeholder for next scheduled event
-                        eventTimerEl.parentElement.classList.remove('flash-down');
-                    }
-                }
-
-                // Confluence Ticker Sync
-                if (confTickerEl && data.confluenceScore != null) {
-                    confTickerEl.innerText = `${data.confluenceScore}%`;
-                    confTickerEl.className = data.confluenceScore >= 70 ? 'bullish-text' : 'bearish-text';
-                }
-
-                // Magnet StrikeZones
-                if (data.markers && data.currentPrice) {
-                    const price = data.currentPrice;
-                    const pdh = data.markers.pdh || 0;
-                    const pdl = data.markers.pdl || 0;
-
-                    if (bslMagnetPrice && pdh > 0) {
-                        bslMagnetPrice.innerText = pdh.toFixed(2);
-                        const distLine = ((pdh - price) / price) * 100;
-                        bslMagnetDist.innerText = `${distLine > 0 ? '+' : ''}${distLine.toFixed(2)}%`;
-                        bslMagnetDist.className = Math.abs(distLine) < 0.2 ? 'magnet-dist sweep-ready' : 'magnet-dist';
-                    }
-                    if (sslMagnetPrice && pdl > 0) {
-                        sslMagnetPrice.innerText = pdl.toFixed(2);
-                        const distLine = ((pdl - price) / price) * 100;
-                        sslMagnetDist.innerText = `${distLine > 0 ? '+' : ''}${distLine.toFixed(2)}%`;
-                        sslMagnetDist.className = Math.abs(distLine) < 0.2 ? 'magnet-dist sweep-ready' : 'magnet-dist';
-                    }
-
-                    // Asia Range Display
-                    if (data.bias && data.bias.asiaRange) {
-                        const ar = data.bias.asiaRange;
-                        if (asiaHighEl) asiaHighEl.innerText = ar.high.toFixed(precision);
-                        if (asiaLowEl) asiaLowEl.innerText = ar.low.toFixed(precision);
-                    }
-
-                    if (data.bias && data.bias.cbdr) {
-                        const c = data.bias.cbdr;
-                        const bias = data.bias.bias;
-                        // Projections depend on Bias
-                        if (cbdrSd1El) cbdrSd1El.innerText = (bias === 'BULLISH' || bias === 'STRONG BULLISH') ? c.sd1_high.toFixed(precision) : c.sd1_low.toFixed(precision);
-                        if (cbdrSd2El) cbdrSd2El.innerText = (bias === 'BULLISH' || bias === 'STRONG BULLISH') ? c.sd2_high.toFixed(precision) : c.sd2_low.toFixed(precision);
-                    }
-                }
+        // --- PYTH SUB-SECOND TICK (Improvement 4) ---
+        if (candleSeries && data.currentPrice > 0) {
+            const tf = data.timeframe || '5m';
+            let tfMs = 300000;
+            if (tf === '1m') tfMs = 60000;
+            if (tf === '15m') tfMs = 900000;
+            if (tf === '1h') tfMs = 3600000;
+            if (tf === '1d') tfMs = 86400000;
             
-                if (data.institutionalRadar) {
-                    updateInstitutionalRadar(data);
-                }
-            }
-
-            // --- MOBILE COMMANDER HUD SYNC ---
-            const mobileSymbol = document.getElementById('mobile-hud-symbol');
-            const mobilePrice = document.getElementById('mobile-hud-price');
-            const mobileBias = document.getElementById('mobile-hud-bias');
-            const mobileRec = document.getElementById('mobile-hud-rec');
-
-            if (mobileSymbol) mobileSymbol.innerText = data.symbol || 'SPY';
-            if (mobilePrice && data.currentPrice) {
-                const isFX = data.symbol.includes('=X') || data.symbol.includes('USD');
-                mobilePrice.innerText = `$${data.currentPrice.toFixed(isFX ? 4 : 2)}`;
-            }
-            if (mobileBias && data.bias) {
-                mobileBias.innerText = data.bias.bias;
-                mobileBias.className = 'hud-bias ' + (data.bias.bias === 'BULLISH' ? 'bullish-text' : data.bias.bias === 'BEARISH' ? 'bearish-text' : 'gold-text');
-            }
-            if (mobileRec && data.recommendation) {
-                mobileRec.innerText = data.recommendation.action;
-                mobileRec.className = 'hud-rec ' + (data.recommendation.action.includes('CALL') ? 'bullish-text' : data.recommendation.action.includes('PUT') ? 'bearish-text' : 'gold-text');
-            }
+            const now = Date.now();
+            const candleTs = Math.floor(now / tfMs) * tfMs;
+            const timeInSeconds = Math.floor(candleTs / 1000);
+            
+            // This updates the very last bar on your chart with institutional precision
+            candleSeries.update({
+                time: timeInSeconds,
+                close: data.currentPrice
+            });
         }
     } catch (err) {
-        console.error("[UI] Error in updateUI:", err);
+        console.error("[UI] Critical Update Failure:", err);
     }
 }
-
-
-
 function updateWatchlist(data) {
     const stocksList = document.getElementById('stocks-list');
     const forexList = document.getElementById('forex-list');
     const stocksCountEl = document.getElementById('stocks-count');
     const forexCountEl = document.getElementById('forex-count');
     
-    if (!stocksList || !forexList) return;
+    // Critical: Only update if the payload contains watchlist data
+    if (!data.watchlist || !stocksList || !forexList) return;
 
-    const wl = data.watchlist || [];
+    const wl = (data.watchlist || []).sort((a,b) => (b.confluenceScore || 0) - (a.confluenceScore || 0));
+    const stocks = wl.filter(s => !s.symbol.includes('=X') && !s.symbol.includes('USD') && !s.symbol.includes('DX-Y'));
+    const forex = wl.filter(s => s.symbol.includes('=X') || s.symbol.includes('USD') || s.symbol.includes('DX-Y'));
 
-    // --- ALPHA SORTING: Rank by "GO" status, then Confluence Score ---
-    wl.sort((a, b) => {
-        const aReady = (a.recommendation?.action !== 'WAIT' && (a.confluenceScore || 0) >= 80 && a.recommendation?.isStable);
-        const bReady = (b.recommendation?.action !== 'WAIT' && (b.confluenceScore || 0) >= 80 && b.recommendation?.isStable);
-
-        if (bReady !== aReady) return bReady ? 1 : -1;
-        
-        if ((b.confluenceScore || 0) !== (a.confluenceScore || 0)) {
-            return (b.confluenceScore || 0) - (a.confluenceScore || 0);
-        }
-        return Math.abs(b.dailyChangePercent || 0) - Math.abs(a.dailyChangePercent || 0);
-    });
+    if (stocksCountEl) stocksCountEl.innerText = stocks.length;
+    if (forexCountEl) forexCountEl.innerText = forex.length;
 
     stocksList.innerHTML = '';
     forexList.innerHTML = '';
 
-    let stockCount = 0;
-    let forexCount = 0;
+    const renderList = (list, targetList) => {
+        list.forEach(stock => {
+            try {
+                const price = stock.price || 0;
+                const isFX = stock.symbol.includes('=X') || stock.symbol.includes('USD');
+                const precision = isFX ? 4 : 2;
+                const action = stock.recommendation?.action || 'WAIT';
+                const actionClass = action.includes('CALL') ? 'bullish-text' : action.includes('PUT') ? 'bearish-text' : 'text-dim';
+                const isReady = (action !== 'WAIT' && (stock.confluenceScore || 0) >= 75);
 
-    wl.forEach(stock => {
-        try {
-            if (!stock || !stock.symbol) return;
-
-            const isFX = stock.symbol.includes('=X') || stock.symbol.includes('-USD') || stock.symbol.includes('/USD') || stock.symbol.includes('EUR') || stock.symbol.includes('GBP') || stock.symbol.includes('JPY');
-            const targetList = isFX ? forexList : stocksList;
-            if (isFX) forexCount++; else stockCount++;
-
-            const price = typeof stock.price === 'number' ? stock.price : 0;
-            const prevPrice = watchlistPrevPrices[stock.symbol];
-            
-            let pulseClass = '';
-            if (prevPrice !== undefined && price !== prevPrice) {
-                pulseClass = price > prevPrice ? 'pulse-up' : 'pulse-down';
-            }
-            watchlistPrevPrices[stock.symbol] = price;
-
-            const rec = stock.recommendation || { action: 'WAIT' };
-            const action = rec.action || 'WAIT';
-            const actionClass = action.includes('CALL') ? 'bullish-text' : action.includes('PUT') ? 'bearish-text' : 'text-dim';
-
-            const isReady = (action !== 'WAIT' && (stock.confluenceScore || 0) >= 80 && rec.isStable);
-            const readyBadge = isReady ? '<span class="go-badge">GO</span>' : '';
-            
-            let alignBadge = '';
-            if (stock.alignedCount >= 3) {
-                const alignColor = (stock.bias && stock.bias.includes('BULLISH')) ? 'var(--bullish)' : 'var(--bearish)';
-                alignBadge = `<span class="align-badge" style="background:${alignColor}22; border:1px solid ${alignColor}; color:${alignColor}; font-size:0.45rem; padding:1px 4px; border-radius:3px; margin-left:4px; font-weight:900;">${stock.alignedCount}TF</span>`;
-            }
-
-            const card = document.createElement('div');
-            card.className = `ticker-card ${pulseClass} ${data.symbol === stock.symbol ? 'active-symbol' : ''} ${isReady ? 'ready-signal' : ''}`;
-            card.setAttribute('data-symbol', stock.symbol);
-            card.style.cursor = 'pointer';
-            card.onclick = () => {
-                socket.emit('switch_symbol', stock.symbol);
-                if (typeof showToast === 'function') showToast(`Switching to ${stock.symbol}...`);
-                card.style.transform = 'scale(0.98)';
-                setTimeout(() => { card.style.transform = 'scale(1)'; }, 100);
-            };
-
-            const precision = isFX ? 4 : 2;
-            const biasText = (stock.bias && stock.bias.bias) ? stock.bias.bias : (stock.bias || 'NEUTRAL');
-            const biasClass = biasText.includes('BULLISH') ? 'bullish-text' : biasText.includes('BEARISH') ? 'bearish-text' : '';
-            const source = stock.dataSource || 'FHUB';
-
-            card.innerHTML = `
-                <div class="ticker-info">
-                    <span class="ticker-sym">${stock.symbol} ${readyBadge} ${alignBadge} <span class="source-badge">${source}</span></span>
-                    <span class="ticker-price">$${price.toFixed(precision)}</span>
-                </div>
-                <div class="ticker-metrics">
-                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
-                        <span class="ticker-bias ${biasClass}">${biasText}</span>
-                        <span style="font-size:0.55rem; font-weight:900; color:${stock.confluenceScore >= 75 ? 'var(--bullish)' : 'var(--text-dim)'};">${stock.confluenceScore || 0}% CONF</span>
+                const card = document.createElement('div');
+                card.className = `ticker-card ${data.symbol === stock.symbol ? 'active-symbol' : ''} ${isReady ? 'ready-signal' : ''}`;
+                card.innerHTML = `
+                    <div class="ticker-info">
+                        <span class="ticker-sym">${stock.symbol} ${isReady ? '<span class="go-badge">GO</span>' : ''}</span>
+                        <span class="ticker-price">$${price.toFixed(precision)}</span>
                     </div>
-                    <span class="ticker-signal ${actionClass} ${action !== 'WAIT' ? 'pulse-subtle' : ''}">${action}</span>
-                </div>
-                <div class="ticker-meta">
-                    <span style="color:${(stock.dailyChangePercent || 0) >= 0 ? 'var(--bullish)' : 'var(--bearish)'};">${(stock.dailyChangePercent || 0) >= 0 ? '+' : ''}${(stock.dailyChangePercent || 0).toFixed(2)}%</span>
-                    <span style="color:var(--text-dim); font-size: 0.5rem;">${stock.adr ? 'ADR: ' + stock.adr.toFixed(2) : ''}</span>
-                </div>
-            `;
-
-            card.onclick = () => {
-                socket.emit('switch_symbol', stock.symbol);
-                document.querySelectorAll('.ticker-card').forEach(c => c.classList.remove('active-symbol'));
-                card.classList.add('active-symbol');
-            };
-
-            targetList.appendChild(card);
-
-            if (pulseClass) {
-                setTimeout(() => card.classList.remove(pulseClass), 800);
+                    <div class="ticker-metrics">
+                         <span class="ticker-bias ${stock.bias?.includes('BULLISH') ? 'bullish-text' : stock.bias?.includes('BEARISH') ? 'bearish-text' : ''}">${stock.bias || 'NEUTRAL'}</span>
+                         <span class="ticker-signal ${actionClass}">${action}</span>
+                    </div>
+                `;
+                card.onclick = () => socket.emit('switch_symbol', stock.symbol);
+                targetList.appendChild(card);
+            } catch (err) {
+                console.error("[UI] Watchlist error for " + stock.symbol, err);
             }
-        } catch (err) {
-            console.error(`[UI] Error rendering symbol ${stock?.symbol}:`, err);
-        }
-    });
+        });
+    };
 
-    if (stocksCountEl) stocksCountEl.innerText = `${stockCount} TICKERS`;
-    if (forexCountEl) forexCountEl.innerText = `${forexCount} TICKERS`;
+    renderList(stocks, stocksList);
+    renderList(forex, forexList);
 }
 
 function updateChecklist(data) {
@@ -2380,6 +1610,28 @@ const mobileTriggerBtn = document.getElementById('mobile-trigger-btn');
 const openChecklist = () => {
     const checklistModal = document.getElementById('checklist-modal');
     if (!checklistModal) return;
+    
+    // --- SLIPPAGE GUARD LOGIC (Improvement 3) ---
+    const data = window.latestInstitutionalData;
+    const slippageWarning = document.getElementById('slippage-warning-box');
+    const slippageStatus = document.getElementById('slippage-status');
+    
+    if (data && slippageWarning && slippageStatus) {
+        // Threshold: 15 bps of discordance is "High Risk" for institutional execution
+        const discordance = data.priceDiscordance || 0;
+        const isHighRisk = discordance > 15;
+        
+        slippageWarning.style.display = isHighRisk ? 'block' : 'none';
+        slippageStatus.innerText = isHighRisk ? 'CAUTION: LOW LIQUIDITY' : 'OPTIMAL LIQUIDITY';
+        slippageStatus.style.color = isHighRisk ? 'var(--bearish)' : 'var(--bullish)';
+        
+        const slippageOuter = document.getElementById('slippage-guard-item');
+        if (slippageOuter) {
+            slippageOuter.style.borderColor = isHighRisk ? 'var(--bearish)' : 'rgba(255,255,255,0.1)';
+            slippageOuter.style.background = isHighRisk ? 'rgba(244, 63, 94, 0.05)' : 'rgba(0,0,0,0.4)';
+        }
+    }
+
     checklistModal.style.display = 'flex';
     document.querySelectorAll('.trigger-check').forEach(c => c.checked = false);
     const btnConfirmTrade = document.getElementById('btn-confirm-trade');
@@ -2388,6 +1640,10 @@ const openChecklist = () => {
 
 document.getElementById('btn-unlock-signal')?.addEventListener('click', openChecklist);
 mobileTriggerBtn?.addEventListener('click', openChecklist);
+document.getElementById('btn-manual-scan')?.addEventListener('click', () => {
+    socket.emit('manual_scan_trigger');
+    showToast("MANUAL SCALPER SCAN INITIATED...");
+});
 document.getElementById('btn-close-checklist')?.addEventListener('click', () => { 
     const checklistModal = document.getElementById('checklist-modal');
     if (checklistModal) checklistModal.style.display = 'none'; 
@@ -2522,4 +1778,146 @@ function updateSpiderMatrix(data) {
         status.innerText = isAligned ? 'BASKET: ALIGNED' : 'BASKET: DISCORDANT';
         status.style.color = isAligned ? 'var(--gold)' : 'var(--bearish)';
     }
+}
+
+function updateMacroCorrelation(data) {
+    const dxyVal = document.getElementById('dxy-val');
+    const dxyBar = document.getElementById('dxy-bar');
+    const vixVal = document.getElementById('vix-val-macro');
+    const vixBar = document.getElementById('vix-bar');
+    const roroLabel = document.getElementById('roro-label');
+    const roroBar = document.getElementById('roro-bar');
+    const roroVal = document.getElementById('roro-val');
+
+    if (!dxyVal || !vixVal || !roroLabel) return;
+
+    // Direct extraction with strict fallbacks
+    const m = data.markers || {};
+    const dxy = Number(m.dxy) || 103.55;
+    const vix = Number(m.vix) || 16.50;
+
+    // Update DXY
+    dxyVal.innerText = dxy.toFixed(2);
+    if (dxyBar) {
+        const dxyPercent = Math.max(0, Math.min(100, (dxy - 98) / 8 * 100)); // 98-106 scale
+        dxyBar.style.width = `${dxyPercent}%`;
+        dxyBar.style.background = dxy > 103.5 ? 'var(--bearish)' : 'var(--bullish)';
+    }
+
+    // Update VIX
+    vixVal.innerText = vix.toFixed(2);
+    if (vixBar) {
+        const vixPercent = Math.max(0, Math.min(100, (vix - 10) / 30 * 100)); // 10-40 scale
+        vixBar.style.width = `${vixPercent}%`;
+        vixBar.style.background = vix > 20 ? 'var(--bearish)' : 'var(--bullish)';
+    }
+
+    // RORO Sentiment (Risk-On / Risk-Off)
+    const dxyImpact = (103.5 - dxy) / 3; 
+    const vixImpact = (18 - vix) / 8; 
+    const rawRoro = 50 + ((dxyImpact + vixImpact) * 25);
+    const roro = Math.max(0, Math.min(100, Math.round(rawRoro)));
+
+    if (roroLabel) {
+        roroLabel.innerText = roro > 60 ? 'RISK-ON' : roro < 40 ? 'RISK-OFF' : 'NEUTRAL';
+        roroLabel.style.color = roro > 60 ? 'var(--bullish)' : roro < 40 ? 'var(--bearish)' : 'var(--gold)';
+    }
+    if (roroBar) {
+        roroBar.style.width = `${roro}%`;
+        roroBar.style.background = roro > 60 ? 'var(--bullish)' : roro < 40 ? 'var(--bearish)' : 'var(--gold)';
+    }
+    // --- RORO FLASH DETECTION (Improvement 2) ---
+    const roroFlash = document.getElementById('roro-flash');
+    if (roroFlash) {
+        if (data.isRoroFlash) {
+            roroFlash.style.opacity = '1';
+            roroFlash.style.color = data.roroDirection === 'ON' ? 'var(--bullish)' : 'var(--bearish)';
+            roroFlash.innerText = `⚡ FLASH ${data.roroDirection}`;
+            roroFlash.classList.add('pulse-glow');
+            
+            // Revert back after 4 seconds of stability
+            setTimeout(() => { 
+                roroFlash.style.opacity = '0.8';
+                roroFlash.style.color = 'var(--gold)';
+                roroFlash.innerText = '⚡ PULSE: SCANNING';
+                roroFlash.classList.remove('pulse-glow');
+            }, 4000);
+        } else if (!roroFlash.innerText.includes('FLASH')) {
+            // Constant state if not currently flashing
+            roroFlash.style.opacity = '0.8';
+            roroFlash.style.color = 'var(--gold)';
+            roroFlash.innerText = '⚡ PULSE: SCANNING';
+        }
+    }
+}
+
+function updateStrikeZones(data) {
+    const m = data.markers;
+    if (!m) return;
+
+    const bslPrice = document.getElementById('magnet-bsl-price');
+    const bslDist = document.getElementById('magnet-bsl-dist');
+    const sslPrice = document.getElementById('magnet-ssl-price');
+    const sslDist = document.getElementById('magnet-ssl-dist');
+    const asiaHigh = document.getElementById('magnet-asia-high');
+    const asiaLow = document.getElementById('magnet-asia-low');
+    const sd1 = document.getElementById('magnet-cbdr-sd1');
+    const sd2 = document.getElementById('magnet-cbdr-sd2');
+
+    const price = data.currentPrice || 0;
+
+    if (bslPrice && m.draws?.highs?.length > 0) {
+        const topBsl = m.draws.highs[0];
+        bslPrice.innerText = topBsl.price.toFixed(2);
+        if (bslDist) bslDist.innerText = (((topBsl.price / price) - 1) * 100).toFixed(2) + '%';
+    }
+
+    if (sslPrice && m.draws?.lows?.length > 0) {
+        const bottomSsl = m.draws.lows[0];
+        sslPrice.innerText = bottomSsl.price.toFixed(2);
+        if (sslDist) sslDist.innerText = (((bottomSsl.price / price) - 1) * 100).toFixed(2) + '%';
+    }
+
+    if (asiaHigh && m.asiaRange) asiaHigh.innerText = m.asiaRange.high.toFixed(2);
+    if (asiaLow && m.asiaRange) asiaLow.innerText = m.asiaRange.low.toFixed(2);
+
+    const cbdr = data.bias?.cbdr;
+    if (cbdr) {
+        if (sd1) sd1.innerText = cbdr.sd1?.toFixed(2) || '--';
+        if (sd2) sd2.innerText = cbdr.sd2?.toFixed(2) || '--';
+    }
+}
+
+function updateBlockFeed(data) {
+    const feed = document.getElementById('block-trades-feed');
+    if (!feed || !data.blockTrades) return;
+
+    // Clear placeholder only if we have data
+    if (data.blockTrades.length > 0 && feed.innerHTML.includes('Listening for whales')) {
+        feed.innerHTML = '';
+    }
+
+    // Capture IDs of current items to avoid double-posting if updateBlockFeed is called multiple times with same data
+    const existingIds = new Set(Array.from(feed.children).map(c => c.getAttribute('data-id')));
+    
+    data.blockTrades.slice(-10).forEach(block => {
+        const blockId = `${block.symbol}-${block.time}-${block.size}`;
+        if (existingIds.has(blockId)) return;
+
+        const div = document.createElement('div');
+        div.setAttribute('data-id', blockId);
+        div.style.cssText = 'padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.55rem; display: flex; justify-content: space-between; align-items: center;';
+        
+        const isBuy = block.type === 'BUY';
+        const color = isBuy ? 'var(--bullish)' : 'var(--bearish)';
+        
+        div.innerHTML = `
+            <span style="font-weight: 800; color: #fff;">${block.symbol}</span>
+            <span style="color: ${color}; font-weight: 900;">$${(block.value / 1000).toFixed(0)}K ${isBuy ? 'Γû¦' : 'Γû+'}</span>
+            <span style="color: var(--text-dim); opacity: 0.7;">@ ${block.price}</span>
+        `;
+        
+        feed.prepend(div);
+        if (feed.children.length > 15) feed.lastChild.remove();
+    });
 }
