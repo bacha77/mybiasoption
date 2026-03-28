@@ -3327,3 +3327,100 @@ h3 {
     0% { background: rgba(244, 63, 94, 0.45); box-shadow: 0 0 20px rgba(244, 63, 94, 0.4); }
     100% { background: transparent; box-shadow: none; }
 }
+
+/* --- G7 SPIDER MATRIX (CSM) STYLES --- */
+.spider-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    padding: 0.5rem;
+}
+
+.spider-node {
+    text-align: center;
+    background: rgba(15, 23, 42, 0.4);
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.spider-node.node-leader {
+    border-color: var(--bullish);
+    background: rgba(16, 185, 129, 0.1) !important;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
+}
+
+.spider-node.node-leader::before {
+    content: 'TOP';
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    font-size: 0.35rem;
+    font-weight: 950;
+    color: var(--bullish);
+}
+
+.spider-node.node-laggard {
+    border-color: var(--bearish);
+    background: rgba(244, 63, 94, 0.1) !important;
+    box-shadow: 0 0 10px rgba(244, 63, 94, 0.1);
+}
+
+.spider-node.node-laggard::before {
+    content: 'WEAK';
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    font-size: 0.35rem;
+    font-weight: 950;
+    color: var(--bearish);
+}
+
+.strength-bar-bg {
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.05);
+    margin-top: 4px;
+}
+
+.strength-bar-fill {
+    height: 100%;
+    background: var(--gold);
+    transition: all 0.5s cubic-bezier(0.075, 0.82, 0.165, 1);
+}
+
+/* --- FIRE & RELOAD ANIMATIONS --- */
+.fire-pulse {
+    animation: fire-flicker 0.4s infinite alternate, fire-shake 0.2s infinite;
+    border: 2px solid #ef4444 !important;
+    background: rgba(239, 68, 68, 0.2) !important;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.4) !important;
+}
+
+@keyframes fire-flicker {
+    0% { opacity: 0.8; box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+    100% { opacity: 1; box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); }
+}
+
+@keyframes fire-shake {
+    0% { transform: translate(0,0); }
+    25% { transform: translate(1px, 1px); }
+    50% { transform: translate(-1px, -1px); }
+    75% { transform: translate(1px, -1px); }
+    100% { transform: translate(0,0); }
+}
+
+.reload-glow {
+    animation: reload-breath 1s infinite alternate;
+    border: 2px solid var(--bullish) !important;
+    background: rgba(16, 185, 129, 0.15) !important;
+}
+
+@keyframes reload-breath {
+    0% { box-shadow: 0 0 5px var(--bullish); }
+    100% { box-shadow: 0 0 25px var(--bullish); }
+}
+

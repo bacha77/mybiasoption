@@ -25,5 +25,6 @@
   "EURUSD=X",
   "GBPUSD=X",
   "USDJPY=X",
-  "AUDUSD=X"
+  "AUDUSD=X",
+  "DIA"
 ]

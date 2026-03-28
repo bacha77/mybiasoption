@@ -11,18 +11,104 @@ export class DataSourceManager {
         this.lastSourceUsed = 'YAHOO';
     }
 
+    async getQuotes(symbols) {
+        const output = {};
+        try {
+            // Priority 1: Pyth (High Speed Institutional Oracle)
+            const pythSymbols = symbols.filter(s => s !== 'VIX');
+            const pythResults = await pythService.getLatestPrices(pythSymbols).catch(() => ({}));
+            
+            Object.keys(pythResults).forEach(sym => {
+                const pyth = pythResults[sym];
+                if (pyth && pyth.price > 0) {
+                    output[sym] = {
+                        price: pyth.price,
+                        prevClose: this.prevCloseCache?.[sym]?.value || pyth.price,
+                        source: 'PYTH-BATCH'
+                    };
+                }
+            });
+
+            // Priority 2: Yahoo (Only for VIX or extreme fallbacks)
+            const missing = symbols.filter(s => !output[s]);
+            if (missing.length > 0) {
+                // Throttle Yahoo to prevent blocking
+                await Promise.all(missing.map(async (sym) => {
+                    try {
+                        let metaSym = sym;
+                        if (metaSym === 'VIX') metaSym = '^VIX';
+                        if (metaSym === 'DXY') metaSym = 'DX-Y.NYB';
+                        if (metaSym === 'GOLD') metaSym = 'GC=F';
+
+                        // Yahoo Rate-Limit Shield: Only call if not in cache or 15s elapsed
+                        const cached = this.prevCloseCache?.[metaSym];
+                        if (cached && (Date.now() - cached.time < 15000)) {
+                             output[sym] = { price: cached.price, prevClose: cached.value, source: 'CACHE' };
+                             return;
+                        }
+                        
+                        const q = await yahooFinance.quote(metaSym, {}, { validate: false }).catch(() => null);
+                        if (q && q.regularMarketPrice > 0) {
+                            output[sym] = {
+                                price: q.regularMarketPrice,
+                                prevClose: q.regularMarketPreviousClose || q.regularMarketOpen,
+                                change: q.regularMarketChangePercent,
+                                source: 'YAHOO-BENCH'
+                            };
+                            if (!this.prevCloseCache) this.prevCloseCache = {};
+                            this.prevCloseCache[metaSym] = { value: output[sym].prevClose, price: q.regularMarketPrice, time: Date.now() };
+                        }
+                    } catch (e) {}
+                }));
+            }
+        } catch (e) {
+            console.error("[DATA SOURCE] Benchmark Pulse Failed:", e.message);
+        }
+        return output;
+    }
+
     async getQuote(symbol) {
         // Source 0: Pyth Network (Ultra-High Speed Institutional Oracle)
         try {
             const pyth = await pythService.getLatestPrice(symbol);
             if (pyth && pyth.price > 0) {
                 this.lastSourceUsed = 'PYTH';
-                // Try to get prevClose from Yahoo for % change, but return Pyth price immediately
+                
+                // --- INSTANT CACHE & ASYNC META (Performance Boost) ---
+                if (!this.prevCloseCache) this.prevCloseCache = {};
+                
+                // Harmonize Metadata Source (Yahoo)
+                let metaSym = symbol;
+                if (metaSym === 'VIX') metaSym = '^VIX';
+                if (metaSym === 'DXY') metaSym = 'DX-Y.NYB';
+                if (metaSym === 'GOLD') metaSym = 'GC=F';
+
+                const cached = this.prevCloseCache[metaSym];
+                const now = Date.now();
+                
+                // If cache missing or older than 1 hour, refresh asychnronously
+                if (!cached || (now - cached.time > 3600000)) {
+                    yahooFinance.quote(metaSym, {}, { validate: false }).then(quote => {
+                        if (quote) {
+                            this.prevCloseCache[metaSym] = {
+                                value: quote.regularMarketPreviousClose || quote.regularMarketOpen || quote.regularMarketPrice,
+                                time: Date.now()
+                            };
+                        }
+                    }).catch(() => {});
+                }
+
+                let prevClose = cached ? cached.value : null;
+                if (!prevClose) {
+                    const fallback = { 'SPY': 585, 'QQQ': 480, 'DIA': 420, 'DXY': 103.5, 'VIX': 16.5, 'GOLD': 2500 };
+                    prevClose = fallback[symbol] || pyth.price;
+                }
+
                 return {
                     price: pyth.price,
-                    prevClose: null, // Will be filled by fallback logic if needed
+                    prevClose: prevClose, 
                     confidence: pyth.confidence,
-                    source: 'PYTH-HERMES'
+                    source: 'PYTH-HERMES-V2'
                 };
             }
         } catch (e) {}

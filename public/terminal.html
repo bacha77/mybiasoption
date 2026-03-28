@@ -159,6 +159,148 @@
                 <!-- Primary Chart Card -->
 
                 <section class="card reveal-1">
+                    <!-- G7 INSTITUTIONAL POWER BENCH (REBUILT FROM SCRATCH) -->
+                    <div id="market-ticker-ribbon" style="display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, auto); gap: 1px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px 12px 0 0; overflow: hidden; position: relative;">
+                        <!-- Media Query for larger screens: Switch to 7 columns -->
+                        <style>
+                            @media (min-width: 1200px) {
+                                #market-ticker-ribbon { grid-template-columns: repeat(7, 1fr); grid-template-rows: 1fr; }
+                            }
+                            .benchmark-cell { 
+                                background: #080d16; 
+                                padding: 12px 16px; 
+                                display: flex; 
+                                flex-direction: column; 
+                                justify-content: center; 
+                                transition: background 0.2s;
+                                border-right: 1px solid rgba(255,255,255,0.05);
+                                min-height: 70px;
+                            }
+                            .benchmark-cell:last-child { border-right: none; }
+                            .benchmark-header { 
+                                display: flex; 
+                                align-items: center; 
+                                justify-content: space-between; 
+                                margin-bottom: 4px;
+                            }
+                            .benchmark-sym { 
+                                font-size: 0.7rem; 
+                                font-weight: 800; 
+                                color: var(--gold); 
+                                letter-spacing: 1px; 
+                            }
+                            .benchmark-pulse {
+                                width: 5px; height: 5px; border-radius: 50%;
+                                background: var(--cyan); box-shadow: 0 0 6px var(--cyan);
+                                opacity: 0.4;
+                            }
+                            .benchmark-pulse.active { animation: pulse-blink 0.5s ease-out; opacity: 1; }
+                            @keyframes pulse-blink { 0% { transform: scale(1); } 100% { transform: scale(2.5); opacity: 0; } }
+
+                            .benchmark-price { 
+                                font-size: 1.25rem; 
+                                font-weight: 900; 
+                                color: #fff; 
+                                font-family: 'JetBrains Mono', monospace; 
+                                letter-spacing: -1px;
+                                margin-bottom: 2px;
+                            }
+                            .benchmark-meta { 
+                                display: flex; 
+                                align-items: center; 
+                                gap: 8px; 
+                                font-family: 'JetBrains Mono', monospace; 
+                                font-size: 0.65rem; 
+                                font-weight: 700;
+                            }
+                            .t-points { font-size: 0.8rem; }
+                        </style>
+
+                        <!-- CELLS (Rendered via JS, but template here) -->
+                        <div class="benchmark-cell ticker-item" data-symbol="SPY">
+                            <div class="benchmark-header">
+                                <span class="benchmark-sym">S&P 500 (SPY)</span>
+                                <div class="benchmark-pulse"></div>
+                            </div>
+                            <div class="benchmark-price t-price">--</div>
+                            <div class="benchmark-meta">
+                                <span class="t-points bullish-text">0.00</span>
+                                <span class="t-change opacity-50">0.00%</span>
+                            </div>
+                        </div>
+
+                        <div class="benchmark-cell ticker-item" data-symbol="QQQ">
+                            <div class="benchmark-header">
+                                <span class="benchmark-sym">NASDAQ (QQQ)</span>
+                                <div class="benchmark-pulse"></div>
+                            </div>
+                            <div class="benchmark-price t-price">--</div>
+                            <div class="benchmark-meta">
+                                <span class="t-points bullish-text">0.00</span>
+                                <span class="t-change opacity-50">0.00%</span>
+                            </div>
+                        </div>
+
+                        <div class="benchmark-cell ticker-item" data-symbol="DIA">
+                            <div class="benchmark-header">
+                                <span class="benchmark-sym">DOW 30 (DIA)</span>
+                                <div class="benchmark-pulse"></div>
+                            </div>
+                            <div class="benchmark-price t-price">--</div>
+                            <div class="benchmark-meta">
+                                <span class="t-points bullish-text">0.00</span>
+                                <span class="t-change opacity-50">0.00%</span>
+                            </div>
+                        </div>
+
+                        <div class="benchmark-cell ticker-item" data-symbol="BTC-USD">
+                            <div class="benchmark-header">
+                                <span class="benchmark-sym">BITCOIN (BTC)</span>
+                                <div class="benchmark-pulse"></div>
+                            </div>
+                            <div class="benchmark-price t-price">--</div>
+                            <div class="benchmark-meta">
+                                <span class="t-points bullish-text">0.00</span>
+                                <span class="t-change opacity-50">0.00%</span>
+                            </div>
+                        </div>
+
+                        <div class="benchmark-cell ticker-item" data-symbol="DXY">
+                            <div class="benchmark-header">
+                                <span class="benchmark-sym">USD INDEX (DXY)</span>
+                                <div class="benchmark-pulse"></div>
+                            </div>
+                            <div class="benchmark-price t-price">--</div>
+                            <div class="benchmark-meta">
+                                <span class="t-points bullish-text">0.00</span>
+                                <span class="t-change opacity-50">0.00%</span>
+                            </div>
+                        </div>
+
+                        <div class="benchmark-cell ticker-item" data-symbol="VIX">
+                            <div class="benchmark-header">
+                                <span class="benchmark-sym">VOLATILITY (VIX)</span>
+                                <div class="benchmark-pulse"></div>
+                            </div>
+                            <div class="benchmark-price t-price">--</div>
+                            <div class="benchmark-meta">
+                                <span class="t-points bullish-text">0.00</span>
+                                <span class="t-change opacity-50">0.00%</span>
+                            </div>
+                        </div>
+
+                        <div class="benchmark-cell ticker-item" data-symbol="GOLD">
+                            <div class="benchmark-header">
+                                <span class="benchmark-sym">SAFETY (GOLD)</span>
+                                <div class="benchmark-pulse"></div>
+                            </div>
+                            <div class="benchmark-price t-price">--</div>
+                            <div class="benchmark-meta">
+                                <span class="t-points bullish-text">0.00</span>
+                                <span class="t-change opacity-50">0.00%</span>
+                            </div>
+                        </div>
+                    </div>
                     <div class="chart-header">
                         <div>
                             <span id="symbol-display" class="chart-symbol">SPY</span>
@@ -446,6 +588,63 @@
 
             <!-- Right Column (Sidebar) -->
             <aside class="sidebar">
+                <!-- GLOBAL MACRO OVERNIGHT PULSE (REBUILT: INSTITUTIONAL GRADE) -->
+                <section class="card reveal-1" style="margin-bottom: 0.75rem; border-color: rgba(255,157,0,0.15); background: linear-gradient(180deg, rgba(15, 23, 42, 0.6) 0%, rgba(0, 0, 0, 0.8) 100%);">
+                    <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.5); padding: 8px 12px; border-bottom: 1px solid rgba(255,157,0,0.3);">
+                        <div style="display:flex; flex-direction:column;">
+                            <span style="letter-spacing:1px; font-weight:950;">GLOBAL OVERNIGHT PULSE</span>
+                            <span style="font-size:0.45rem; color:var(--text-dim); letter-spacing:0.5px;">INSTITUTIONAL ANCHOR: <span style="color:var(--gold);">SPY (S&P 500)</span></span>
+                        </div>
+                        <div id="overnight-global-status" style="font-size: 0.55rem; color: var(--gold); border: 1px solid var(--gold); padding: 2px 8px; border-radius: 4px; font-weight: 950; text-transform: uppercase;">NEUTRAL</div>
+                    </div>
+
+                    <!-- SESSION PERFORMANCE MATRIX -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: rgba(255,255,255,0.05); margin-top: 0px;">
+                        <div class="session-stat" style="text-align: center; background: rgba(0,0,0,0.3); padding: 12px 6px;">
+                            <div style="font-size: 0.45rem; color: var(--text-dim); font-weight: 800; margin-bottom: 6px; letter-spacing: 0.5px;">ASIA OPEN</div>
+                            <div id="overnight-asia-perf" style="font-size: 1.1rem; font-weight: 950; font-family: 'JetBrains Mono'; color: #fff;">0.00%</div>
+                        </div>
+                        <div class="session-stat" style="text-align: center; background: rgba(0,0,0,0.3); padding: 12px 6px;">
+                            <div style="font-size: 0.45rem; color: var(--text-dim); font-weight: 800; margin-bottom: 6px; letter-spacing: 0.5px;">LONDON OPEN</div>
+                            <div id="overnight-london-perf" style="font-size: 1.1rem; font-weight: 950; font-family: 'JetBrains Mono'; color: #fff;">0.00%</div>
+                        </div>
+                        <div class="session-stat" style="text-align: center; background: rgba(0,0,0,0.3); padding: 12px 6px;">
+                            <div style="font-size: 0.45rem; color: var(--gold); font-weight: 900; margin-bottom: 6px; letter-spacing: 0.5px;">NY MIDNIGHT</div>
+                            <div id="overnight-ny-perf" style="font-size: 1.1rem; font-weight: 950; font-family: 'JetBrains Mono'; color: #fff;">0.00%</div>
+                        </div>
+                    </div>
+
+                    <!-- INSTITUTIONAL SENTIMENT METER -->
+                    <div style="padding: 15px 12px 8px 12px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.45rem; font-weight: 900; margin-bottom: 6px; text-transform: uppercase;">
+                            <span style="color:var(--bearish);">Bearish Distribution</span>
+                            <span style="color:var(--gold);">Equilibrium</span>
+                            <span style="color:var(--bullish);">Bullish Accumulation</span>
+                        </div>
+                        <div id="sentiment-meter-container" style="height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; position: relative; border: 1px solid rgba(255,255,255,0.1);">
+                            <div id="sentiment-meter-fill" style="position: absolute; left: 50%; top: 0; bottom: 0; width: 0%; background: var(--cyan); transition: all 1s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 10px var(--cyan);"></div>
+                            <div id="sentiment-meter-marker" style="position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; background: #fff; z-index: 2; transition: left 1s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+                        </div>
+                    </div>
+
+                    <!-- LIQUIDITY SWEEP RADAR -->
+                    <div style="display: flex; justify-content: space-between; padding: 5px 15px 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.03);">
+                         <div id="radar-sweep-asia" style="display:flex; align-items:center; gap:4px; font-size:0.5rem; color:var(--text-dim); font-weight:800;">
+                            <div class="pulse-dot" style="width:6px; height:6px; background:#334155; border-radius:50%;"></div> ASIA SWEEP
+                         </div>
+                         <div id="radar-sweep-london" style="display:flex; align-items:center; gap:4px; font-size:0.5rem; color:var(--text-dim); font-weight:800;">
+                            <div class="pulse-dot" style="width:6px; height:6px; background:#334155; border-radius:50%;"></div> LONDON SWEEP
+                         </div>
+                         <div id="radar-sweep-ny" style="display:flex; align-items:center; gap:4px; font-size:0.5rem; color:var(--text-dim); font-weight:800;">
+                            <div class="pulse-dot" style="width:6px; height:6px; background:#334155; border-radius:50%;"></div> NY SWEEP
+                         </div>
+                    </div>
+
+                    <div id="overnight-narrative" style="font-size: 0.5rem; color: rgba(255,255,255,0.4); padding: 10px; font-style: italic; line-height: 1.4; text-align: center; min-height: 40px;">
+                        Analyzing institutional global flow for SPY anchor...
+                    </div>
+                </section>
+
                 <!-- Institutional Intelligence Radar (Elite Layer) -->
                 <section class="card accent-border reveal-1" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(20, 20, 20, 0) 100%); border: 1px solid rgba(16, 185, 129, 0.2);">
                     <div class="card-header-flex">
@@ -542,6 +741,37 @@
                             Synchronizing institutional pulse... Waiting for high-impact window.
                         </div>
 
+                        <!-- 0DTE GOLD STANDARD SIGNAL RADAR -->
+                        <div id="0dte-radar-card" style="margin-top: 1rem; padding: 0.8rem; background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(0, 0, 0, 0.4) 100%); border-radius: 6px; border: 1px solid rgba(34, 197, 94, 0.3); box-shadow: 0 0 20px rgba(34, 197, 94, 0.05);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div style="font-size: 0.65rem; font-weight: 900; color: #22c55e; letter-spacing: 1.2px;">0DTE GOLD SIGNAL ENGINE</div>
+                                <div id="0dte-live-tag" style="font-size: 0.45rem; font-weight: 900; color: #fff; background: #22c55e; padding: 2px 6px; border-radius: 10px; animation: pulse-opacity 1s infinite alternate;">LIVE</div>
+                            </div>
+                            <div id="0dte-content" style="min-height: 40px;">
+                                <div id="0dte-placeholder" style="text-align: center; opacity: 0.3; padding: 10px 0;">
+                                    <div style="font-size: 0.5rem; letter-spacing: 2px; font-weight: 900;">SCANNING OPTION CHAIN</div>
+                                    <div id="0dte-conf-val" style="font-family: 'JetBrains Mono'; font-size: 0.45rem; margin-top: 4px;">CONFLUENCE: --%</div>
+                                </div>
+                                <div id="0dte-signal-main" style="display: none; animation: slide-in-bottom 0.4s ease-out;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px;">
+                                        <div id="0dte-type" style="font-size: 1.2rem; font-weight: 900; color: #22c55e; line-height: 1;">-- CALL</div>
+                                        <div id="0dte-confidence" style="font-size: 0.6rem; color: var(--gold); font-weight: 800; border: 1px solid var(--gold); padding: 1px 4px; border-radius: 2px;">94% CONF</div>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: 'JetBrains Mono'; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px;">
+                                        <div>
+                                            <div style="font-size: 0.45rem; color: var(--text-dim);">STRIKE</div>
+                                            <div id="0dte-strike" style="font-size: 0.85rem; font-weight: 900; color: #fff;">$000.50</div>
+                                        </div>
+                                        <div style="text-align: right;">
+                                            <div style="font-size: 0.45rem; color: var(--text-dim);">R:R RATIO</div>
+                                            <div id="0dte-rr" style="font-size: 0.85rem; font-weight: 900; color: var(--gold);">2.4 : 1</div>
+                                        </div>
+                                    </div>
+                                    <div id="0dte-trigger" style="font-size: 0.45rem; color: #fff; opacity: 0.8; margin-top: 8px; font-style: italic; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 4px;">Trigger: --</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div id="confluence-checklist" style="margin-top: 1rem; padding: 0.8rem; background: rgba(0,0,0,0.3); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
                             <div style="font-size: 0.55rem; font-weight: 800; color: var(--gold); letter-spacing: 1px; margin-bottom: 10px;">ELITE CONFLUENCE CHECKLIST</div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
@@ -584,6 +814,9 @@
                             <div id="po3-description" style="font-size: 0.5rem; color: var(--text-dim); line-height: 1.3;">
                                 PHASE I: Institutions are building positions. Expect tight range and low volatility.
                             </div>
+                            <div style="margin-top: 8px; font-size: 0.55rem; font-weight: 800; color: #fff; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 6px;">
+                                MM EXPECTED RANGE (0DTE): <span id="expected-range-val" style="color:var(--gold);">±$0.00</span>
+                            </div>
                         </div>
 
                         <!-- RETAIL POSITIONING GAUGE (Contrarian Indicator) -->
@@ -611,37 +844,157 @@
                             </div>
                             <div id="spider-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
                                 <!-- Dynamics injected by app.js -->
-                                <div class="spider-node" data-cur="EUR" style="text-align: center; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
-                                    <div style="font-size: 0.45rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">EUR</div>
-                                    <div class="val" style="font-size: 0.45rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                <div class="spider-node" data-cur="EUR" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
+                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">EUR</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
+                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                    </div>
+                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
+                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    </div>
+                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
-                                <div class="spider-node" data-cur="GBP" style="text-align: center; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
-                                    <div style="font-size: 0.45rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">GBP</div>
-                                    <div class="val" style="font-size: 0.45rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                <div class="spider-node" data-cur="GBP" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
+                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">GBP</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
+                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                    </div>
+                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
+                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    </div>
+                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
-                                <div class="spider-node" data-cur="JPY" style="text-align: center; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
-                                    <div style="font-size: 0.45rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">JPY</div>
-                                    <div class="val" style="font-size: 0.45rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                <div class="spider-node" data-cur="JPY" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
+                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">JPY</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
+                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                    </div>
+                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
+                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    </div>
+                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
-                                <div class="spider-node" data-cur="AUD" style="text-align: center; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
-                                    <div style="font-size: 0.45rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">AUD</div>
-                                    <div class="val" style="font-size: 0.45rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                <div class="spider-node" data-cur="AUD" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
+                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">AUD</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
+                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                    </div>
+                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
+                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    </div>
+                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
-                                <div class="spider-node" data-cur="CAD" style="text-align: center; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
-                                    <div style="font-size: 0.45rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">CAD</div>
-                                    <div class="val" style="font-size: 0.45rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                <div class="spider-node" data-cur="CAD" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
+                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">CAD</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
+                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                    </div>
+                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
+                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    </div>
+                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
-                                <div class="spider-node" data-cur="NZD" style="text-align: center; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
-                                    <div style="font-size: 0.45rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">NZD</div>
-                                    <div class="val" style="font-size: 0.45rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                <div class="spider-node" data-cur="NZD" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
+                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">NZD</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
+                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                    </div>
+                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
+                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    </div>
+                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
-                                <div class="spider-node" data-cur="CHF" style="text-align: center; background: rgba(255,255,255,0.03); padding: 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
-                                    <div style="font-size: 0.45rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">CHF</div>
-                                    <div class="val" style="font-size: 0.45rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                <div class="spider-node" data-cur="CHF" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
+                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">CHF</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
+                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                    </div>
+                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
+                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    </div>
+                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
-                                <div class="spider-node" data-cur="DXY" style="text-align: center; background: rgba(16,185,129,0.05); padding: 4px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.2);">
-                                    <div style="font-size: 0.45rem; font-weight: 900; color: var(--gold); margin-bottom: 2px;">DXY</div>
-                                    <div class="val" style="font-size: 0.45rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--text-bright);">+0.00%</div>
+                                <div class="spider-node" data-cur="USD" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
+                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">USD</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
+                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
+                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                    </div>
+                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
+                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    </div>
+                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- NEW: MACRO-EVENT VOLATILITY PULSE -->
+                        <div id="event-pulse-container" style="margin-top: 1rem; padding: 0.8rem; background: rgba(0,0,0,0.3); border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.05);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="font-size: 0.55rem; font-weight: 800; color: var(--gold); letter-spacing: 1.2px;">MACRO VOLATILITY PULSE</div>
+                                <div id="event-status" style="font-size: 0.4rem; font-weight: 900; background: var(--gold); color: #000; padding: 2px 5px; border-radius: 3px; text-transform: uppercase;">STABLE</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div id="event-countdown-box" style="width: 42px; height: 42px; border: 2px solid var(--gold); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.02);">
+                                    <div id="event-timer-min" style="font-size: 0.7rem; font-weight: 950; color: #fff; line-height: 1;">--</div>
+                                    <div style="font-size: 0.3rem; color: var(--text-dim); font-weight: 800;">MIN</div>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div id="event-name" style="font-size: 0.65rem; font-weight: 900; color: #fff; text-transform: uppercase; margin-bottom: 2px;">SCANNING EVENTS...</div>
+                                    <div id="event-impact" style="font-size: 0.4rem; color: var(--text-dim); font-weight: 700; letter-spacing: 0.5px;">IMPACT: UNKNOWN</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- NEW: G7 CORRELATION HEATMAP (Decoupling Alerts) -->
+                        <div id="g7-correlation-container" style="margin-top: 1rem; padding: 0.8rem; background: rgba(0, 180, 255, 0.03); border-radius: 6px; border: 1px solid rgba(0, 180, 255, 0.1);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div style="font-size: 0.55rem; font-weight: 800; color: #00f2ff; letter-spacing: 1.2px;">G7 CORRELATION HEATMAP</div>
+                                <div id="decoupling-status" style="font-size: 0.4rem; font-weight: 900; color: #00f2ff; opacity: 0.8;">SCANNING...</div>
+                            </div>
+                            <div id="correlation-matrix" style="display: grid; grid-template-columns: 24px repeat(8, 2fr); gap: 2px;">
+                                <!-- Header Row -->
+                                <div style="background:transparent;"></div>
+                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">USD</div>
+                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">EUR</div>
+                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">GBP</div>
+                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">JPY</div>
+                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">AUD</div>
+                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">CAD</div>
+                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">CHF</div>
+                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">NZD</div>
+                            </div>
+                            <div style="margin-top: 10px; display: flex; gap: 8px; justify-content: center;">
+                                <div style="display:flex; align-items:center; gap:3px;">
+                                    <div style="width:5px; height:5px; background:#00f2ff; border-radius:1px;"></div>
+                                    <span style="font-size:0.3rem; color:var(--text-dim);">COUPLED</span>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:3px;">
+                                    <div style="width:5px; height:5px; background:var(--gold); border-radius:1px;"></div>
+                                    <span style="font-size:0.3rem; color:var(--text-dim);">DECOUPLED</span>
                                 </div>
                             </div>
                         </div>

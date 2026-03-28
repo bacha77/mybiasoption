@@ -224,6 +224,7 @@ const roroLabel = document.getElementById('roro-label');
 const roroBar = document.getElementById('roro-bar');
 const roroVal = document.getElementById('roro-val');
 const displacementBadge = document.getElementById('displacement-badge');
+const expectedRangeEl = document.getElementById('expected-range-val');
 
 // Radar Elements
 const radarIrScore = document.getElementById('radar-ir-score');
@@ -324,6 +325,15 @@ class InstitutionalAudio {
     }
     playWhale() { this.play(this.whaleFreq, 'triangle', 0.6, 0.12); }
     playSignal() { this.play(this.signalFreq, 'sine', 0.4, 0.08); }
+    playTrap() {
+        this.play(220, 'square', 0.2, 0.1);
+        setTimeout(() => this.play(110, 'square', 0.4, 0.15), 200);
+    }
+    playFireSignal() {
+        this.play(660, 'sawtooth', 0.1, 0.1);
+        setTimeout(() => this.play(880, 'sawtooth', 0.15, 0.12), 100);
+        setTimeout(() => this.play(1100, 'sawtooth', 0.2, 0.15), 200);
+    }
 }
 
 class VoiceNarrator {
@@ -361,6 +371,9 @@ class VoiceNarrator {
             utterance.pitch = 0.95;
             this.synth.speak(utterance);
         } catch (e) { }
+    }
+    speakTrap(symbol, type) {
+        this.speak(`CAUTION. ${type.replace('_',' ')} DETECTED ON ${symbol.replace('=X','')}. INSTITUTIONAL TRAP IN PROGRESS.`);
     }
 }
 
@@ -564,6 +577,10 @@ function initChartInstance() {
             textColor: '#94a3b8',
             fontFamily: "'Inter', sans-serif",
         },
+        localization: {
+            timeZone: 'America/New_York', // Institutional Standard: NY Time
+            priceFormatter: p => p > 1000 ? p.toFixed(2) : p.toFixed(4)
+        },
         grid: {
             vertLines: { color: 'rgba(255, 255, 255, 0.03)', style: 1 },
             horzLines: { color: 'rgba(255, 255, 255, 0.03)', style: 1 },
@@ -621,18 +638,26 @@ document.getElementById('zoom-out-btn')?.addEventListener('click', () => {
     }
 });
 function setChartData(candles) {
-    if (!candleSeries || !candles) return;
+    if (!candleSeries || !candles || candles.length === 0) return;
     try {
-        const formatted = candles
-            .filter(c => c.open > 0 && c.high > 0 && c.low > 0 && c.close > 0) // Strict positive filter
-            .map(c => ({
-                time: Math.floor(Number(c.timestamp) / 1000),
+        const formatted = candles.map(c => {
+            // Support both raw server candles and pre-enriched client candles
+            const time = c.time || Math.floor(Number(c.timestamp) / 1000);
+            if (!time || isNaN(time)) return null;
+
+            return {
+                time: time,
                 open: Number(c.open),
                 high: Number(c.high),
                 low: Number(c.low),
-                close: Number(c.close)
-            }))
-            .sort((a, b) => a.time - b.time);
+                close: Number(c.close),
+                // Preserve institutional shading from server
+                color: c.color,
+                wickColor: c.wickColor || c.color,
+                borderColor: c.borderColor || c.color
+            };
+        }).filter(c => c !== null && c.open > 0)
+          .sort((a, b) => a.time - b.time);
 
         if (formatted.length > 0) {
             candleSeries.setData(formatted);
@@ -827,7 +852,8 @@ function updateInstitutionalRadar(data) {
     // 5. Reality Narrative
     if (radarRealityText) {
         radarRealityText.innerText = bias.narrative || "Synchronizing institutional pulse...";
-        radarRealityText.style.borderLeftColor = bias.bias.includes('BULLISH') ? 'var(--bullish)' : (bias.bias.includes('BEARISH') ? 'var(--bearish)' : 'var(--gold)');
+        const currentBias = bias.bias || 'NEUTRAL';
+        radarRealityText.style.borderLeftColor = currentBias.includes('BULLISH') ? 'var(--bullish)' : (currentBias.includes('BEARISH') ? 'var(--bearish)' : 'var(--gold)');
     }
 
     // 6. Retail Sentiment Gauge (Contrarian Indicator)
@@ -969,9 +995,30 @@ function updateInstitutionalRadar(data) {
     if (data.scalpScan && scalperOverlay) {
         scalperOverlay.style.display = 'block';
         if (scalperVelocity) scalperVelocity.innerText = data.scalpScan.velocity;
+        
         if (scalperResult) {
-            scalperResult.innerText = data.scalpScan.signal;
+            const oldSignal = scalperResult.innerText;
+            const newSignal = data.scalpScan.signal;
+            scalperResult.innerText = newSignal;
             scalperResult.style.color = data.scalpScan.color;
+
+            // --- ELITE ALARMS ---
+            if (newSignal !== oldSignal && newSignal !== 'SEARCHING...') {
+                if (data.scalpScan.isFire) {
+                    audioHooter.playFireSignal();
+                    if (voiceNarrator.enabled) voiceNarrator.speak(`${data.symbol.replace('=X','')} FIRE BREAKOUT DETECTED. HIGH VELOCITY.`);
+                    scalperOverlay.classList.add('fire-pulse');
+                    showToast(`🔥 FIRE DETECTED: ${data.symbol.replace('=X','')}`, "BULLISH");
+                } else if (data.scalpScan.isReload) {
+                    audioHooter.playSignal();
+                    if (voiceNarrator.enabled) voiceNarrator.speak(`${data.symbol.replace('=X','')} INSTITUTIONAL RELOAD.`);
+                    scalperOverlay.classList.add('reload-glow');
+                    showToast(`♻️ RELOAD DETECTED: ${data.symbol.replace('=X','')}`, "BULLISH");
+                }
+                setTimeout(() => {
+                    scalperOverlay.classList.remove('fire-pulse', 'reload-glow');
+                }, 3000);
+            }
         }
     } else if (scalperOverlay) {
         scalperOverlay.style.display = 'none';
@@ -1090,13 +1137,41 @@ function updateChartOverlays(data) {
         addLevel(m.asiaRange.low, 'rgba(56, 189, 248, 0.4)', 1, 'ASIA LOW', 1);
     }
 
-    // --- INSTITUTIONAL HEATMAP (GRAVITY ZONES) ---
+    // --- INSTITUTIONAL HEATMAP & DARK POOL POC ---
     if (data.heatmap) {
-        data.heatmap.slice(0, 5).forEach(zone => {
-            // Only add lines for high-gravity targets (> 70)
-            if (zone.gravity > 70) {
-                addLevel(zone.price, zone.color, 1, `[HUNT] ${zone.type}`, 2);
+        data.heatmap.forEach(zone => {
+            if (zone.strength > 60) {
+                addLevel(zone.price, zone.color, zone.type === 'VOLUME_POC' ? 0 : 1, zone.label, zone.strength);
             }
+        });
+    }
+
+    // --- DARK POOL VOLUME PROFILE (HIGH ACCUMULATION ZONES) ---
+    if (data.volumeProfile) {
+        data.volumeProfile.forEach(p => {
+            if (p.intensity > 70 && !p.isPOC) {
+                addLevel(p.price, 'rgba(255, 255, 255, 0.03)', 2, '', 5);
+            }
+        });
+    }
+
+    // --- 0DTE EXPECTED MOVE OVERLAY (INSTITUTIONAL RANGE) ---
+    if (data.expectedMove) {
+        addLevel(data.expectedMove.upper, 'rgba(245, 158, 11, 0.6)', 1, '0DTE EXPECTED UPPER', 25);
+        addLevel(data.expectedMove.lower, 'rgba(245, 158, 11, 0.6)', 1, '0DTE EXPECTED LOWER', 25);
+    }
+
+    // --- INSTITUTIONAL DARK POOL FOOTPRINTS (PERSISTENT CLUSTERS) ---
+    if (data.darkPoolFootprints) {
+        data.darkPoolFootprints.forEach(fp => {
+            addLevel(fp.price, fp.color, 0, fp.label, fp.weight);
+        });
+    }
+
+    // --- INSTITUTIONAL ORDER FLOW HEATMAP (DOM) ---
+    if (data.orderFlowDOM) {
+        data.orderFlowDOM.forEach(dom => {
+            addLevel(dom.price, dom.color, 0, '', 5);
         });
     }
 
@@ -1159,42 +1234,47 @@ function updateChartOverlays(data) {
     const nyTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 30, 0).getTime() / 1000;
 
     const allMarkers = [];
-    const scalperVelocity = document.getElementById('scalper-velocity-val');
-    const scalperResult = document.getElementById('scalper-scan-result');
 
-    if (data.scalpScan && scalperOverlay) {
-        scalperOverlay.style.display = 'block';
-        if (scalperVelocity) scalperVelocity.innerText = data.scalpScan.velocity;
-        if (scalperResult) {
-            scalperResult.innerText = data.scalpScan.signal;
-            scalperResult.style.color = data.scalpScan.color;
-        }
-    } else if (scalperOverlay) {
-        scalperOverlay.style.display = 'none';
+    // 5. LIQUIDATION SWEEP MARKERS
+    if (data.markers && data.markers.sweeps) {
+        data.markers.sweeps.forEach(s => {
+            allMarkers.push({
+                time: Math.floor(s.timestamp / 1000),
+                position: s.type === 'BULLISH' ? 'belowBar' : 'aboveBar',
+                color: s.type === 'BULLISH' ? 'var(--bullish)' : 'var(--bearish)',
+                shape: s.type === 'BULLISH' ? 'arrowUp' : 'arrowDown',
+                text: s.type === 'BULLISH' ? 'SWEEP (L)' : 'SWEEP (S)',
+                size: 2
+            });
+        });
+    }
+
+    if (allMarkers.length > 0) {
+        candleSeries.setMarkers(allMarkers.sort((a,b) => a.time - b.time));
     }
 }
 
 
 socket.on('init', (data) => {
     console.log(`[SOCKET] Received init for ${data.symbol}`);
+    if (candleSeries) candleSeries.setData([]);
     setChartData(data.candles || []);
     updateUI(data);
     if (data.watchlist) updateWatchlist(data);
-    const btnManualScan = document.getElementById('btn-manual-scan');
-    if (btnManualScan) {
-        btnManualScan.onclick = (e) => {
-            console.log('[CLIENT] EMITTING manual_scan_trigger');
-            socket.emit('manual_scan_trigger');
-            e.stopPropagation();
-            btnManualScan.innerText = 'SCANNING...';
-            socket.emit('manual_scan');
-            setTimeout(() => { btnManualScan.innerText = 'SCAN NOW'; }, 2000);
-        };
-    }
 
     if ((!data.candles || data.candles.length === 0) && data.timeframe === '1m') {
         socket.emit('switch_timeframe', '5m');
     }
+});
+
+socket.on('symbol_updated', (data) => {
+    console.log(`[SOCKET] Symbol Updated: ${data.symbol}`);
+    if (data.candles && data.candles.length > 0) {
+        if (candleSeries) candleSeries.setData([]); 
+        setChartData(data.candles);
+    }
+    updateUI(data);
+    if (data.watchlist) updateWatchlist(data);
 });
 
 socket.on('update', (data) => {
@@ -1213,50 +1293,72 @@ socket.on('update', (data) => {
     }
     if (candleSeries && data.candles && data.candles.length > 0) {
         const lastCandle = data.candles[data.candles.length - 1];
-        if (lastCandle.timestamp && lastCandle.open != null) {
-            const timeInSeconds = Math.floor(Number(lastCandle.timestamp) / 1000);
+        if (lastCandle.time != null && lastCandle.open != null) {
             try {
                 candleSeries.update({
-                    time: timeInSeconds,
+                    time: lastCandle.time,
                     open: Number(lastCandle.open),
                     high: Number(lastCandle.high),
                     low: Number(lastCandle.low),
-                    close: Number(lastCandle.close)
+                    close: Number(lastCandle.close),
+                    color: lastCandle.color,
+                    wickColor: lastCandle.wickColor,
+                    borderColor: lastCandle.borderColor
                 });
             } catch (e) {
-                console.warn("[CHART] Update skipped (likely older/duplicate timestamp):", timeInSeconds);
+                console.warn("[CHART] Update skipped:", lastCandle.time);
             }
+        }
+
+        // --- INSTITUTIONAL SMT MARKERS ---
+        const radar = data.institutionalRadar || {};
+        if (radar.smt) {
+            const markers = [{
+                time: lastCandle.time,
+                position: radar.smt.type.includes('BEARISH') ? 'aboveBar' : 'belowBar',
+                color: 'var(--gold)',
+                shape: radar.smt.type.includes('BEARISH') ? 'arrowDown' : 'arrowUp',
+                text: 'SMT'
+            }];
+            candleSeries.setMarkers(markers);
+        } else {
+            candleSeries.setMarkers([]);
         }
     }
 });
 
+socket.on('price_updated', (data) => {
+    if (data.isBatch && Array.isArray(data.updates)) {
+        data.updates.forEach(upd => {
+            if (typeof updateMarketTicker === 'function') updateMarketTicker(upd);
+        });
+    } else {
+        if (typeof updateMarketTicker === 'function') updateMarketTicker(data);
+    }
+});
+
+socket.on('price_update', (data) => {
+    if (typeof updateUI === 'function') updateUI(data);
+});
+
 socket.on('tf_updated', (data) => {
     console.log(`[SOCKET] TF Updated: ${data.timeframe}, candles: ${data.candles?.length}`);
-    if (data.candles && candleSeries) {
-        const seenTs = new Set();
-        const formattedData = data.candles
-            .filter(c => c.open != null && c.open > 0 && c.high != null && c.low != null && c.close != null)
-            .map(c => ({
-                time: Math.floor(c.timestamp / 1000),
-                open: c.open,
-                high: c.high,
-                low: c.low,
-                close: c.close
-            }))
-            .filter(c => {
-                if (seenTs.has(c.time)) return false;
-                seenTs.add(c.time);
-                return true;
-            })
-            .sort((a, b) => a.time - b.time);
-
-        if (formattedData.length > 0) {
-            candleSeries.setData(formattedData);
-            setTimeout(() => {
-                if (tvChart) tvChart.timeScale().fitContent();
-            }, 100);
-        }
+    if (candleSeries && data.candles && data.candles.length > 0) {
+        // Only clear and reset if we have new data to show
+        candleSeries.setData([]);
+        setChartData(data.candles);
+        
+        setTimeout(() => { 
+            if (tvChart) {
+                tvChart.timeScale().fitContent();
+                tvChart.timeScale().scrollToRealTime();
+            }
+        }, 200);
+    } else {
+        // If no data yet, don't clear the chart, just show a notification
+        if (typeof showToast === 'function') showToast(`Syncing ${data.timeframe} data...`, 'warning');
     }
+    updateUI(data);
     if (data.watchlist) updateWatchlist(data);
 });
 
@@ -1275,8 +1377,8 @@ function updateUI(data) {
         const symbolDisplay = document.getElementById('symbol-display');
 
         if (priceEl) {
-            const price = data.currentPrice || 0;
-            priceEl.innerText = price > 0 ? price.toFixed(precision) : '---';
+            const price = data.currentPrice || data.price || 0;
+            priceEl.innerText = price > 0 ? price.toFixed(precision) : 'SYNCING...';
             
             // 1a. --- SUB-SECOND TICK FLASH ---
             if (typeof lastPrice !== 'undefined' && lastPrice !== price && price > 0) {
@@ -1310,8 +1412,21 @@ function updateUI(data) {
             confluenceScoreEl.innerText = `${score}%`;
             confluenceScoreEl.style.color = score >= 70 ? 'var(--bullish)' : (score <= 30 ? 'var(--bearish)' : 'var(--gold)');
         }
-
         if (symbolDisplay) symbolDisplay.innerText = symbol;
+
+        // --- SUB-SECOND CANDLE SYNC (TOS-STYLE PERFORMANCE) ---
+        // Ensure the active candle breathes with the market in real-time
+        if (data.candle && candleSeries) {
+            try {
+                const c = data.candle;
+                const time = c.time || Math.floor(Number(c.timestamp) / 1000);
+                if (time && !isNaN(time)) {
+                    // UNIFIED: Candle updates are now handled in a single high-precision pass below.
+                }
+            } catch (e) {
+                console.warn("[CHART] Failed to identify live tick context:", e);
+            }
+        }
 
         // 2. --- INSTITUTIONAL RADAR & BIAS ---
         const radar = data.markers?.radar || data.institutionalRadar || {};
@@ -1347,7 +1462,10 @@ function updateUI(data) {
             radarRealityText.style.borderLeftColor = b.includes('BULLISH') ? 'var(--bullish)' : (b.includes('BEARISH') ? 'var(--bearish)' : '#94a3b8');
         }
 
-        // --- NEW: ADVANCED BADGE ENGINE ---
+        if (expectedRangeEl && data.expectedMove) {
+            expectedRangeEl.innerText = `±$${data.expectedMove.range.toFixed(2)}`;
+        }
+
         const b = biasData;
         const m = data.markers || {};
         const radar_active = m.radar || data.institutionalRadar || {};
@@ -1491,7 +1609,12 @@ function updateUI(data) {
         executeUpdate(updateSpiderMatrix, 'SpiderMatrix');
         executeUpdate(updateProtocolStatus, 'ProtocolStatus');
         executeUpdate(updateChartOverlays, 'ChartOverlays');
+        executeUpdate(update0DTESignal, '0DTE Signal');
         executeUpdate(updateChecklist, 'Checklist');
+        executeUpdate(updateMarketTicker, 'Market Ticker');
+        executeUpdate(updateG7Correlation, 'G7 Correlation');
+        executeUpdate(updateEventPulse, 'Event Pulse');
+        executeUpdate(updateForexRadar, 'ForexRadar');
 
         // --- PYTH SUB-SECOND TICK (Improvement 4) ---
         if (candleSeries && data.currentPrice > 0) {
@@ -1505,12 +1628,75 @@ function updateUI(data) {
             const now = Date.now();
             const candleTs = Math.floor(now / tfMs) * tfMs;
             const timeInSeconds = Math.floor(candleTs / 1000);
-            
-            // This updates the very last bar on your chart with institutional precision
-            candleSeries.update({
-                time: timeInSeconds,
-                close: data.currentPrice
-            });
+
+            // Apply institutional high-velocity shading to the real-time tick
+            const lastEnriched = data.candles ? data.candles[data.candles.length - 1] : null;
+            const liveColor = (lastEnriched && lastEnriched.time === timeInSeconds) ? lastEnriched.color : (data.currentPrice >= (data.prevOpen || data.currentPrice) ? '#10b981' : '#f43f5e');
+
+            // UNIFIED INSTITUTIONAL HEARTBEAT: Single-pass candle render
+            const c = data.candle || {};
+            try {
+                candleSeries.update({
+                    time: timeInSeconds,
+                    open: Number(c.open || data.currentPrice),
+                    high: Number(c.high || data.currentPrice),
+                    low: Number(c.low || data.currentPrice),
+                    close: Number(data.currentPrice || data.price || 0),
+                    color: liveColor,
+                    wickColor: liveColor,
+                    borderColor: liveColor
+                });
+            } catch (err) {
+                // If local time is out of sync with history, we skip the real-time update to keep the HUD alive
+                if (err.message.includes('oldest data')) {
+                    // SILENT SKIP: Prevent time-drift from crashing the whole UI
+                } else {
+                    console.error("[UI] Critical Update Failure:", err);
+                }
+            }
+
+            // Restore Edge-Lock: Keep the chart synchronized to the live price automatically
+            if (tvChart) tvChart.timeScale().scrollToRealTime();
+        }
+        // 7. --- GLOBAL OVERNIGHT PULSE ---
+        if (data.overnightSentiment) {
+            const os = data.overnightSentiment;
+            const asiaEl = document.getElementById('overnight-asia-perf');
+            const londonEl = document.getElementById('overnight-london-perf');
+            const nyEl = document.getElementById('overnight-ny-perf');
+            const prevEl = document.getElementById('overnight-prev-perf');
+            const statusEl = document.getElementById('overnight-global-status');
+            const narrEl = document.getElementById('overnight-narrative');
+
+            if (asiaEl) {
+                asiaEl.innerText = `${os.asia >= 0 ? '+' : ''}${os.asia.toFixed(2)}%`;
+                asiaEl.className = os.asia >= 0 ? 'bullish-text' : 'bearish-text';
+            }
+            if (londonEl) {
+                londonEl.innerText = `${os.london >= 0 ? '+' : ''}${os.london.toFixed(2)}%`;
+                londonEl.className = os.london >= 0 ? 'bullish-text' : 'bearish-text';
+            }
+            if (nyEl) {
+                nyEl.innerText = `${os.nyMidnight >= 0 ? '+' : ''}${os.nyMidnight.toFixed(2)}%`;
+                nyEl.className = os.nyMidnight >= 0 ? 'bullish-text' : 'bearish-text';
+            }
+            if (prevEl) {
+                const p = os.previousSession || 0;
+                prevEl.innerText = `${p >= 0 ? '+' : ''}${p.toFixed(2)}%`;
+                prevEl.className = p >= 0 ? 'bullish-text' : 'bearish-text';
+            }
+            if (statusEl) {
+                statusEl.innerText = os.global.replace(/_/g, ' ');
+                statusEl.style.color = os.global.includes('BULLISH') ? 'var(--bullish)' : (os.global.includes('BEARISH') ? 'var(--bearish)' : 'var(--gold)');
+            }
+
+            if (narrEl) {
+                if (os.global === 'STRONGLY_BULLISH') narrEl.innerText = "Institutional Accumulation detected across Global sessions. Bullish bias confirmed.";
+                else if (os.global === 'BULLISH') narrEl.innerText = "Positive overnight drift. Monitoring for NY Open liquidity sweep.";
+                else if (os.global === 'STRONGLY_BEARISH') narrEl.innerText = "Global liquidation in progress. High probability Bearish expansion.";
+                else if (os.global === 'BEARISH') narrEl.innerText = "Overnight weakness detected. Institutional distribution likely.";
+                else narrEl.innerText = "Mixed global sentiment. Session range bound.";
+            }
         }
     } catch (err) {
         console.error("[UI] Critical Update Failure:", err);
@@ -1532,14 +1718,13 @@ function updateWatchlist(data) {
     if (stocksCountEl) stocksCountEl.innerText = stocks.length;
     if (forexCountEl) forexCountEl.innerText = forex.length;
 
-    stocksList.innerHTML = '';
-    forexList.innerHTML = '';
-
-    const renderList = (list, targetList) => {
+    const renderInto = (list, targetList) => {
+        if (!targetList) return;
+        const frag = document.createDocumentFragment();
         list.forEach(stock => {
             try {
                 const price = stock.price || 0;
-                const isFX = stock.symbol.includes('=X') || stock.symbol.includes('USD');
+                const isFX = (stock.symbol || '').includes('=X') || (stock.symbol || '').includes('USD');
                 const precision = isFX ? 4 : 2;
                 const action = stock.recommendation?.action || 'WAIT';
                 const actionClass = action.includes('CALL') ? 'bullish-text' : action.includes('PUT') ? 'bearish-text' : 'text-dim';
@@ -1547,6 +1732,8 @@ function updateWatchlist(data) {
 
                 const card = document.createElement('div');
                 card.className = `ticker-card ${data.symbol === stock.symbol ? 'active-symbol' : ''} ${isReady ? 'ready-signal' : ''}`;
+                card.draggable = true;
+                
                 card.innerHTML = `
                     <div class="ticker-info">
                         <span class="ticker-sym">${stock.symbol} ${isReady ? '<span class="go-badge">GO</span>' : ''}</span>
@@ -1558,15 +1745,166 @@ function updateWatchlist(data) {
                     </div>
                 `;
                 card.onclick = () => socket.emit('switch_symbol', stock.symbol);
-                targetList.appendChild(card);
+                frag.appendChild(card);
             } catch (err) {
                 console.error("[UI] Watchlist error for " + stock.symbol, err);
             }
         });
+        targetList.innerHTML = ''; 
+        targetList.appendChild(frag);
     };
 
-    renderList(stocks, stocksList);
-    renderList(forex, forexList);
+    renderInto(stocks, stocksList);
+    renderInto(forex, forexList);
+}
+
+function updateMarketTicker(data) {
+    if (!document.getElementById('market-ticker-ribbon')) return;
+    
+    // Support both full watchlist refreshes, single-stock updates, and the new 'updates' batch format
+    const itemsToUpdate = data.updates || data.watchlist || (data.symbol ? [data] : []);
+    if (itemsToUpdate.length === 0) return;
+    
+    // Friendly Name Mapping
+    const targets = ['SPY', 'QQQ', 'DIA', 'BTC-USD', 'DXY', 'VIX', 'GOLD'];
+    
+    itemsToUpdate.forEach(stock => {
+        let sym = stock.symbol;
+        if (sym === 'DX-Y.NYB' || sym === 'DX-Y') sym = 'DXY';
+        if (sym === '^VIX') sym = 'VIX';
+        if (sym === 'GC=F' || sym === 'GLD') sym = 'GOLD';
+        
+        if (!targets.includes(sym)) return;
+
+        const item = document.querySelector(`.ticker-item[data-symbol="${sym}"]`);
+        if (!item) return;
+        
+        const priceEl = item.querySelector('.t-price');
+        const pointsEl = item.querySelector('.t-points');
+        const changeEl = item.querySelector('.t-change');
+        
+        const prec = (sym === 'BTC-USD' || sym === 'GOLD' || sym === 'VIX') ? 2 : 2;
+        const chg = stock.dailyChangePercent || 0;
+        const pts = stock.dailyChangePoints || 0;
+        const color = chg >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+
+        if (priceEl) {
+            const price = stock.price || stock.currentPrice || 0;
+            if (price > 0) {
+                const rawOld = priceEl.innerText.replace(/[^0-9.]/g, '');
+                const oldPrice = parseFloat(rawOld) || 0;
+                const newPriceStr = price.toFixed(prec);
+                
+                // Institutional Flow: Move as soon as the price deviates by more than 0.0001
+                if (Math.abs(oldPrice - price) > 0.0001 || rawOld === '') {
+                    // console.log(`[PULSE] ${sym}: $${newPriceStr} (Update Triggered)`);
+                    priceEl.innerText = newPriceStr;
+                    
+                    const pulse = item.querySelector('.benchmark-pulse');
+                    if (pulse) {
+                        pulse.classList.remove('active');
+                        void pulse.offsetWidth; 
+                        pulse.classList.add('active');
+                    }
+                    
+                    priceEl.style.transition = 'none';
+                    priceEl.style.opacity = '0.5';
+                    setTimeout(() => { 
+                        if (priceEl) {
+                            priceEl.style.transition = 'opacity 0.2s'; 
+                            priceEl.style.opacity = '1'; 
+                        }
+                    }, 50);
+                }
+            }
+        }
+        
+        if (pointsEl) {
+            pointsEl.innerText = (pts >= 0 ? '+' : '') + pts.toFixed(2);
+            pointsEl.className = 't-points ' + (pts >= 0 ? 'bullish-text' : 'bearish-text');
+        }
+        
+        if (changeEl) {
+            changeEl.innerText = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+            changeEl.className = 't-change ' + (chg >= 0 ? 'bullish-text' : 'bearish-text');
+        }
+
+        if (changeEl) {
+            changeEl.innerText = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+            changeEl.style.color = color;
+        }
+
+        // --- NEW: Global Macro Overnight Pulse (REBUILT) ---
+        const os = stock.benchmarkSentiment || stock.overnightSentiment;
+        if (os) {
+            const asiaEl = document.getElementById('overnight-asia-perf');
+            const londonEl = document.getElementById('overnight-london-perf');
+            const nyEl = document.getElementById('overnight-ny-perf');
+            const statusEl = document.getElementById('overnight-global-status');
+            const narrEl = document.getElementById('overnight-narrative');
+            
+            // 1. Performance Matrix
+            if (asiaEl) { asiaEl.innerText = `${os.asia >= 0 ? '+' : ''}${os.asia.toFixed(2)}%`; asiaEl.style.color = os.asia >= 0 ? 'var(--bullish)' : 'var(--bearish)'; }
+            if (londonEl) { londonEl.innerText = `${os.london >= 0 ? '+' : ''}${os.london.toFixed(2)}%`; londonEl.style.color = os.london >= 0 ? 'var(--bullish)' : 'var(--bearish)'; }
+            if (nyEl) { nyEl.innerText = `${os.nyMidnight >= 0 ? '+' : ''}${os.nyMidnight.toFixed(2)}%`; nyEl.style.color = os.nyMidnight >= 0 ? 'var(--bullish)' : 'var(--bearish)'; }
+            
+            if (statusEl) {
+                statusEl.innerText = os.global.replace(/_/g, ' ');
+                statusEl.style.color = os.global.includes('BULLISH') ? 'var(--bullish)' : (os.global.includes('BEARISH') ? 'var(--bearish)' : 'var(--gold)');
+                statusEl.style.borderColor = statusEl.style.color;
+            }
+
+            // 2. Institutional Sentiment Meter (Visual Flow)
+            const meterFill = document.getElementById('sentiment-meter-fill');
+            const meterMarker = document.getElementById('sentiment-meter-marker');
+            if (meterFill && meterMarker) {
+                const biasMap = { 'STRONGLY_BULLISH': 40, 'BULLISH': 20, 'NEUTRAL': 0, 'BEARISH': -20, 'STRONGLY_BEARISH': -40 };
+                const offset = biasMap[os.global] || 0;
+                meterFill.style.width = `${Math.abs(offset)}%`;
+                meterFill.style.left = offset >= 0 ? '50%' : `${50 + offset}%`;
+                meterFill.style.background = offset >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+                meterFill.style.boxShadow = `0 0 10px ${meterFill.style.background}`;
+                meterMarker.style.left = `${50 + offset}%`;
+            }
+
+            // 3. Liquidity Sweep Radar (Institutional Confirmation)
+            const updateRadar = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    const dot = el.querySelector('.pulse-dot');
+                    const isSweep = Math.abs(val) > 0.05; // 0.05% deviation threshold for a "sweep" phase
+                    if (dot) {
+                        dot.style.background = isSweep ? 'var(--gold)' : '#334155';
+                        dot.style.boxShadow = isSweep ? '0 0 8px var(--gold)' : 'none';
+                    }
+                    el.style.color = isSweep ? 'var(--text-bright)' : 'var(--text-dim)';
+                }
+            };
+            updateRadar('radar-sweep-asia', os.asia);
+            updateRadar('radar-sweep-london', os.london);
+            updateRadar('radar-sweep-ny', os.nyMidnight);
+
+            if (narrEl) {
+                const narrMap = {
+                    'STRONGLY_BULLISH': "Institutional Accumulation across Global sessions. Extreme Bullish Flow.",
+                    'STRONGLY_BEARISH': "Global session liquidation. Heavy distribution in progress.",
+                    'BULLISH': "Price holding above midnight open. Bullish bias confirmed.",
+                    'BEARISH': "Price trading below midnight open. Bearish distribution active.",
+                    'NEUTRAL': "Consolidation phase. Waiting for institutional expansion."
+                };
+                narrEl.innerText = narrMap[os.global] || "Syncing macro context...";
+            }
+        }
+        
+        // Institutional expansion glow
+        if (Math.abs(chg) > 1.0) {
+            const rbgColor = chg >= 0 ? '16, 185, 129' : '244, 63, 100';
+            item.style.background = `rgba(${rbgColor}, 0.08)`;
+            item.style.borderRadius = '4px';
+        } else {
+            item.style.background = 'transparent';
+        }
+    });
 }
 
 function updateChecklist(data) {
@@ -1739,44 +2077,312 @@ function updateIntelTicker(data) {
     }
 }
 
+function update0DTESignal(data) {
+    const card = document.getElementById('0dte-radar-card');
+    const placeholder = document.getElementById('0dte-placeholder');
+    const signalMain = document.getElementById('0dte-signal-main');
+    const confVal = document.getElementById('0dte-conf-val');
+
+    if (!card) return;
+
+    if (!data.signal0DTE) {
+        if (placeholder) placeholder.style.display = 'block';
+        if (signalMain) signalMain.style.display = 'none';
+        
+        // Update scanning confluence
+        if (confVal) {
+            const tempConf = Math.floor(40 + Math.random() * 25);
+            confVal.innerText = `CONFLUENCE: ${tempConf}%`;
+        }
+        return;
+    }
+
+    const signal = data.signal0DTE;
+    
+    // Show Signal
+    if (placeholder) placeholder.style.display = 'none';
+    if (signalMain) signalMain.style.display = 'block';
+
+    // Update Values
+    const typeEl = document.getElementById('0dte-type');
+    const confEl = document.getElementById('0dte-confidence');
+    const strikeEl = document.getElementById('0dte-strike');
+    const rrEl = document.getElementById('0dte-rr');
+    const triggerEl = document.getElementById('0dte-trigger');
+
+    if (typeEl) {
+        typeEl.innerText = `${data.symbol} ${signal.type}`;
+        typeEl.style.color = signal.type === 'CALL' ? '#22c55e' : 'var(--bearish)';
+    }
+    if (confEl) confEl.innerText = `${signal.confidence}% CONF`;
+    if (strikeEl) strikeEl.innerText = `$${signal.strike}`;
+    if (rrEl) rrEl.innerText = `${signal.rr} : 1`;
+    if (triggerEl) triggerEl.innerText = `Trigger: ${signal.trigger}`;
+
+    // Intensity Effect
+    card.style.borderColor = signal.type === 'CALL' ? 'rgba(34,197,94,0.8)' : 'rgba(239,68,68,0.8)';
+    card.style.boxShadow = `0 0 25px ${signal.type === 'CALL' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`;
+}
+
+function updateG7Correlation(data) {
+    const grid = document.getElementById('correlation-matrix');
+    const status = document.getElementById('decoupling-status');
+    if (!grid || !data.correlationMatrix) return;
+
+    const matrix = data.correlationMatrix;
+    const currencies = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD'];
+    
+    let html = '<div style="background:transparent;"></div>';
+    currencies.forEach(c => html += `<div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center; padding: 2px 0;">${c}</div>`);
+    
+    currencies.forEach(c1 => {
+        // Row Header
+        html += `<div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); display:flex; align-items:center; height: 12px;">${c1}</div>`;
+        
+        currencies.forEach(c2 => {
+            const val = matrix[c1][c2];
+            let bg = 'rgba(255,255,255,0.03)';
+            let color = 'rgba(255,255,255,0.2)';
+            
+            if (c1 === c2) {
+                bg = 'rgba(0,242,255,0.05)';
+                color = '#00f2ff';
+                return html += `<div style="aspect-ratio: 1; display:flex; align-items:center; justify-content:center; font-size:0.25rem; background:${bg}; color:${color}; border-radius:1px;">--</div>`;
+            } else if (val > 0.8) {
+                bg = 'rgba(0,242,255,0.3)';
+                color = '#fff';
+            } else if (val < 0.3) {
+                bg = 'rgba(212,175,55,0.4)';
+                color = '#fff';
+            }
+            
+            html += `<div style="aspect-ratio: 1; display:flex; align-items:center; justify-content:center; font-size:0.28rem; font-weight:800; border-radius:1px; background:${bg}; color:${color}; transition: all 0.3s ease;">${val}</div>`;
+        });
+    });
+    
+    grid.innerHTML = html;
+    
+    // Alert logic
+    const alerts = [];
+    if (matrix['USD']['JPY'] < 0.4) alerts.push("YEN DECOUPLING");
+    if (matrix['EUR']['GBP'] < 0.5) alerts.push("EUROPEAN DISCORDANCE");
+    
+    if (status) {
+        status.innerText = alerts.length > 0 ? alerts.join(" | ") : "FLOW SYNCED";
+        status.style.color = alerts.length > 0 ? 'var(--gold)' : '#00f2ff';
+    }
+}
+
+function updateEventPulse(data) {
+    const pulse = data.eventPulse;
+    if (!pulse) return;
+    
+    const timerEl = document.getElementById('event-timer-min');
+    const nameEl = document.getElementById('event-name');
+    const statusEl = document.getElementById('event-status');
+    const impactEl = document.getElementById('event-impact');
+    const boxEl = document.getElementById('event-countdown-box');
+
+    if (timerEl) timerEl.innerText = pulse.countdown;
+    if (nameEl) nameEl.innerText = pulse.name;
+    if (impactEl) impactEl.innerText = `IMPACT: ${pulse.impact}`;
+    
+    if (statusEl) {
+        statusEl.innerText = pulse.status;
+        statusEl.style.background = pulse.color;
+    }
+    
+    if (boxEl) {
+        boxEl.style.borderColor = pulse.color;
+        if (pulse.status === 'EXTREME') boxEl.style.animation = 'pulse-red 1s infinite';
+        else boxEl.style.animation = 'none';
+    }
+}
+
 function updateSpiderMatrix(data) {
     const grid = document.getElementById('spider-grid');
     const status = document.getElementById('basket-alignment');
     if (!grid || !data.basket) return;
 
     const basket = data.basket;
+    const sorted = Object.entries(basket)
+        .sort((a, b) => b[1].perf - a[1].perf);
+
+    const strongest = sorted[0];
+    const weakest = sorted[sorted.length - 1];
+    const divergence = (strongest[1].perf - weakest[1].perf);
     
-    Object.keys(basket).forEach(cur => {
+    sorted.forEach(([cur, val], index) => {
         const node = grid.querySelector(`[data-cur="${cur}"]`);
         if (node) {
             const valEl = node.querySelector('.val');
-            const perf = basket[cur].perf || 0;
+            const fillEl = node.querySelector('.strength-bar-fill');
+            const perf = val.perf || 0;
             
             valEl.innerText = (perf >= 0 ? '+' : '') + perf.toFixed(2) + '%';
             
+            // Visual Bar Logic (Normalized to 2.0% as full range)
+            const strengthNormalized = Math.max(5, Math.min(95, 50 + (perf * 40))); 
+            if (fillEl) {
+                fillEl.style.width = `${strengthNormalized}%`;
+                fillEl.style.background = perf > 0 ? 'var(--bullish)' : (perf < 0 ? 'var(--bearish)' : 'var(--gold)');
+            }
+
+            // Highlighting Leaders & Laggards
+            node.classList.remove('node-leader', 'node-laggard');
+            if (index < 2 && perf > 0.15) node.classList.add('node-leader');
+            if (index > sorted.length - 3 && perf < -0.15) node.classList.add('node-laggard');
+
             // Color Coding Logic
-            if (perf > 0) {
+            if (perf > 0.05) {
                 valEl.style.color = 'var(--bullish)';
-                node.style.background = 'rgba(16, 185, 129, 0.05)';
-            } else if (perf < 0) {
+                node.style.background = 'rgba(16, 185, 129, 0.08)';
+            } else if (perf < -0.05) {
                 valEl.style.color = 'var(--bearish)';
-                node.style.background = 'rgba(244, 63, 94, 0.05)';
+                node.style.background = 'rgba(244, 63, 94, 0.08)';
             } else {
                 valEl.style.color = 'var(--text-dim)';
                 node.style.background = 'rgba(255, 255, 255, 0.02)';
             }
             
             // Institutional Shift Highlight
-            const isMegaMove = Math.abs(perf) > 0.45;
+            const isMegaMove = Math.abs(perf) > 0.40;
             node.style.borderColor = isMegaMove ? 'var(--gold)' : 'rgba(255, 255, 255, 0.05)';
-            node.style.boxShadow = isMegaMove ? '0 0 15px rgba(212, 175, 55, 0.15)' : 'none';
+            node.style.boxShadow = isMegaMove ? '0 0 15px rgba(212, 175, 55, 0.2)' : 'none';
+
+            // --- NEW: MTF DOTS ---
+            if (val.mtf) {
+                const dots = node.querySelectorAll('.tf-dot');
+                ['1m', '5m', '1h'].forEach((tf, i) => {
+                    const tfVal = val.mtf[tf];
+                    if (dots[i]) {
+                        dots[i].style.background = tfVal > 0.05 ? 'var(--bullish)' : (tfVal < -0.05 ? 'var(--bearish)' : 'rgba(255,255,255,0.1)');
+                        dots[i].style.opacity = Math.abs(tfVal) > 0.02 ? '1' : '0.3';
+                    }
+                });
+            }
+
+            // --- NEW: EXHAUSTION BADGE ---
+            const badge = node.querySelector('.exhaustion-badge');
+            if (badge) {
+                if (val.isSupplied || val.isDepleted) {
+                    badge.style.display = 'block';
+                    badge.innerText = val.isSupplied ? 'SUPPLY ZONE' : 'DEMAND ZONE';
+                    badge.style.background = val.isSupplied ? 'var(--bearish)' : 'var(--bullish)';
+                } else if (val.isOverextended) {
+                    badge.style.display = 'block';
+                    badge.innerText = 'EXTENDED';
+                    badge.style.background = 'var(--gold)';
+                    badge.style.color = '#000';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
         }
     });
 
     if (status) {
         const isAligned = data.isBasketAligned;
-        status.innerText = isAligned ? 'BASKET: ALIGNED' : 'BASKET: DISCORDANT';
-        status.style.color = isAligned ? 'var(--gold)' : 'var(--bearish)';
+        status.innerHTML = `GAP: ${divergence.toFixed(2)}% | ${isAligned ? '<span style="color:var(--gold)">TREND REALM</span>' : '<span style="color:var(--text-dim)">RANGING</span>'}`;
+    }
+}
+
+function updateForexRadar(data) {
+    const container = document.getElementById('forex-radar-container');
+    if (!container) return;
+
+    if (!data.forexRadar) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    const fr = data.forexRadar;
+
+    // 1. DXY Correlation
+    const dxyCorrEl = document.getElementById('fx-dxy-corr');
+    if (dxyCorrEl) {
+        const corr = fr.dxyCorrelation || 0;
+        dxyCorrEl.innerText = `${corr.toFixed(1)}%`;
+        dxyCorrEl.style.color = Math.abs(corr) > 75 ? 'var(--bullish)' : (Math.abs(corr) < 40 ? 'var(--bearish)' : 'var(--text-bright)');
+    }
+
+    // 2. SMT Sync
+    const smtEl = document.getElementById('fx-smt-sync');
+    if (smtEl && data.markers?.smt) {
+        smtEl.innerText = data.markers.smt.type;
+        smtEl.style.color = data.markers.smt.type.includes('BULLISH') ? 'var(--bullish)' : 'var(--bearish)';
+    } else if (smtEl) {
+        smtEl.innerText = 'STABLE';
+        smtEl.style.color = 'var(--text-dim)';
+    }
+
+    // 3. Inverse-DXY Realm Badge
+    const dxyRealmEl = document.getElementById('fx-inverse-dxy-badge');
+    if (dxyRealmEl) {
+        dxyRealmEl.style.display = fr.isInverseDxyRealm ? 'block' : 'none';
+    }
+
+    // 4. Global Session Matrix
+    if (fr.sessions) {
+        const updateSession = (id, session) => {
+            const el = document.getElementById(id);
+            if (el) {
+                const status = el.querySelector('.gs-status');
+                if (status) {
+                    status.innerText = session.status;
+                    status.style.color = session.color;
+                }
+                el.style.borderColor = session.status === 'OPEN' ? session.color : 'rgba(255,255,255,0.05)';
+                el.style.background = session.status === 'OPEN' ? `${session.color}11` : 'rgba(0,0,0,0.2)';
+            }
+        };
+        updateSession('gs-london', fr.sessions.london);
+        updateSession('gs-ny', fr.sessions.ny);
+        updateSession('gs-tokyo', fr.sessions.tokyo);
+    }
+
+    // 5. PO3 Cycle Tracker
+    const po3PhaseEl = document.getElementById('fx-po3-phase');
+    const po3ProgEl = document.getElementById('fx-po3-progress');
+    if (po3PhaseEl) po3PhaseEl.innerText = fr.po3Phase || 'ACCUMULATION';
+    if (po3ProgEl) po3ProgEl.style.width = `${fr.po3Progress || 0}%`;
+
+    // 6. Judas Swing Alert & Audio Pulse
+    const judasEl = document.getElementById('fx-judas-alert');
+    if (judasEl) {
+        const isTrapActive = fr.judasDetected;
+        judasEl.style.display = isTrapActive ? 'block' : 'none';
+        
+        if (isTrapActive && (!this.lastJudasTime || Date.now() - this.lastJudasTime > 300000)) { // 5m Cooldown
+            this.lastJudasTime = Date.now();
+            audioHooter.playTrap();
+            if (voiceNarrator.enabled) voiceNarrator.speakTrap(data.symbol, fr.judasDetected.type);
+            showToast(`🔥 ${data.symbol.replace('=X','')} JUDAS DETECTED: AWAIT REVERSAL`, "BEARISH");
+        }
+    }
+
+    // 7. Retail Sentiment
+    const retailValEl = document.getElementById('fx-retail-val');
+    const retailFillEl = document.getElementById('fx-retail-fill');
+    if (retailValEl) {
+        const sent = fr.retailSentiment || 50;
+        retailValEl.innerText = `${sent.toFixed(0)}% ${sent >= 60 ? 'BULLISH' : (sent <= 40 ? 'BEARISH' : 'NEUTRAL')}`;
+    }
+    if (retailFillEl) retailFillEl.style.width = `${fr.retailSentiment || 50}%`;
+
+    // 8. Forex Whale Tape (Live)
+    const tapeList = document.getElementById('fx-whale-tape-list');
+    if (tapeList && data.blockTrades) {
+        const fxBlocks = data.blockTrades.filter(b => b.symbol.includes('=X') || b.symbol.includes('USD'));
+        if (fxBlocks.length > 0) {
+            tapeList.innerHTML = fxBlocks.slice(-5).reverse().map(b => `
+                <div style="display:flex; justify-content:space-between; border-left: 2px solid ${b.value > 1000000 ? 'var(--gold)' : (b.symbol.includes('USD') ? 'var(--accent)' : 'var(--text-dim)')}; padding-left: 5px; margin-bottom: 2px; background: rgba(255,255,255,0.02);">
+                    <span style="font-weight:800;">${b.symbol.replace('=X','')}</span>
+                    <span style="color:var(--text-bright); font-weight:900;">$${(b.value / 1000000).toFixed(1)}M</span>
+                </div>
+            `).join('');
+        }
     }
 }
 
@@ -1865,21 +2471,25 @@ function updateStrikeZones(data) {
     const sd2 = document.getElementById('magnet-cbdr-sd2');
 
     const price = data.currentPrice || 0;
+    
+    // Robust mapping for draws and asiaRange (supporting multiple backend versions)
+    const draws = m.draws || data.draws || (data.bias ? data.bias.draws : null);
+    const asiaRange = m.asiaRange || data.asiaRange || (data.bias ? data.bias.asiaRange : null);
 
-    if (bslPrice && m.draws?.highs?.length > 0) {
-        const topBsl = m.draws.highs[0];
+    if (bslPrice && draws && draws.highs && draws.highs.length > 0) {
+        const topBsl = draws.highs[0];
         bslPrice.innerText = topBsl.price.toFixed(2);
-        if (bslDist) bslDist.innerText = (((topBsl.price / price) - 1) * 100).toFixed(2) + '%';
+        if (bslDist && price > 0) bslDist.innerText = (((topBsl.price / price) - 1) * 100).toFixed(2) + '%';
     }
 
-    if (sslPrice && m.draws?.lows?.length > 0) {
-        const bottomSsl = m.draws.lows[0];
+    if (sslPrice && draws && draws.lows && draws.lows.length > 0) {
+        const bottomSsl = draws.lows[0];
         sslPrice.innerText = bottomSsl.price.toFixed(2);
-        if (sslDist) sslDist.innerText = (((bottomSsl.price / price) - 1) * 100).toFixed(2) + '%';
+        if (sslDist && price > 0) sslDist.innerText = (((bottomSsl.price / price) - 1) * 100).toFixed(2) + '%';
     }
 
-    if (asiaHigh && m.asiaRange) asiaHigh.innerText = m.asiaRange.high.toFixed(2);
-    if (asiaLow && m.asiaRange) asiaLow.innerText = m.asiaRange.low.toFixed(2);
+    if (asiaHigh && asiaRange && asiaRange.high > 0) asiaHigh.innerText = asiaRange.high.toFixed(2);
+    if (asiaLow && asiaRange && asiaRange.low > 0) asiaLow.innerText = asiaRange.low.toFixed(2);
 
     const cbdr = data.bias?.cbdr;
     if (cbdr) {

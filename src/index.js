@@ -92,12 +92,103 @@ async function startServer() {
         }
     };
 
-    simulator.onPriceUpdateCallback = (symbol, price, change, candles) => {
-        if (symbol === simulator.currentSymbol) {
-            const latestCandle = candles[simulator.currentTimeframe]?.slice(-1)[0];
-            io.emit('price_update', {
-                symbol, price, change, candle: latestCandle
+    simulator.onPriceUpdateCallback = (data) => {
+        if (data.isBatch) {
+            io.emit('price_updated', data);
+            
+            // Institutional Sync: If the active symbol is in the batch, update the chart too
+            const activeUpdate = data.updates.find(u => u.symbol === simulator.currentSymbol);
+            if (activeUpdate) {
+                const stock = simulator.stocks[simulator.currentSymbol];
+                if (stock) {
+                    const timeframe = simulator.currentTimeframe;
+                    const candles = stock.candles[timeframe] || [];
+                    if (candles.length > 0) {
+                        const c = candles[candles.length - 1];
+                        
+                        // Institutional Shading Logic (Unified with History)
+                        const isUp = c.close >= c.open;
+                        const bodySize = Math.abs(c.close - c.open);
+                        const avgBody = (candles.length > 20) 
+                            ? (candles.slice(-20).reduce((sum, b) => sum + Math.abs(b.close - b.open), 0) / 20) 
+                            : (c.open * 0.001);
+                        
+                        let color = isUp ? '#10b981' : '#f43f5e';
+                        const multiplier = simulator.currentSymbol === 'BTC-USD' ? 2.5 : 2.0;
+                        if (bodySize > avgBody * multiplier) {
+                            color = isUp ? '#00f2ff' : '#ff0055'; 
+                        }
+
+                        if (activeUpdate.price === 0) {
+                            console.warn(`[DEBUG] SENDING price_update with 0 price for ${simulator.currentSymbol}`);
+                        }
+                        
+                        io.emit('price_update', {
+                            symbol: simulator.currentSymbol,
+                            currentPrice: activeUpdate.price, // Parity with app.js expectations
+                            price: activeUpdate.price,        // Keep for legacy support
+                            dailyChangePercent: activeUpdate.dailyChangePercent,
+                            dailyChangePoints: activeUpdate.dailyChangePoints,
+                            candle: candles.length > 0 ? {
+                                time: Math.floor(candles[candles.length - 1].timestamp / 1000),
+                                open: candles[candles.length - 1].open,
+                                high: candles[candles.length - 1].high,
+                                low: candles[candles.length - 1].low,
+                                close: candles[candles.length - 1].close,
+                                color,
+                                wickColor: color,
+                                borderColor: color
+                            } : null
+                        });
+                    }
+                }
+            }
+            return;
+        }
+
+        const { symbol, price, dailyChangePercent, dailyChangePoints, candles } = data;
+        
+        // Always emit for the market ticker indices
+        const tickerSymbols = ['SPY', 'QQQ', 'DIA', 'BTC-USD', 'DXY', 'VIX', 'GOLD'];
+        if (tickerSymbols.includes(symbol) || tickerSymbols.includes(symbol.replace('^', '').replace('DX-Y.NYB', 'DXY'))) {
+            io.emit('price_updated', {
+                symbol, price, dailyChangePercent, dailyChangePoints
             });
+        }
+
+        if (symbol === simulator.currentSymbol) {
+            const timeframe = simulator.currentTimeframe;
+            const tfCandles = candles[timeframe] || [];
+            if (tfCandles.length > 0) {
+                const c = tfCandles[tfCandles.length - 1];
+                
+                // Institutional Shading Logic (Unified)
+                const isUp = c.close >= c.open;
+                const bodySize = Math.abs(c.close - c.open);
+                const avgBody = (tfCandles.length > 20) 
+                    ? (tfCandles.slice(-20).reduce((sum, b) => sum + Math.abs(b.close - b.open), 0) / 20) 
+                    : (c.open * 0.001);
+                
+                let color = isUp ? '#10b981' : '#f43f5e';
+                const multiplier = symbol === 'BTC-USD' ? 2.5 : 2.0;
+                if (bodySize > avgBody * multiplier) {
+                    color = isUp ? '#00f2ff' : '#ff0055'; 
+                }
+
+                io.emit('price_update', {
+                    symbol, price, dailyChangePercent, dailyChangePoints, 
+                    candle: tfCandles.length > 0 ? {
+                        time: Math.floor(tfCandles[tfCandles.length - 1].timestamp / 1000),
+                        open: tfCandles[tfCandles.length - 1].open,
+                        high: tfCandles[tfCandles.length - 1].high,
+                        low: tfCandles[tfCandles.length - 1].low,
+                        close: tfCandles[tfCandles.length - 1].close,
+                        color,
+                        wickColor: color,
+                        borderColor: color
+                    } : null
+                });
+            }
         }
     };
 
@@ -152,9 +243,11 @@ async function startServer() {
             socket.emit('scalper_pulse', { updates: signals });
         });
 
-        socket.on('switch_timeframe', (tf) => {
+        socket.on('switch_timeframe', async (tf) => {
             if (simulator.timeframes.includes(tf)) {
                 simulator.currentTimeframe = tf;
+                // Force history refresh for the new timeframe to ensure accurate switching
+                await simulator.refreshHistoricalData(simulator.currentSymbol).catch(() => {});
                 socket.emit('tf_updated', {
                     ...processData(),
                     watchlist: processWatchlist(),
@@ -226,11 +319,15 @@ async function startServer() {
             
             if (activeSignals.length > 0) io.emit('scalper_pulse', { updates: activeSignals });
 
+            const g7 = calculateG7Basket();
             const payload = {
                 ...currentUpdate,
                 blockTrades: simulator.blockTrades,
                 sectors: processSectors(),
-                basket: calculateG7Basket(),
+                basket: g7.basket,
+                correlationMatrix: g7.correlationMatrix,
+                eventPulse: newsService.getEventPulse(),
+                orderFlowDOM: engine.calculateOrderFlowHeatmap(currentUpdate.currentPrice, currentUpdate.markers, 0),
                 isBasketAligned: checkBasketAlignment()
             };
             if (watchlistUpdate) payload.watchlist = watchlistUpdate;
@@ -261,30 +358,82 @@ function calculateG7Basket() {
     const rawPairs = {
         'EUR': 'EURUSD=X', 'GBP': 'GBPUSD=X', 'JPY': 'USDJPY=X',
         'AUD': 'AUDUSD=X', 'CAD': 'USDCAD=X', 'NZD': 'NZDUSD=X',
-        'CHF': 'USDCHF=X', 'DXY': 'DX-Y.NYB'
+        'CHF': 'USDCHF=X'
     };
-    const basket = {};
-    Object.entries(rawPairs).forEach(([cur, sym]) => {
-        const s = simulator.stocks[sym];
-        if (s) {
-            let perf = s.dailyChangePercent || 0;
-            // Normalize: If USDJPY goes UP, JPY is DOWN (weak)
-            if (['JPY', 'CAD', 'CHF'].includes(cur)) perf = -perf;
-            basket[cur] = { perf, symbol: sym };
-        } else {
-            basket[cur] = { perf: 0, symbol: sym };
-        }
+    
+    const timeframes = ['1m', '5m', '1h'];
+    const basketByTf = {};
+
+    timeframes.forEach(tf => {
+        let sumReturns = 0;
+        let count = 0;
+        const results = {};
+
+        Object.entries(rawPairs).forEach(([cur, sym]) => {
+            const s = simulator.stocks[sym];
+            if (s && s.candles[tf] && s.candles[tf].length > 1) {
+                const candles = s.candles[tf];
+                const start = candles[0].close;
+                const end = candles[candles.length - 1].close;
+                let perf = ((end - start) / start) * 100;
+                
+                if (['JPY', 'CAD', 'CHF'].includes(cur)) perf = -perf;
+                results[cur] = perf;
+                sumReturns += perf;
+                count++;
+            }
+        });
+
+        const usdStrength = count > 0 ? -(sumReturns / (count + 1)) : 0;
+        basketByTf[tf] = { 'USD': usdStrength };
+        Object.keys(results).forEach(cur => {
+            basketByTf[tf][cur] = (results[cur] || 0) + usdStrength;
+        });
     });
-    return basket;
+
+    // 1m is the "Primary" live strength
+    const primary = basketByTf['1m'] || {};
+    const finalBasket = {};
+
+    Object.keys(primary).forEach(cur => {
+        const mtf = {
+            '1m': primary[cur] || 0,
+            '5m': (basketByTf['5m'] && basketByTf['5m'][cur]) || 0,
+            '1h': (basketByTf['1h'] && basketByTf['1h'][cur]) || 0
+        };
+
+        // Institutional Basket Levels: Find extremes in the 1h lookback
+        const h1Basket = basketByTf['1h'] || {};
+        const h1Perf = h1Basket[cur] || 0;
+
+        finalBasket[cur] = {
+            perf: primary[cur], // Current 1m strength
+            mtf: mtf,
+            symbol: rawPairs[cur] || 'DX-Y.NYB',
+            // High/Low Basket Targets (Institutional Exhaustion Levels)
+            isOverextended: Math.abs(primary[cur]) > 0.8,
+            isSupplied: h1Perf > 1.2, // Strong demand zone
+            isDepleted: h1Perf < -1.2 // Strong supply zone
+        };
+    });
+
+    const correlationMatrix = engine.calculateG7CorrelationMatrix(finalBasket);
+
+    return {
+        basket: finalBasket,
+        correlationMatrix
+    };
 }
 
 function checkBasketAlignment() {
     const basket = calculateG7Basket();
-    const perfs = Object.values(basket).map(v => v.perf).filter(p => p !== 0);
-    if (perfs.length < 4) return false;
-    const pos = perfs.filter(p => p > 0.05).length;
-    const neg = perfs.filter(p => p < -0.05).length;
-    return (pos >= 6 || neg >= 6);
+    const strengths = Object.values(basket).map(v => v.perf);
+    const extremePositive = strengths.filter(s => s > 0.35).length;
+    const extremeNegative = strengths.filter(s => s < -0.35).length;
+    const divergence = Math.max(...strengths) - Math.min(...strengths);
+    
+    // Aligned if we have clear strong vs clear weak (Divergence > 0.7%)
+    return (extremePositive >= 1 && extremeNegative >= 1) && divergence > 0.7;
 }
 
 function calculateConfluenceScore(symbol, stock, bias, markers, relativeStrength, multiTfBias) {
@@ -343,11 +492,64 @@ function processData(symbol = simulator.currentSymbol) {
         multiTfBias[timeframe] = tfBias.bias;
     });
 
+    const isForex = symbol.includes('=X') || symbol.includes('USD') || symbol === 'DX-Y.NYB';
+    const dxyPrice = simulator.stocks['DX-Y.NYB']?.currentPrice || simulator.stocks['UUP']?.currentPrice || internals.dxy || 104.0;
+    
     const bullCount = Object.values(multiTfBias).filter(b => b.includes('BULLISH')).length;
     const bearCount = Object.values(multiTfBias).filter(b => b.includes('BEARISH')).length;
     const alignedCount = Math.max(bullCount, bearCount);
 
     const finalConfScore = calculateConfluenceScore(symbol, stock, bias, markers, relativeStrength, multiTfBias);
+
+    // --- 0DTE SIGNAL ENGINE ---
+    const signal0DTE = engine.detect0DTESignal(candles, markers, stock.currentPrice, symbol, { ...bias, confluenceScore: finalConfScore }, internals);
+
+    // Calculate DXY Correlation for Forex Pairs
+    let dxyCorrelation = 0;
+    if (isForex && symbol !== 'DX-Y.NYB') {
+        const dxyCandles = simulator.stocks['DX-Y.NYB']?.candles['1h'] || [];
+        dxyCorrelation = engine.calculateRelativeStrength(candles.slice(-20), dxyCandles, symbol);
+    }
+
+    const vixVal = simulator.stocks['^VIX']?.currentPrice || internals.vix || 15.0;
+    const expectedMove = simulator.eliteAlgo.calculateExpectedMove(stock.currentPrice, vixVal, symbol);
+
+    const historyToUse = candles; // Use full history for avg body calculation
+    const enrichedCandles = candles.slice(-250).map((c, i) => {
+        const globalIndex = candles.length - 250 + i;
+        const isUp = c.close >= c.open;
+        const bodySize = Math.abs(c.close - c.open);
+        
+        // Accurate lookback from the global array
+        const lookbackRange = candles.slice(Math.max(0, globalIndex - 20), globalIndex);
+        const avgBody = lookbackRange.length > 0 
+            ? (lookbackRange.reduce((sum, b) => sum + Math.abs(b.close - b.open), 0) / lookbackRange.length) 
+            : (c.open * 0.001);
+        
+        // Institutional Neon Shading (Standard = Emerald/Rose, High-V = Cyan/NeonRed)
+        let color = isUp ? '#10b981' : '#f43f5e';
+        const velocityMultiplier = symbol === 'BTC-USD' ? 2.5 : 2.0; // Slightly more sensitive for stocks
+        
+        if (bodySize > avgBody * velocityMultiplier) {
+            color = isUp ? '#00f2ff' : '#ff0055'; 
+        }
+        
+        return { 
+            time: Math.floor(c.timestamp / 1000),
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+            color,
+            wickColor: color,
+            borderColor: color
+        };
+    });
+
+    if (!stock.currentPrice || stock.currentPrice === 0) {
+        console.warn(`[SYNC WARNING] Symbol ${symbol} has NO currentPrice. Defaulting to previousClose.`);
+        stock.currentPrice = stock.previousClose;
+    }
 
     return {
         symbol,
@@ -358,25 +560,31 @@ function processData(symbol = simulator.currentSymbol) {
         roro: internals.roro, 
         isRoroFlash: internals.isRoroFlash,
         roroDirection: internals.roroDirection,
-        candles: candles.slice(-200),
+        candles: enrichedCandles,
         fvgs,
         draws,
         bias: { ...bias, internals },
         multiTfBias,
+        signal0DTE, 
+        expectedMove,
+        darkPoolFootprints: engine.calculateDarkPoolFootprints(simulator.blockTrades || [], stock.currentPrice, symbol),
         heatmap: engine.calculateInstitutionalHeatmap(candles, markers, stock.currentPrice, symbol),
         bloomberg: stock.bloomberg,
         markers: {
             ...markers,
+            draws,
+            fvgs,
             radar: {
                 ...markers.radar,
                 irScore: markers.radar ? simulator.eliteAlgo.calculateIRScore(bias, markers.radar.killzone, markers.radar.smt, markers.radar.gex, bias.retailSentiment) : 0,
                 amdPhase: bias.amdPhase,
                 alignedCount: alignedCount,
-                pythConfidence: stock.pythConfidence
+                pythConfidence: stock.pythConfidence,
+                expectedMove
             },
-            dxy: simulator.stocks['DX-Y.NYB']?.currentPrice || simulator.stocks['UUP']?.currentPrice || internals.dxy || 104.0,
+            dxy: dxyPrice,
             dxyPrev: internals.dxyPrev || internals.dxy || 104.0,
-            vix: simulator.stocks['^VIX']?.currentPrice || internals.vix || 15.0,
+            vix: vixVal,
         },
         absorption: engine.detectAbsorption(candles),
         sweeps: engine.detectLiquidationSweep(candles, draws),
@@ -391,33 +599,51 @@ function processData(symbol = simulator.currentSymbol) {
         },
         news: simulator.getNews(),
         session: engine.getSessionInfo(symbol),
+        forexRadar: isForex ? {
+            dxyCorrelation,
+            isInverseDxyRealm: Math.abs(dxyCorrelation) > 75,
+            sessions: engine.getGlobalForexSessions(),
+            po3Phase: bias.amdPhase,
+            po3Progress: (engine.getKillzoneStatus()?.progress || 0),
+            judasDetected: bias.judas || false,
+            retailSentiment: bias.retailSentiment || 50
+        } : null,
         sectors: processSectors(),
         scalpScan: { 
             velocity: ((Math.abs(markers.cvd || 0) / 1000).toFixed(1)), 
-            signal: (Math.abs(markers.cvd || 0) > 1000 && stock.priceDiscordance > 20) ? 'INSTITUTIONAL RELOAD' : 
-                    (Math.abs(markers.cvd || 0) > 1000 && stock.priceDiscordance < 10) ? '🔥 FIRE BREAKOUT' : 'SEARCHING...',
+            signal: engine.detectInstitutionalReload(markers, candles) ? 'INSTITUTIONAL RELOAD' : 
+                    engine.detectFireBreakout(markers, candles, bias) ? '🔥 FIRE BREAKOUT' : 'SEARCHING...',
             color: (markers.cvd > 0 ? '#10b981' : markers.cvd < 0 ? '#f43f5e' : '#94a3b8'),
-            isReload: (Math.abs(markers.cvd || 0) > 1000 && stock.priceDiscordance > 20)
+            isReload: !!engine.detectInstitutionalReload(markers, candles),
+            isFire: !!engine.detectFireBreakout(markers, candles, bias),
+            intensity: (engine.detectInstitutionalReload(markers, candles)?.intensity || engine.detectFireBreakout(markers, candles, bias)?.intensity || 0)
         },
-        blockTrades: simulator.blockTrades || []
+        heatmap: engine.calculateInstitutionalHeatmap(candles, markers, stock.currentPrice, symbol),
+        volumeProfile: engine.calculateVolumeProfile(candles, stock.currentPrice, symbol),
+        whaleTape: (simulator.blockTrades || []).find(b => b.symbol === symbol),
+        blockTrades: simulator.blockTrades || [],
+        overnightSentiment: simulator.calculateOvernightSentiment(symbol)
     };
 }
 
 function processWatchlist() {
     const spy = simulator.stocks['SPY'];
-    const spyChange = spy ? spy.dailyChangePercent : 0;
+    const spyChange = spy ? spy.dailyChangePercent || 0 : 0;
+    
+    // Core Institutional Indices for Ticker
+    const coreIndices = ['SPY', 'QQQ', 'DIA', 'BTC-USD', 'DXY', 'VIX', 'GOLD', '^TNX'];
+    const allSymbols = [...new Set([...simulator.watchlist, ...coreIndices])];
 
-    return simulator.watchlist.map(symbol => {
+    return allSymbols.map(symbol => {
         try {
             let normalizedSym = symbol.toUpperCase().trim();
-            if (normalizedSym === 'BTCUSD') normalizedSym = 'BTC-USD';
-            if (normalizedSym === 'EURUSD') normalizedSym = 'EURUSD=X';
-            if (normalizedSym === 'GBPUSD') normalizedSym = 'GBPUSD=X';
-            if (normalizedSym === 'USDJPY') normalizedSym = 'USDJPY=X';
-            if (normalizedSym === 'DXY' || normalizedSym === 'DX-Y') normalizedSym = 'DX-Y.NYB';
+            if (normalizedSym === 'DXY' || normalizedSym === 'DX-Y.NYB') normalizedSym = 'DXY';
+            if (normalizedSym === 'VIX' || normalizedSym === '^VIX') normalizedSym = 'VIX';
+            if (normalizedSym === 'GOLD' || normalizedSym === 'GC=F') normalizedSym = 'GOLD';
 
-            const stock = simulator.stocks[normalizedSym];
-            if (!stock) return { symbol, price: 0, bias: 'OFFLINE', recommendation: { action: 'WAIT' } };
+            // Find the stock in the simulator, trying both the normalized name and the raw name
+            const stock = simulator.stocks[normalizedSym] || simulator.stocks[symbol];
+            if (!stock) return { symbol, price: 0, dailyChangePercent: 0, bias: 'OFFLINE', recommendation: { action: 'WAIT' } };
 
             const tf = simulator.currentTimeframe;
             const candles = stock.candles[tf] || [];
@@ -438,10 +664,15 @@ function processWatchlist() {
             const bearCount = Object.values(multiTfBias).filter(b => b.includes('BEARISH')).length;
             const alignedCount = Math.max(bullCount, bearCount);
 
+            const current = stock.currentPrice || 0;
+            const prev = stock.previousClose || 0;
+            const pointsChange = prev > 0 ? (current - prev) : 0;
+
             return {
                 symbol,
-                price: stock.currentPrice || 0,
+                price: current,
                 dailyChangePercent: stock.dailyChangePercent || 0,
+                dailyChangePoints: pointsChange,
                 bias: bias ? bias.bias : 'NEUTRAL',
                 recommendation: recommendation || { action: 'WAIT' },
                 hasRS: (stock.dailyChangePercent || 0) > spyChange,

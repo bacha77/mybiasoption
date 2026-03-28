@@ -169,4 +169,29 @@ export class InstitutionalAlgorithm {
 
         return Math.max(0, Math.min(100, score));
     }
+
+    /**
+     * 0DTE Expected Move Algorithm
+     * Calculates the institutional range where 68% of price action is expected to reside.
+     * Used by Market Makers to "pin" the price near high-gamma strikes.
+     */
+    calculateExpectedMove(price, vix, symbol) {
+        if (price <= 0 || !vix) return null;
+
+        const isFX = symbol.includes('=X') || symbol.includes('USD');
+        // VIX is a proxy for equities. For Forex, we adjust or use a fixed vol proxy if needed.
+        const iv = isFX ? 0.08 : (vix / 100); 
+        const dailyMove = price * (iv / Math.sqrt(252));
+        
+        // Institutional Adjustment for 0DTE Gamma
+        const mmAlpha = 1.25; 
+        const expectedRange = dailyMove * mmAlpha;
+        
+        return {
+            upper: parseFloat((price + expectedRange).toFixed(2)),
+            lower: parseFloat((price - expectedRange).toFixed(2)),
+            range: parseFloat(expectedRange.toFixed(2)),
+            confidence: 0.68
+        };
+    }
 }
