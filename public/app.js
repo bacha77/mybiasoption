@@ -595,6 +595,8 @@ function initChartInstance() {
             borderColor: '#1e293b',
             timeVisible: true,
             barSpacing: 10,
+            rightOffset: 25, // Institutional Buffer: Give the price room to breathe
+            minBarSpacing: 0.5,
         }
     });
 
@@ -1655,8 +1657,17 @@ function updateUI(data) {
                 }
             }
 
-            // Restore Edge-Lock: Keep the chart synchronized to the live price automatically
-            if (tvChart) tvChart.timeScale().scrollToRealTime();
+            // --- INSTITUTIONAL EDGE-LOCK (SMART SCROLLING) ---
+            // Only auto-scroll to the live price if the trader is already near the edge.
+            // This prevents the 'squashing' bug and allows for free historical review.
+            if (tvChart) {
+                const ts = tvChart.timeScale();
+                const visible = ts.getVisibleRange();
+                if (visible && visible.to) {
+                    const isAtEdge = timeInSeconds >= (visible.to - (tfMs / 500)); // Within half a bar of edge
+                    if (isAtEdge) ts.scrollToRealTime();
+                }
+            }
         }
         // 7. --- GLOBAL OVERNIGHT PULSE ---
         if (data.overnightSentiment) {
@@ -1795,9 +1806,16 @@ function updateMarketTicker(data) {
                 const oldPrice = parseFloat(rawOld) || 0;
                 const newPriceStr = price.toFixed(prec);
                 
+                // --- PYTH ALPHA INDICATOR (Synergy Glow) ---
+                if (stock.pythConfidence !== undefined) {
+                    const bps = (stock.pythConfidence / price) * 10000;
+                    const precision = Math.max(0, 100 - (bps / 5)); // 5 bps = 0% sync, 0 bps = 100%
+                    priceEl.style.textShadow = precision > 95 ? `0 0 ${Math.min(10, (precision-90)*2)}px var(--cyan)` : 'none';
+                    priceEl.title = `Institutional Synergy: ${precision.toFixed(2)}% (Pyth Confidence: ±$${stock.pythConfidence.toFixed(4)})`;
+                }
+
                 // Institutional Flow: Move as soon as the price deviates by more than 0.0001
                 if (Math.abs(oldPrice - price) > 0.0001 || rawOld === '') {
-                    // console.log(`[PULSE] ${sym}: $${newPriceStr} (Update Triggered)`);
                     priceEl.innerText = newPriceStr;
                     
                     const pulse = item.querySelector('.benchmark-pulse');

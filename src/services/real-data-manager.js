@@ -189,20 +189,19 @@ export class RealDataManager {
         if (quote.prevClose && quote.prevClose > 0) {
             stock.previousClose = quote.prevClose;
         } else if (!stock.previousClose || stock.previousClose === 0) {
-            // Institutional Hard-Baseline Seeding for Major Benchmarks
-            const baselines = { 
-                'SPY': 584.22, 'QQQ': 481.56, 'DIA': 421.34, 
-                'DXY': 105.42, 'DX-Y': 105.42, 'DX-Y.NYB': 105.42,
-                '^VIX': 17.42, 'VIX': 17.42, 'BTC-USD': 98422.50, 'ETH-USD': 3422.10,
-                'GC=F': 2642.50, 'GOLD': 2642.50
-            };
-            
-            if (baselines[symbol]) {
-                stock.previousClose = baselines[symbol];
+            // Dynamic Institutional Bootstrapping: Derive from the current price and % change if available
+            const dp = quote.change || 0;
+            if (dp !== 0) {
+                stock.previousClose = stock.currentPrice / (1 + (dp / 100));
             } else {
-                // Derivation Fallback
-                const dp = quote.change || 0;
-                if (dp !== 0) stock.previousClose = stock.currentPrice / (1 + (dp / 100));
+                // Last Resort: Hard-baselines (kept as absolute minimal floor but corrected for current market)
+                const stableBaselines = { 
+                    'SPY': 635.00, 'QQQ': 565.00, 'DIA': 455.00, 
+                    'DXY': 100.15, 'DX-Y': 100.15, 'DX-Y.NYB': 100.15,
+                    '^VIX': 30.50, 'VIX': 30.50, 'BTC-USD': 66400.00, 'ETH-USD': 2850.10,
+                    'GC=F': 4515.50, 'GOLD': 4515.50
+                };
+                stock.previousClose = stableBaselines[symbol] || stock.currentPrice;
             }
         }
         
@@ -534,13 +533,24 @@ export class RealDataManager {
                 }
             });
 
-            if (this.onPriceUpdateCallback) {
+            // --- PRECISION-GATED UI EMITTANCE ---
+            // Institutional stabilization: Only broadcast to UI if change is significant (> 0.001%) 
+            // This prevents "shimmering" on sub-cent ticks while keeping internal engine precise.
+            const oldPrice = stock.lastEmittedPrice || 0;
+            const priceThreshold = stock.currentPrice * 0.00001; 
+            const isSignificant = Math.abs(price - oldPrice) > priceThreshold || (Date.now() - (stock.lastEmittedTime || 0) > 2000);
+
+            if (this.onPriceUpdateCallback && isSignificant) {
+                stock.lastEmittedPrice = price;
+                stock.lastEmittedTime = Date.now();
                 this.onPriceUpdateCallback({
                     symbol,
                     price,
                     dailyChangePercent: stock.dailyChangePercent,
                     dailyChangePoints: pointsChange,
-                    candles: stock.candles
+                    candles: stock.candles,
+                    pythConfidence: stock.pythConfidence,
+                    source: stock.dataSource
                 });
             }
         }
