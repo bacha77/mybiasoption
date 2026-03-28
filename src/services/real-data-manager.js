@@ -560,6 +560,8 @@ export class RealDataManager {
                     candles: stock.candles,
                     pythConfidence: stock.pythConfidence,
                     liquidityStatus,
+                    hybridCVD: (stock.cvd || 0) + ((stock.netWhaleFlow || 0) / (price || 1)),
+                    netWhaleFlow: stock.netWhaleFlow || 0,
                     source: stock.dataSource
                 });
             }
@@ -738,7 +740,7 @@ export class RealDataManager {
                 return JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
             }
         } catch (e) { console.error("Load Watchlist Error:", e.message); }
-        return ['SPY', 'QQQ', 'IWM', 'SMH', 'NVDA', 'TSLA', 'AAPL', 'MSFT', 'META', 'AMZN', 'GOOGL', 'AMD', 'NFLX', 'BTC-USD', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X'];
+        return ['SPY', 'QQQ', 'IWM', 'SMH', 'NVDA', 'TSLA', 'AAPL', 'MSFT', 'META', 'AMZN', 'GOOGL', 'AMD', 'NFLX', 'BTC-USD', 'ETH-USD', 'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X'];
     }
 
     saveWatchlist() {

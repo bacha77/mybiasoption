@@ -320,6 +320,8 @@ async function startServer() {
             if (activeSignals.length > 0) io.emit('scalper_pulse', { updates: activeSignals });
 
             const g7 = calculateG7Basket();
+            const smtAlerts = checkSMTDivergences();
+            
             const payload = {
                 ...currentUpdate,
                 blockTrades: simulator.blockTrades,
@@ -328,10 +330,12 @@ async function startServer() {
                 correlationMatrix: g7.correlationMatrix,
                 eventPulse: newsService.getEventPulse(),
                 orderFlowDOM: engine.calculateOrderFlowHeatmap(currentUpdate.currentPrice, currentUpdate.markers, 0),
-                isBasketAligned: checkBasketAlignment()
+                isBasketAligned: checkBasketAlignment(),
+                smtAlerts: smtAlerts
             };
             if (watchlistUpdate) payload.watchlist = watchlistUpdate;
             io.emit('update', payload);
+            if (smtAlerts.length > 0) io.emit('smt_alert', { alerts: smtAlerts });
         } catch (err) {
             logToFile(`Update Loop Error: ${err.message}`);
         } finally {
@@ -339,6 +343,36 @@ async function startServer() {
         }
     };
     runUpdateLoop();
+}
+
+function checkSMTDivergences() {
+    const pairs = [
+        ['SPY', 'QQQ'],
+        ['EURUSD=X', 'GBPUSD=X'],
+        ['BTC-USD', 'ETH-USD']
+    ];
+
+    const alerts = [];
+    pairs.forEach(([a, b]) => {
+        const sA = simulator.stocks[a];
+        const sB = simulator.stocks[b];
+        if (!sA || !sB) return;
+
+        const tf = '1m';
+        const cA = sA.candles[tf] || [];
+        const cB = sB.candles[tf] || [];
+
+        const smt = simulator.eliteAlgo.detectSMT(a, sA.currentPrice, cA, b, sB.currentPrice, cB);
+        if (smt) {
+            alerts.push({
+                symbols: [a, b],
+                type: smt.type,
+                message: smt.message,
+                timestamp: Date.now()
+            });
+        }
+    });
+    return alerts;
 }
 
 function processSectors() {
@@ -567,6 +601,8 @@ function processData(symbol = simulator.currentSymbol) {
         multiTfBias,
         signal0DTE, 
         expectedMove,
+        hybridCVD: (stock.cvd || 0) + ((stock.netWhaleFlow || 0) / (stock.currentPrice || 1)),
+        netWhaleFlow: stock.netWhaleFlow || 0,
         darkPoolFootprints: engine.calculateDarkPoolFootprints(simulator.blockTrades || [], stock.currentPrice, symbol),
         heatmap: engine.calculateInstitutionalHeatmap(candles, markers, stock.currentPrice, symbol),
         bloomberg: stock.bloomberg,

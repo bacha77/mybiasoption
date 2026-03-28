@@ -444,6 +444,27 @@
                                 <div id="imbalance-text" class="imbalance-text">50% BULL / 50% BEAR</div>
                             </div>
                         </div>
+
+                        <!-- REBUILT: HYBRID ORDER FLOW METRICS -->
+                        <div class="metric-item" data-tooltip="Hybrid Cumulative Volume Delta. Combines tick-rule volume with hidden institutional flow.">
+                            <span class="m-label">HYBRID CVD</span>
+                            <span id="cvd-val" class="m-value gold-text">0</span>
+                        </div>
+                        <div class="metric-item" data-tooltip="Net Institutional Dollar Flow. Measures the total size of Whale Block trades.">
+                            <span class="m-label">NET WHALE FLOW</span>
+                            <span id="net-whale-val" class="m-value gold-text">$0.00M</span>
+                            <div style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); border-radius: 1px; margin-top: 4px; overflow: hidden;">
+                                <div id="whale-intensity-bar" style="width: 0%; height: 100%; background: var(--gold); transition: all 0.3s ease;"></div>
+                            </div>
+                        </div>
+                        <div class="metric-item" data-tooltip="Market Maker Expected Move (68% Confidence). The 'Danger Zone' for institutional reversals.">
+                            <span class="m-label">EXPECTED RANGE</span>
+                            <span id="expected-range-val" class="m-value gold-text">±$0.00</span>
+                        </div>
+                        <div class="metric-item" data-tooltip="Point of Control. The price level with the highest institutional volume cluster.">
+                            <span class="m-label">VOLUME POC</span>
+                            <span id="poc-val" class="m-value accent-text">0.00</span>
+                        </div>
                         <div class="metric-item full-width"
                             data-tooltip="Volatility Regime. Stable = Safe for trends. Crisis = Expect binary moves and liquidation sweeps.">
                             <span class="m-label">VIX REGIME</span>

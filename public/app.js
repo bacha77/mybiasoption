@@ -99,6 +99,15 @@ socket.on('news_update', (data) => {
     }
 });
 
+socket.on('smt_alert', (data) => {
+    data.alerts.forEach(alert => {
+        showToast(`⚖️ SMT DIVERGENCE: ${alert.symbols[0]}/${alert.symbols[1]} | ${alert.message}`, 'toast-smt');
+        if (typeof voiceNarrator !== 'undefined' && voiceNarrator.speak) {
+            voiceNarrator.speak(`Caution. SMT Divergence detected between ${alert.symbols[0]} and ${alert.symbols[1]}. Institutional divergence confirmed.`);
+        }
+    });
+});
+
 socket.on('scalper_pulse', (updData) => {
     const list = document.getElementById('scalper-scan-list');
     if (!list || !updData.updates) return;
@@ -675,6 +684,35 @@ function setChartData(candles) {
     } catch (e) {
         console.error("[CHART] Error in setChartData:", e);
     }
+}
+
+let expectedMoveLines = [];
+function updateExpectedMoveLines(expectedMove) {
+    if (!candleSeries || !expectedMove || !expectedMove.upper) return;
+
+    // Clear existing
+    expectedMoveLines.forEach(l => candleSeries.removePriceLine(l));
+    expectedMoveLines = [];
+
+    const upperLine = candleSeries.createPriceLine({
+        price: expectedMove.upper,
+        color: 'rgba(244, 63, 94, 0.6)',
+        lineWidth: 2,
+        lineStyle: 1, // Dashed
+        axisLabelVisible: true,
+        title: 'EXPECTED HIGH (68%)',
+    });
+
+    const lowerLine = candleSeries.createPriceLine({
+        price: expectedMove.lower,
+        color: 'rgba(16, 185, 129, 0.6)',
+        lineWidth: 2,
+        lineStyle: 1, // Dashed
+        axisLabelVisible: true,
+        title: 'EXPECTED LOW (68%)',
+    });
+
+    expectedMoveLines.push(upperLine, lowerLine);
 }
 function updateInstitutionalRadar(data) {
     // Heartbeat Sync Flash (Proof of Work)
@@ -1377,6 +1415,7 @@ function updateUI(data) {
         const changeEl = document.getElementById('price-change');
         const confluenceScoreEl = document.getElementById('master-confluence-score');
         const symbolDisplay = document.getElementById('symbol-display');
+        const expectedRangeEl = document.getElementById('expected-range-val');
 
         if (priceEl) {
             const price = data.currentPrice || data.price || 0;
@@ -1415,6 +1454,14 @@ function updateUI(data) {
             confluenceScoreEl.style.color = score >= 70 ? 'var(--bullish)' : (score <= 30 ? 'var(--bearish)' : 'var(--gold)');
         }
         if (symbolDisplay) symbolDisplay.innerText = symbol;
+
+        // --- INSTITUTIONAL EXPECTED MOVE OVERLAY ---
+        if (data.expectedMove) {
+             updateExpectedMoveLines(data.expectedMove);
+             if (expectedRangeEl) {
+                 expectedRangeEl.innerText = `$${data.expectedMove.lower.toFixed(2)} - $${data.expectedMove.upper.toFixed(2)}`;
+             }
+        }
 
         // --- SUB-SECOND CANDLE SYNC (TOS-STYLE PERFORMANCE) ---
         // Ensure the active candle breathes with the market in real-time
@@ -1520,14 +1567,26 @@ function updateUI(data) {
             if (callWallEl) callWallEl.innerText = (m.callWall || 0).toFixed(precision);
             if (putWallEl) putWallEl.innerText = (m.putWall || 0).toFixed(precision);
             if (cvdEl) {
-                const cvd = m.cvd || 0;
-                cvdEl.innerText = cvd.toLocaleString();
+                const cvd = data.hybridCVD !== undefined ? data.hybridCVD : (m.cvd || 0);
+                cvdEl.innerText = Math.round(cvd).toLocaleString();
                 cvdEl.className = 'm-value ' + (cvd >= 0 ? 'bullish-text' : 'bearish-text');
-            }
-            if (netWhaleVal) {
-                const val = (m.netWhaleFlow || 0) / 1000000;
-                netWhaleVal.innerText = `$${val.toFixed(2)}M`;
-                netWhaleVal.className = 'm-value ' + (val >= 0 ? 'bullish-text' : 'bearish-text');
+                
+                // --- INSTITUTIONAL FLOW GAUGE (Synergy Shift) ---
+                const netWhaleVal = document.getElementById('net-whale-val');
+                if (netWhaleVal) {
+                    const whaleFlow = data.netWhaleFlow || m.netWhaleFlow || 0;
+                    const valM = whaleFlow / 1000000;
+                    netWhaleVal.innerText = `$${valM.toFixed(2)}M`;
+                    netWhaleVal.className = 'm-value ' + (whaleFlow >= 0 ? 'bullish-text' : 'bearish-text');
+                    
+                    const whaleBar = document.getElementById('whale-intensity-bar');
+                    if (whaleBar) {
+                        const intensity = Math.min(100, (Math.abs(valM) / 5) * 100); // Max at $5M flow
+                        whaleBar.style.width = `${intensity}%`;
+                        whaleBar.style.background = whaleFlow >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+                        whaleBar.style.boxShadow = `0 0 10px ${whaleBar.style.background}`;
+                    }
+                }
             }
         }
 
@@ -1949,21 +2008,37 @@ function updateChecklist(data) {
     document.getElementById('check-gamma-wall')?.classList.toggle('active', !!list.gammaCheck);
 }
 
-function showToast(msg) {
+function showToast(msg, customClass = '') {
     const toast = document.createElement('div');
-    toast.className = 'toast-alert';
-    toast.style.background = 'rgba(15, 23, 42, 0.9)';
+    toast.className = 'toast-alert ' + customClass;
+    toast.style.background = 'rgba(15, 23, 42, 0.95)';
     toast.style.color = '#fff';
     toast.style.padding = '12px 20px';
     toast.style.borderRadius = '12px';
     toast.style.borderLeft = '4px solid var(--accent)';
+    
+    if (customClass === 'toast-smt') {
+        toast.style.borderLeft = '4px solid var(--gold)';
+        toast.style.boxShadow = '0 0 15px rgba(255, 215, 0, 0.3)';
+    } else if (customClass === 'toast-grail') {
+        toast.style.borderLeft = '4px solid #ff3366';
+        toast.style.boxShadow = '0 0 20px rgba(255, 51, 102, 0.4)';
+    }
+
     toast.style.marginBottom = '10px';
-    toast.style.fontSize = '0.8rem';
+    toast.style.fontSize = '0.9rem';
     toast.style.fontWeight = '700';
+    toast.style.zIndex = '9999';
     toast.innerText = msg;
     const toastContainer = document.getElementById('toast-container');
-    if (toastContainer) toastContainer.appendChild(toast);
-    setTimeout(() => toast.remove(), 5000);
+    if (toastContainer) {
+        toastContainer.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.5s';
+            setTimeout(() => toast.remove(), 500);
+        }, 5000);
+    }
 }
 
 function updateVixGauge(vix) {
