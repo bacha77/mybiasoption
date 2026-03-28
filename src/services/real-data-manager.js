@@ -543,6 +543,15 @@ export class RealDataManager {
             if (this.onPriceUpdateCallback && isSignificant) {
                 stock.lastEmittedPrice = price;
                 stock.lastEmittedTime = Date.now();
+
+                // Institutional Liquidity Mapping
+                let liquidityStatus = 'STABLE';
+                if (stock.pythConfidence !== undefined) {
+                    const bps = (stock.pythConfidence / price) * 10000;
+                    if (bps > 15) liquidityStatus = 'DANGEROUS';
+                    else if (bps > 5) liquidityStatus = 'THIN';
+                }
+
                 this.onPriceUpdateCallback({
                     symbol,
                     price,
@@ -550,6 +559,7 @@ export class RealDataManager {
                     dailyChangePoints: pointsChange,
                     candles: stock.candles,
                     pythConfidence: stock.pythConfidence,
+                    liquidityStatus,
                     source: stock.dataSource
                 });
             }

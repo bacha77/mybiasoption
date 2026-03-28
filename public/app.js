@@ -1777,7 +1777,7 @@ function updateMarketTicker(data) {
     if (itemsToUpdate.length === 0) return;
     
     // Friendly Name Mapping
-    const targets = ['SPY', 'QQQ', 'DIA', 'BTC-USD', 'DXY', 'VIX', 'GOLD'];
+    const targets = ['SPY', 'QQQ', 'DIA', 'BTC-USD', 'DXY', 'VIX', 'GOLD', 'NVDA', 'TSLA', 'AAPL', 'MSFT', 'META', 'AMZN', 'GOOGL', 'AMD', 'NFLX', 'IWM', 'SMH', 'XLK', 'XLY', 'XLF'];
     
     itemsToUpdate.forEach(stock => {
         let sym = stock.symbol;
@@ -1921,6 +1921,20 @@ function updateMarketTicker(data) {
             item.style.borderRadius = '4px';
         } else {
             item.style.background = 'transparent';
+        }
+
+        // --- INSTITUTIONAL LIQUIDITY SHIELD (Pyth V2) ---
+        if (stock.liquidityStatus) {
+            if (stock.liquidityStatus === 'DANGEROUS') {
+                item.style.borderLeft = '4px solid #ff3366';
+                item.style.backgroundColor = 'rgba(255, 51, 102, 0.05)';
+            } else if (stock.liquidityStatus === 'THIN') {
+                item.style.borderLeft = '4px solid var(--gold)';
+                item.style.backgroundColor = 'transparent';
+            } else {
+                item.style.borderLeft = 'none';
+                item.style.backgroundColor = 'transparent';
+            }
         }
     });
 }
