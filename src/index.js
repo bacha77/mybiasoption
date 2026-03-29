@@ -324,6 +324,24 @@ async function startServer() {
             
             if (activeSignals.length > 0) io.emit('scalper_pulse', { updates: activeSignals });
 
+            // --- AI MULTI-ASSET SCOUT (THE "WATCHLIST SCOUT") ---
+            const goldAlertsSent = global.goldAlertsSent || new Map();
+            global.goldAlertsSent = goldAlertsSent;
+
+            const premiumAlerts = (watchlist || []).filter(w => (w.confluenceScore || 0) >= 88);
+            premiumAlerts.forEach(alert => {
+                const lastSent = goldAlertsSent.get(alert.symbol) || 0;
+                if (Date.now() - lastSent > 600000) { // 10 minute cooldown per symbol
+                    io.emit('gold_alert', {
+                        symbol: alert.symbol,
+                        score: alert.confluenceScore,
+                        bias: alert.bias,
+                        action: alert.recommendation?.action || 'ACCUMULATE'
+                    });
+                    goldAlertsSent.set(alert.symbol, Date.now());
+                }
+            });
+
             const smtAlerts = checkSMTDivergences();
             
             const payload = {

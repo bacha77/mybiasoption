@@ -1403,6 +1403,12 @@ socket.on('tf_updated', (data) => {
     if (data.watchlist) updateWatchlist(data);
 });
 
+socket.on('gold_alert', (a) => {
+    if (typeof showToast === 'function') {
+        showToast(`🥇 GOLD STANDARD: ${a.symbol} ${a.bias} SET-UP (${a.score}%)`, 'toast-gold');
+    }
+});
+
 function updateUI(data) {
     if (!data) return;
     window.latestInstitutionalData = data; // Global store for execution guard (Improvement 3)
@@ -2027,6 +2033,10 @@ function showToast(msg, customClass = '') {
     } else if (customClass === 'toast-grail') {
         toast.style.borderLeft = '4px solid #ff3366';
         toast.style.boxShadow = '0 0 20px rgba(255, 51, 102, 0.4)';
+    } else if (customClass === 'toast-gold') {
+        toast.style.borderLeft = '4px solid var(--gold)';
+        toast.style.background = 'linear-gradient(90deg, rgba(255, 215, 0, 0.1) 0%, rgba(15, 23, 42, 0.95) 100%)';
+        toast.style.boxShadow = '0 0 25px rgba(255, 215, 0, 0.5)';
     }
 
     toast.style.marginBottom = '10px';
