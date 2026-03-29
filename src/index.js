@@ -601,6 +601,16 @@ function processData(symbol = simulator.currentSymbol) {
         multiTfBias,
         signal0DTE, 
         expectedMove,
+        aiInsight: generateAIAnalystInsight({
+            symbol,
+            confluenceScore: finalConfScore,
+            bias,
+            netWhaleFlow: stock.netWhaleFlow,
+            expectedMove,
+            currentPrice: stock.currentPrice,
+            roro: internals.roro,
+            roroDirection: internals.roroDirection
+        }),
         hybridCVD: (stock.cvd || 0) + ((stock.netWhaleFlow || 0) / (stock.currentPrice || 1)),
         netWhaleFlow: stock.netWhaleFlow || 0,
         darkPoolFootprints: engine.calculateDarkPoolFootprints(simulator.blockTrades || [], stock.currentPrice, symbol),
@@ -720,6 +730,65 @@ function processWatchlist() {
             return { symbol, price: 0, bias: 'ERROR' };
         }
     });
+}
+
+/**
+ * --- AI ANALYST: INSTITUTIONAL NARRATIVE ENGINE ---
+ * Synthesizes all data points into a coherent strategy feed.
+ */
+function generateAIAnalystInsight(data) {
+    const symbol = data.symbol || 'SPY';
+    const score = Math.round(data.confluenceScore || 0);
+    const bias = data.bias?.bias || 'NEUTRAL';
+    const flow = data.netWhaleFlow || 0;
+    const move = data.expectedMove;
+    const roroDir = data.roroDirection || 'NEUTRAL';
+    
+    let insight = "";
+    let action = "MONITORING";
+    let prob = score;
+
+    // Narrative Logic
+    if (score >= 80) {
+        insight = `High-conviction ${bias} regime detected. Institutional desks are aggressively defending current levels. `;
+        action = bias.includes('BULLISH') ? 'ACCUMULATE CALLS' : 'ACCUMULATE PUTS';
+    } else if (score >= 65) {
+        insight = `Developing ${bias} trend. Order flow alignment is increasing. `;
+        action = bias.includes('BULLISH') ? 'BULLISH BIAS' : 'BEARISH BIAS';
+    } else if (score <= 35) {
+        insight = `High-conviction ${bias} regime detected. Market is in a clear liquidation phase. `;
+        action = 'SHORT VENTURE';
+    } else {
+        insight = "The market is in a tactical wait-and-see phase. Liquidity is balanced between BSL and SSL. ";
+        action = "WAIT FOR SWEEP";
+    }
+
+    // Add Order Flow Context
+    if (Math.abs(flow) > 500000) {
+        insight += `Whale momentum is ${flow > 0 ? 'bullish' : 'bearish'} with $${(Math.abs(flow)/1000000).toFixed(1)}M hitting the tape. `;
+    }
+
+    // Add Expected Move Context
+    if (move && data.currentPrice) {
+        const distUpper = Math.abs(data.currentPrice - move.upper);
+        const distLower = Math.abs(data.currentPrice - move.lower);
+        const buffer = data.currentPrice * 0.002;
+
+        if (distUpper < buffer) insight += "Current price is testing the Expected Move Upper bound. Institutional selling likely. ";
+        else if (distLower < buffer) insight += "Current price is testing the Expected Move Lower bound. Institutional buying likely. ";
+        else insight += `Price is maintaining the ${bias.includes('BULLISH') ? 'bullish' : 'bearish'} channel toward the ${bias.includes('BULLISH') ? 'upper' : 'lower'} target. `;
+    }
+
+    if (roroDir !== 'NEUTRAL') {
+        insight += `Macro sentiment confirms a risk-${roroDir === 'BULLISH' ? 'on' : 'off'} environment. `;
+    }
+
+    return {
+        text: insight,
+        action: action,
+        probability: Math.min(99, prob),
+        intensity: Math.abs(flow) > 1000000 ? 'HIGH' : 'NORMAL'
+    };
 }
 
 startServer().catch(err => {

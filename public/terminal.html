@@ -657,6 +657,24 @@
 
             <!-- Right Column (Sidebar) -->
             <aside class="sidebar">
+                <!-- NEW: AI ANALYST (STRATEGIST FEED) -->
+                <section class="card reveal-1" style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.05) 0%, rgba(0, 0, 0, 0.4) 100%); border: 1px solid rgba(56, 189, 248, 0.2); margin-bottom: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(56, 189, 248, 0.1); padding-bottom: 8px;">
+                         <div style="display: flex; align-items: center; gap: 8px;">
+                             <div id="ai-status-pulse" style="width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: pulse-opacity 1.5s infinite alternate;"></div>
+                             <span style="font-size: 0.6rem; font-weight: 950; letter-spacing: 1px; color: var(--cyan);">B.I.A.S AI ANALYST (ST1-ENGINE)</span>
+                         </div>
+                         <span id="ai-conviction" style="font-size: 0.5rem; font-family: 'JetBrains Mono'; background: var(--cyan-dim); color: var(--cyan); padding: 1px 6px; border-radius: 2px; font-weight: 800;">CONF: 0%</span>
+                    </div>
+                    <div id="ai-insight-text" style="font-size: 0.75rem; min-height: 50px; color: var(--text-bright); font-style: italic; line-height: 1.5; font-family: 'Inter';">Initializing market deep-scan... Analyzing institutional nodes...</div>
+                    <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 10px;">
+                         <div style="display: flex; flex-direction: column;">
+                             <span style="font-size: 0.45rem; color: var(--text-dim); font-weight: 800; letter-spacing: 0.5px;">STRATEGIC ACTION</span>
+                             <span id="ai-action" style="font-size: 0.8rem; font-weight: 900; color: var(--gold);">SCANNING...</span>
+                         </div>
+                         <div id="ai-intensity" style="font-size: 0.45rem; font-weight: 900; color: var(--text-dim); border: 1px solid rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 2px;">INTENSITY: LOW</div>
+                    </div>
+                </section>
                 <!-- GLOBAL MACRO OVERNIGHT PULSE (REBUILT: INSTITUTIONAL GRADE) -->
                 <section class="card reveal-1" style="margin-bottom: 0.75rem; border-color: rgba(255,157,0,0.15); background: linear-gradient(180deg, rgba(15, 23, 42, 0.6) 0%, rgba(0, 0, 0, 0.8) 100%);">
                     <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.5); padding: 8px 12px; border-bottom: 1px solid rgba(255,157,0,0.3);">

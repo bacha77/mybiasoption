@@ -412,7 +412,8 @@ document.getElementById('btn-voice-toggle')?.addEventListener('click', () => voi
 
 let lastSignalAction = '';
 let lastPrice = 0;
-let signalUnlocked = false;
+let lastInstitutionalData = null;
+let lastAIInsight = "";
 let pendingSignalData = null;
 
 // --- Tactical Handbook Logic ---
@@ -1483,6 +1484,9 @@ function updateUI(data) {
         const radarSessionName = document.getElementById('radar-session-name');
         const radarSessionTimer = document.getElementById('radar-session-timer');
         const radarRealityText = document.getElementById('radar-reality-text');
+
+        // --- NEW: AI ANALYST (STRATEGIST FEED) SYNC ---
+        if (data.aiInsight) updateAIAnalyst(data.aiInsight);
 
         if (radarIrScore) {
             const score = Math.round(radar.irScore || 0);
@@ -2637,4 +2641,51 @@ function updateBlockFeed(data) {
         feed.prepend(div);
         if (feed.children.length > 15) feed.lastChild.remove();
     });
+}
+
+function updateAIAnalyst(insight) {
+    if (!insight) return;
+    
+    const textEl = document.getElementById('ai-insight-text');
+    const convEl = document.getElementById('ai-conviction');
+    const actionEl = document.getElementById('ai-action');
+    const intensityEl = document.getElementById('ai-intensity');
+
+    if (convEl) {
+        convEl.innerText = `CONF: ${insight.probability}%`;
+        convEl.style.color = insight.probability >= 70 ? 'var(--bullish)' : (insight.probability <= 35 ? 'var(--bearish)' : 'var(--cyan)');
+    }
+    
+    if (actionEl) {
+        actionEl.innerText = insight.action;
+        actionEl.className = (insight.action.includes('CALL') || insight.action.includes('BULLISH')) ? 'bullish-text' : 
+                          ((insight.action.includes('PUT') || insight.action.includes('SHORT') || insight.action.includes('BEARISH')) ? 'bearish-text' : 'gold-text');
+    }
+
+    if (intensityEl) {
+        intensityEl.innerText = `INTENSITY: ${insight.intensity}`;
+        intensityEl.style.borderColor = insight.intensity === 'HIGH' ? 'var(--cyan)' : 'rgba(255,255,255,0.1)';
+        intensityEl.style.color = insight.intensity === 'HIGH' ? 'var(--cyan)' : 'var(--text-dim)';
+    }
+
+    // Typewriter effect if text changed
+    if (textEl && lastAIInsight !== insight.text) {
+        lastAIInsight = insight.text;
+        typeWriter(textEl, insight.text);
+    }
+}
+
+function typeWriter(element, text) {
+    let charIndex = 0;
+    element.innerHTML = '';
+    const speed = 15; // Fast tactical speed
+    
+    function type() {
+        if (charIndex < text.length) {
+            element.innerHTML += text.charAt(charIndex);
+            charIndex++;
+            setTimeout(type, speed);
+        }
+    }
+    type();
 }
