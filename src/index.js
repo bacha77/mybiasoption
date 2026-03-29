@@ -307,19 +307,21 @@ async function startServer() {
     const runUpdateLoop = async () => {
         try {
             await simulator.updateAll();
-            const currentUpdate = processData();
+            const g7 = calculateG7Basket();
+            const eventPulse = newsService.getEventPulse();
+            
+            const currentUpdate = processData(simulator.currentSymbol, { basket: g7.basket, eventPulse });
             const now = Date.now();
             let watchlistUpdate = (now - lastWatchlistEmit > 10000) ? processWatchlist() : null;
             if (watchlistUpdate) lastWatchlistEmit = now;
 
             const activeSignals = simulator.watchlist.map(sym => {
-                const d = processData(sym);
+                const d = processData(sym, { basket: g7.basket, eventPulse });
                 return (d.scalpScan && (parseFloat(d.scalpScan.velocity) > 1.5 || (d.alignedCount || 0) >= 3)) ? { symbol: sym, ...d.scalpScan, alignedCount: d.alignedCount } : null;
             }).filter(s => s !== null);
             
             if (activeSignals.length > 0) io.emit('scalper_pulse', { updates: activeSignals });
 
-            const g7 = calculateG7Basket();
             const smtAlerts = checkSMTDivergences();
             
             const payload = {
@@ -328,7 +330,7 @@ async function startServer() {
                 sectors: processSectors(),
                 basket: g7.basket,
                 correlationMatrix: g7.correlationMatrix,
-                eventPulse: newsService.getEventPulse(),
+                eventPulse: eventPulse,
                 orderFlowDOM: engine.calculateOrderFlowHeatmap(currentUpdate.currentPrice, currentUpdate.markers, 0),
                 isBasketAligned: checkBasketAlignment(),
                 smtAlerts: smtAlerts
@@ -488,7 +490,7 @@ function calculateConfluenceScore(symbol, stock, bias, markers, relativeStrength
     return Math.round(confScoreValue);
 }
 
-function processData(symbol = simulator.currentSymbol) {
+function processData(symbol = simulator.currentSymbol, options = {}) {
     const normalizedSymbol = symbol.replace(/\./g, '-');
     const stock = simulator.stocks[normalizedSymbol];
     const tf = simulator.currentTimeframe;
@@ -609,7 +611,9 @@ function processData(symbol = simulator.currentSymbol) {
             expectedMove,
             currentPrice: stock.currentPrice,
             roro: internals.roro,
-            roroDirection: internals.roroDirection
+            roroDirection: internals.roroDirection,
+            basket: options.basket,
+            eventPulse: options.eventPulse
         }),
         hybridCVD: (stock.cvd || 0) + ((stock.netWhaleFlow || 0) / (stock.currentPrice || 1)),
         netWhaleFlow: stock.netWhaleFlow || 0,
@@ -740,54 +744,70 @@ function generateAIAnalystInsight(data) {
     const symbol = data.symbol || 'SPY';
     const score = Math.round(data.confluenceScore || 0);
     const bias = data.bias?.bias || 'NEUTRAL';
+    const phase = data.bias?.amdPhase || 'ACCUMULATION';
     const flow = data.netWhaleFlow || 0;
     const move = data.expectedMove;
     const roroDir = data.roroDirection || 'NEUTRAL';
+    const pulse = data.eventPulse;
     
     let insight = "";
     let action = "MONITORING";
     let prob = score;
 
-    // Narrative Logic
+    // 1. PO3 PHASE DETECTION
+    if (phase === 'MANIPULATION') {
+        insight = `⚠️ JUDAS SWING DETECTED. Price is in the ${phase} phase. Institutional stop-runs are active. Do not chase. `;
+        prob += 5;
+    } else if (phase === 'DISTRIBUTION') {
+        insight = `Target reached. Market has entered the ${phase} phase. Institutional profit-taking detected. `;
+    } else {
+        insight = `Market is in ${phase}. Institutional nodes are building liquidity for the next expansion. `;
+    }
+
+    // 2. PRIMARY NARRATIVE
     if (score >= 80) {
-        insight = `High-conviction ${bias} regime detected. Institutional desks are aggressively defending current levels. `;
+        insight += `High-conviction ${bias} regime confirmed. `;
         action = bias.includes('BULLISH') ? 'ACCUMULATE CALLS' : 'ACCUMULATE PUTS';
     } else if (score >= 65) {
-        insight = `Developing ${bias} trend. Order flow alignment is increasing. `;
+        insight += `Developing ${bias} bias. Order flow is syncing with institutional targets. `;
         action = bias.includes('BULLISH') ? 'BULLISH BIAS' : 'BEARISH BIAS';
-    } else if (score <= 35) {
-        insight = `High-conviction ${bias} regime detected. Market is in a clear liquidation phase. `;
-        action = 'SHORT VENTURE';
     } else {
-        insight = "The market is in a tactical wait-and-see phase. Liquidity is balanced between BSL and SSL. ";
+        insight += "Price action is currently corrective. Awaiting session liquidity sweep. ";
         action = "WAIT FOR SWEEP";
     }
 
-    // Add Order Flow Context
+    // 3. NEWS INTEGRATION (High Impact)
+    if (pulse && (pulse.status === 'EXTREME' || pulse.status === 'ELEVATED')) {
+        insight += `URGENT: ${pulse.name} in ${pulse.countdown}m. Expect extreme institutional volatility. Slippage risk is ${pulse.status}. `;
+        if (pulse.status === 'EXTREME') action = "FLATTEN / PROTECT";
+    }
+
+    // 4. CROSS-ASSET ALPHA
+    if (data.basket) {
+        const spyPerf = data.basket['SPY']?.perf || 0;
+        const btcPerf = data.basket['BTC-USD']?.perf || 0;
+        
+        if (symbol === 'SPY' && Math.abs(btcPerf) > Math.abs(spyPerf) * 2) {
+            insight += `Inter-market Warning: BTC move of ${btcPerf.toFixed(2)}% is leading SPY. Index follow-through highly likely. `;
+        }
+    }
+
+    // 5. WHALE FLOW & EXPECTED MOVE
     if (Math.abs(flow) > 500000) {
-        insight += `Whale momentum is ${flow > 0 ? 'bullish' : 'bearish'} with $${(Math.abs(flow)/1000000).toFixed(1)}M hitting the tape. `;
+        insight += `Whale aggression is ${flow > 0 ? 'bullish' : 'bearish'} ($${(Math.abs(flow)/1000000).toFixed(1)}M). `;
     }
 
-    // Add Expected Move Context
     if (move && data.currentPrice) {
-        const distUpper = Math.abs(data.currentPrice - move.upper);
-        const distLower = Math.abs(data.currentPrice - move.lower);
         const buffer = data.currentPrice * 0.002;
-
-        if (distUpper < buffer) insight += "Current price is testing the Expected Move Upper bound. Institutional selling likely. ";
-        else if (distLower < buffer) insight += "Current price is testing the Expected Move Lower bound. Institutional buying likely. ";
-        else insight += `Price is maintaining the ${bias.includes('BULLISH') ? 'bullish' : 'bearish'} channel toward the ${bias.includes('BULLISH') ? 'upper' : 'lower'} target. `;
-    }
-
-    if (roroDir !== 'NEUTRAL') {
-        insight += `Macro sentiment confirms a risk-${roroDir === 'BULLISH' ? 'on' : 'off'} environment. `;
+        if (Math.abs(data.currentPrice - move.upper) < buffer) insight += "Approaching Institutional Ceiling (Expected Move High). Reversal risk is elevated. ";
+        else if (Math.abs(data.currentPrice - move.lower) < buffer) insight += "Approaching Institutional Floor (Expected Move Low). Dip-buying likely. ";
     }
 
     return {
         text: insight,
         action: action,
         probability: Math.min(99, prob),
-        intensity: Math.abs(flow) > 1000000 ? 'HIGH' : 'NORMAL'
+        intensity: Math.abs(flow) > 1000000 || (pulse && pulse.status === 'EXTREME') ? 'HIGH' : 'NORMAL'
     };
 }
 
