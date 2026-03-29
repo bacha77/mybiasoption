@@ -792,6 +792,28 @@ function generateAIAnalystInsight(data) {
         }
     }
 
+    // 2.5 INSTITUTIONAL FOREX REGIME (G7 FLOW)
+    const isForex = symbol.includes('=X') || symbol.includes('USD') || symbol === 'BTC-USD';
+    if (isForex && data.basket) {
+        const cur = symbol.substring(0, 3).toUpperCase();
+        const curStrength = data.basket[cur]?.perf || 0;
+        const dxyStrength = data.basket['USD']?.perf || 0;
+
+        if (curStrength > 0.4) insight += `FOREX: ${cur} is extremely STRONG in the G7 basket. Accumulation detected. `;
+        else if (curStrength < -0.4) insight += `FOREX: ${cur} is the WEAKEST link. Clear institutional selling. `;
+
+        if (Math.abs(dxyStrength) > 0.2 && cur !== 'USD') {
+            const isInverse = (dxyStrength > 0 && curStrength < 0) || (dxyStrength < 0 && curStrength > 0);
+            if (!isInverse && Math.abs(curStrength) > 0.1) {
+                insight += `⚠️ CORRELATION WARNING: ${cur} is moving WITH the Dollar. This is an artificial move. Expect a Judas reversal. `;
+                prob -= 10;
+            } else if (isInverse) {
+                insight += `Institutional Sync: ${cur} is perfectly inversely aligned with DXY. High-probability trend. `;
+                prob += 5;
+            }
+        }
+    }
+
     // 3. PO3 PHASE & NARRATIVE
     if (phase === 'MANIPULATION') {
         insight += `⚠️ PRICE IN MANIPULATION PHASE. Stop-runs are active. institutional desks are hunting liquidity. `;
