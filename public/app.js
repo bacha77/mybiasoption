@@ -2704,12 +2704,12 @@ function updateAIAnalyst(insight) {
 
 function typeWriter(element, text) {
     let charIndex = 0;
-    element.innerHTML = '';
+    element.textContent = '';
     const speed = 15; // Fast tactical speed
     
     function type() {
         if (charIndex < text.length) {
-            element.innerHTML += text.charAt(charIndex);
+            element.textContent += text.charAt(charIndex);
             charIndex++;
             setTimeout(type, speed);
         }

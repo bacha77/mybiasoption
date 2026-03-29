@@ -612,7 +612,7 @@ function processData(symbol = simulator.currentSymbol, options = {}) {
         stock.currentPrice = stock.previousClose;
     }
 
-    return {
+    const payload = {
         symbol,
         currentPrice: stock.currentPrice,
         dailyChangePercent: stock.dailyChangePercent,
@@ -701,6 +701,13 @@ function processData(symbol = simulator.currentSymbol, options = {}) {
         blockTrades: simulator.blockTrades || [],
         overnightSentiment: simulator.calculateOvernightSentiment(symbol)
     };
+
+    if (payload.aiInsight?.text) {
+        // console.log(`[DEBUG_AI] Symbol: ${symbol} | Insight: ${payload.aiInsight.text.substring(0, 100)}...`);
+    }
+
+    return payload;
+}
 }
 
 function processWatchlist() {
