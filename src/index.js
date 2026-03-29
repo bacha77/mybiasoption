@@ -309,10 +309,12 @@ async function startServer() {
             await simulator.updateAll();
             const g7 = calculateG7Basket();
             const eventPulse = newsService.getEventPulse();
-            
-            const currentUpdate = processData(simulator.currentSymbol, { basket: g7.basket, eventPulse });
+            const watchlist = processWatchlist(); // Detailed context for the AI
+            const session = engine.getSessionInfo(simulator.currentSymbol);
+
+            const currentUpdate = processData(simulator.currentSymbol, { basket: g7.basket, eventPulse, watchlist, session });
             const now = Date.now();
-            let watchlistUpdate = (now - lastWatchlistEmit > 10000) ? processWatchlist() : null;
+            let watchlistUpdate = (now - lastWatchlistEmit > 10000) ? watchlist : null;
             if (watchlistUpdate) lastWatchlistEmit = now;
 
             const activeSignals = simulator.watchlist.map(sym => {
@@ -613,7 +615,9 @@ function processData(symbol = simulator.currentSymbol, options = {}) {
             roro: internals.roro,
             roroDirection: internals.roroDirection,
             basket: options.basket,
-            eventPulse: options.eventPulse
+            eventPulse: options.eventPulse,
+            watchlist: options.watchlist,
+            session: options.session
         }),
         hybridCVD: (stock.cvd || 0) + ((stock.netWhaleFlow || 0) / (stock.currentPrice || 1)),
         netWhaleFlow: stock.netWhaleFlow || 0,
@@ -746,61 +750,71 @@ function generateAIAnalystInsight(data) {
     const bias = data.bias?.bias || 'NEUTRAL';
     const phase = data.bias?.amdPhase || 'ACCUMULATION';
     const flow = data.netWhaleFlow || 0;
-    const move = data.expectedMove;
-    const roroDir = data.roroDirection || 'NEUTRAL';
     const pulse = data.eventPulse;
+    const session = data.session || { name: 'OFF-HOURS', active: false };
     
     let insight = "";
     let action = "MONITORING";
     let prob = score;
 
-    // 1. PO3 PHASE DETECTION
-    if (phase === 'MANIPULATION') {
-        insight = `⚠️ JUDAS SWING DETECTED. Price is in the ${phase} phase. Institutional stop-runs are active. Do not chase. `;
-        prob += 5;
-    } else if (phase === 'DISTRIBUTION') {
-        insight = `Target reached. Market has entered the ${phase} phase. Institutional profit-taking detected. `;
+    // 1. SESSION-SPECIFIC KILLZONE TACTICS
+    if (session.active) {
+        if (session.name.includes('LONDON')) {
+            insight = `📍 LONDON OPEN ACTIVE. Monitoring the 'Judas Swing'. Look for a false breakout above/below the Asia range for a reversal. `;
+        } else if (session.name.includes('NY_OPEN')) {
+            insight = `📍 NY OPEN (SILVER BULLET) ACTIVE. High institutional displacement. If price clears a liquidity level, expect expansion. `;
+        } else if (session.name.includes('PM_SESSION')) {
+            insight = `📍 PM SESSION ACTIVE. Watching for 2:00 PM institutional rebalancing. Often identifies the end-of-day reversal. `;
+        } else {
+            insight = `📍 SESSION ACTIVE (${session.name.replace('_', ' ')}). Searching for high-value nodes. `;
+        }
     } else {
-        insight = `Market is in ${phase}. Institutional nodes are building liquidity for the next expansion. `;
+        insight = `MARKET OFF-HOURS. Processing institutional dark pool flows and positioning for next session. `;
     }
 
-    // 2. PRIMARY NARRATIVE
-    if (score >= 80) {
-        insight += `High-conviction ${bias} regime confirmed. `;
-        action = bias.includes('BULLISH') ? 'ACCUMULATE CALLS' : 'ACCUMULATE PUTS';
-    } else if (score >= 65) {
-        insight += `Developing ${bias} bias. Order flow is syncing with institutional targets. `;
-        action = bias.includes('BULLISH') ? 'BULLISH BIAS' : 'BEARISH BIAS';
-    } else {
-        insight += "Price action is currently corrective. Awaiting session liquidity sweep. ";
-        action = "WAIT FOR SWEEP";
-    }
+    // 2. WATCHLIST-WIDE SCANNERS (The answer to your question)
+    if (data.watchlist && data.watchlist.length > 0) {
+        const bullish = data.watchlist.filter(w => w.bias?.includes('BULLISH')).length;
+        const total = data.watchlist.length;
+        const breadth = Math.round((bullish / total) * 100);
 
-    // 3. NEWS INTEGRATION (High Impact)
-    if (pulse && (pulse.status === 'EXTREME' || pulse.status === 'ELEVATED')) {
-        insight += `URGENT: ${pulse.name} in ${pulse.countdown}m. Expect extreme institutional volatility. Slippage risk is ${pulse.status}. `;
-        if (pulse.status === 'EXTREME') action = "FLATTEN / PROTECT";
-    }
-
-    // 4. CROSS-ASSET ALPHA
-    if (data.basket) {
-        const spyPerf = data.basket['SPY']?.perf || 0;
-        const btcPerf = data.basket['BTC-USD']?.perf || 0;
+        if (breadth >= 75) {
+            insight += `MARKET-WIDE BULLISH SYNC: ${breadth}% of your watchlist is trending up. Institutional expansion is systemic. `;
+            prob += 10;
+        } else if (breadth <= 25) {
+            insight += `MARKET-WIDE BEARISH SYNC: Only ${breadth}% of tickers are holding levels. Systemic liquidation is active. `;
+            prob += 10;
+        }
         
-        if (symbol === 'SPY' && Math.abs(btcPerf) > Math.abs(spyPerf) * 2) {
-            insight += `Inter-market Warning: BTC move of ${btcPerf.toFixed(2)}% is leading SPY. Index follow-through highly likely. `;
+        const topPicker = data.watchlist.sort((a,b) => (b.confluenceScore || 0) - (a.confluenceScore || 0))[0];
+        if (topPicker && topPicker.confluenceScore > 85 && topPicker.symbol !== symbol) {
+            insight += `AI TOP PICK: ${topPicker.symbol} has an extreme Confluence Score (${topPicker.confluenceScore}%). Consider checking this chart. `;
         }
     }
 
-    // 5. WHALE FLOW & EXPECTED MOVE
-    if (Math.abs(flow) > 500000) {
-        insight += `Whale aggression is ${flow > 0 ? 'bullish' : 'bearish'} ($${(Math.abs(flow)/1000000).toFixed(1)}M). `;
+    // 3. PO3 PHASE & NARRATIVE
+    if (phase === 'MANIPULATION') {
+        insight += `⚠️ PRICE IN MANIPULATION PHASE. Stop-runs are active. institutional desks are hunting liquidity. `;
+        prob += 5;
+    } else if (score >= 80) {
+        insight += `High-conviction ${bias} regime confirmed. `;
+        action = bias.includes('BULLISH') ? 'ACCUMULATE CALLS' : 'ACCUMULATE PUTS';
+    } else if (score >= 65) {
+        insight += `Developing ${bias} bias. Order flow syncing with institutional targets. `;
+        action = bias.includes('BULLISH') ? 'BULLISH BIAS' : 'BEARISH BIAS';
+    } else {
+        insight += "Market currently corrective. Waiting for session liquidity sweep. ";
+        action = "WAIT FOR SWEEP";
     }
 
-    if (move && data.currentPrice) {
-        const buffer = data.currentPrice * 0.002;
-        if (Math.abs(data.currentPrice - move.upper) < buffer) insight += "Approaching Institutional Ceiling (Expected Move High). Reversal risk is elevated. ";
-        else if (Math.abs(data.currentPrice - move.lower) < buffer) insight += "Approaching Institutional Floor (Expected Move Low). Dip-buying likely. ";
+    // 4. NEWS & WHALES
+    if (pulse && (pulse.status === 'EXTREME' || pulse.status === 'ELEVATED')) {
+        insight += `URGENT: ${pulse.name} in ${pulse.countdown}m. Expect extreme institutional volatility. Slippage risk ${pulse.status}. `;
+        if (pulse.status === 'EXTREME') action = "FLATTEN / PROTECT";
+    }
+
+    if (Math.abs(flow) > 1000000) {
+        insight += `HEAVY WHALE ACTION: $${(Math.abs(flow)/1000000).toFixed(1)}M hitting the tape. Momentum is ${flow > 0 ? 'BULLISH' : 'BEARISH'}. `;
     }
 
     return {
