@@ -2681,6 +2681,15 @@ function updateAIAnalyst(insight) {
     // Typewriter effect if text changed
     if (textEl && lastAIInsight !== insight.text) {
         lastAIInsight = insight.text;
+        const pulse = document.getElementById('ai-status-pulse');
+        if (pulse) {
+            pulse.style.background = 'var(--gold)';
+            pulse.style.animationDuration = '0.3s';
+            setTimeout(() => {
+                pulse.style.background = 'var(--cyan)';
+                pulse.style.animationDuration = '1.5s';
+            }, 2000);
+        }
         typeWriter(textEl, insight.text);
     }
 }
