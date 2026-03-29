@@ -2678,6 +2678,14 @@ function updateAIAnalyst(insight) {
         intensityEl.style.color = insight.intensity === 'HIGH' ? 'var(--cyan)' : 'var(--text-dim)';
     }
 
+    if (window.latestInstitutionalData?.aiStats) {
+        const stats = window.latestInstitutionalData.aiStats;
+        const accEl = document.getElementById('ai-accuracy');
+        const capEl = document.getElementById('ai-capture');
+        if (accEl) accEl.innerText = `ACCURACY: ${stats.accuracy}%`;
+        if (capEl) capEl.innerText = `CAPTURE: ${parseFloat(stats.points) >= 0 ? '+' : ''}${stats.points} PTS`;
+    }
+
     // Typewriter effect if text changed
     if (textEl && lastAIInsight !== insight.text) {
         lastAIInsight = insight.text;
