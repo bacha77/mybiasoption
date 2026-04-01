@@ -14,30 +14,55 @@ export class DataSourceManager {
     async getQuotes(symbols) {
         const output = {};
         try {
-            // Priority 1: Pyth (High Speed Institutional Oracle)
+            // ── STEP 0: Seed prevClose cache for FX pairs that Pyth doesn't supply ──
+            // Run this once on cold start (cache missing). Yahoo has real prev close data.
+            if (!this.prevCloseCache) this.prevCloseCache = {};
+            const fxPairs = symbols.filter(s => s.includes('=X'));
+            const coldFX  = fxPairs.filter(s => !this.prevCloseCache[s]);
+            if (coldFX.length > 0) {
+                await Promise.all(coldFX.map(async (sym) => {
+                    try {
+                        const q = await yahooFinance.quote(sym, {}, { validate: false }).catch(() => null);
+                        if (q && q.regularMarketPrice > 0) {
+                            const prevClose = q.regularMarketPreviousClose || q.regularMarketOpen || q.regularMarketPrice;
+                            this.prevCloseCache[sym] = {
+                                value: prevClose,
+                                price: q.regularMarketPrice,
+                                change: q.regularMarketChangePercent || 0,
+                                time: Date.now()
+                            };
+                        }
+                    } catch (e) {}
+                }));
+            }
+
+            // ── STEP 1: Pyth (High Speed Institutional Oracle) ──────────────────
             const pythSymbols = symbols.filter(s => s !== 'VIX');
             const pythResults = await pythService.getLatestPrices(pythSymbols).catch(() => ({}));
             
             Object.keys(pythResults).forEach(sym => {
                 const pyth = pythResults[sym];
                 if (pyth && pyth.price > 0) {
+                    // Pull real prevClose from the seeded cache (not price itself)
+                    const cached = this.prevCloseCache[sym];
+                    const prevClose = (cached && cached.value > 0) ? cached.value : null;
                     output[sym] = {
-                        price: pyth.price,
-                        prevClose: this.prevCloseCache?.[sym]?.value || pyth.price,
-                        source: 'PYTH-BATCH'
+                        price:     pyth.price,
+                        prevClose: prevClose,   // null if not yet seeded — ingestQuote handles null
+                        confidence: pyth.confidence,
+                        source:    'PYTH-BATCH'
                     };
                 }
             });
 
-            // Priority 2: Yahoo (Only for VIX or extreme fallbacks)
+            // ── STEP 2: Yahoo fallback for symbols Pyth missed ──────────────────
             const missing = symbols.filter(s => !output[s]);
             if (missing.length > 0) {
-                // Throttle Yahoo to prevent blocking
                 await Promise.all(missing.map(async (sym) => {
                     try {
                         let metaSym = sym;
-                        if (metaSym === 'VIX') metaSym = '^VIX';
-                        if (metaSym === 'DXY') metaSym = 'DX-Y.NYB';
+                        if (metaSym === 'VIX')  metaSym = '^VIX';
+                        if (metaSym === 'DXY')  metaSym = 'DX-Y.NYB';
                         if (metaSym === 'GOLD') metaSym = 'GC=F';
 
                         // Yahoo Rate-Limit Shield: Only call if not in cache or 15s elapsed
@@ -50,12 +75,11 @@ export class DataSourceManager {
                         const q = await yahooFinance.quote(metaSym, {}, { validate: false }).catch(() => null);
                         if (q && q.regularMarketPrice > 0) {
                             output[sym] = {
-                                price: q.regularMarketPrice,
+                                price:     q.regularMarketPrice,
                                 prevClose: q.regularMarketPreviousClose || q.regularMarketOpen,
-                                change: q.regularMarketChangePercent,
-                                source: 'YAHOO-BENCH'
+                                change:    q.regularMarketChangePercent,
+                                source:    'YAHOO-BENCH'
                             };
-                            if (!this.prevCloseCache) this.prevCloseCache = {};
                             this.prevCloseCache[metaSym] = { value: output[sym].prevClose, price: q.regularMarketPrice, time: Date.now() };
                         }
                     } catch (e) {}
@@ -100,7 +124,11 @@ export class DataSourceManager {
 
                 let prevClose = cached ? cached.value : null;
                 if (!prevClose) {
-                    const fallback = { 'SPY': 585, 'QQQ': 480, 'DIA': 420, 'DXY': 103.5, 'VIX': 16.5, 'GOLD': 2500 };
+                    const fallback = { 
+                        'SPY': 635, 'QQQ': 560, 'DIA': 450, 'DXY': 105.5, 'VIX': 18.5, 'GOLD': 2500,
+                        'EURUSD=X': 1.080, 'GBPUSD=X': 1.260, 'USDJPY=X': 151.50, 'AUDUSD=X': 0.655,
+                        'USDCAD=X': 1.365, 'NZDUSD=X': 0.598, 'USDCHF=X': 0.905
+                    };
                     prevClose = fallback[symbol] || pyth.price;
                 }
 

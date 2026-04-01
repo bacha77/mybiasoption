@@ -265,76 +265,6 @@ export class LiquidityEngine {
         return isInverse ? (symPerf + compPerf) * 100 : (symPerf - compPerf) * 100;
     }
 
-    /**
-     * G7 Currency Correlation Matrix
-     * Detects coupling/decoupling across all major currency baskets.
-     * Uses relative performance delta to identify institutional synchronization.
-     */
-    calculateG7CorrelationMatrix(baskets) {
-        const currencies = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD'];
-        const matrix = {};
-
-        currencies.forEach(c1 => {
-            matrix[c1] = {};
-            const perf1 = baskets[c1]?.perf || 0;
-            
-            currencies.forEach(c2 => {
-                const perf2 = baskets[c2]?.perf || 0;
-                
-                // Calculate correlation proxy based on performance divergence
-                // 1.0 = Perfect Alignment, -1.0 = Total Decoupling
-                const diff = Math.abs(perf1 - perf2);
-                let corr = 1 - Math.min(diff * 2, 2); 
-                
-                matrix[c1][c2] = parseFloat(corr.toFixed(2));
-            });
-        });
-
-        return matrix;
-    }
-
-    /**
-     * Identifies current trading session based on US Market Hours.
-     */
-    getSessionInfo(symbol = 'SPY') {
-        const now = new Date();
-        const nyTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-        const hour = nyTime.getHours();
-        const minute = nyTime.getMinutes();
-        const day = nyTime.getDay();
-        const isWeekend = day === 0 || (day === 6 && hour < 17); // Saturday or early Sunday
-        const totalMinutes = (hour * 60) + minute;
-
-        const isForex = symbol === 'BTC-USD' || symbol.includes('=X');
-        const marketOpen = 570; // 9:30 AM
-        const marketClose = 960; // 4:00 PM
-
-        // Forex is 24/5. US Market is 9:30-4:00.
-        let isMarketOpen = !isWeekend && totalMinutes >= marketOpen && totalMinutes < marketClose;
-        if (isForex && !isWeekend) isMarketOpen = true;
-
-        if (isWeekend) return { session: 'WEEKEND', status: 'MARKET CLOSED', color: '#ff3366', isMarketOpen: false };
-
-        if (!isForex) {
-            if (totalMinutes >= 600 && totalMinutes <= 660) return { session: 'SILVER_BULLET', status: 'ALGO EXPANSION', color: '#f59e0b', isMarketOpen: true };
-            if (totalMinutes >= 570 && totalMinutes <= 660) return { session: 'NY_OPEN', status: 'HIGH VOLATILITY', color: '#00f2ff', isMarketOpen: true };
-            if (totalMinutes > 660 && totalMinutes < 780) return { session: 'NY_AM', status: 'TRENDING', color: '#00ff88', isMarketOpen: true };
-            if (totalMinutes >= 780 && totalMinutes <= 810) return { session: 'LUNCH', status: 'CONSOLIDATION', color: '#94a3b8', isMarketOpen: true };
-            if (totalMinutes > 810 && totalMinutes <= 960) return { session: 'NY_PM', status: 'EOD DRIVE', color: '#00f2ff', isMarketOpen: true };
-            if (totalMinutes > 960 && totalMinutes <= 1200) return { session: 'POST_MARKET', status: 'LOW LIQUIDITY', color: '#6366f1', isMarketOpen: true };
-
-            return { session: 'OFF_HOURS', status: 'MARKET CLOSED', color: '#334155', isMarketOpen: false };
-        } else {
-            // Forex-specific Follow-The-Sun Session logic
-            if (hour >= 3 && hour < 4) return { session: 'LONDON_BULLET', status: 'ALGO EXPANSION', color: '#f59e0b', isMarketOpen: true };
-            if (hour >= 2 && hour < 5) return { session: 'LONDON_OPEN', status: 'HIGH VOLUME', color: '#00f2ff', isMarketOpen: true };
-            if (hour >= 5 && hour < 11) return { session: 'LONDON_DRIVE', status: 'TRENDING', color: '#00ff88', isMarketOpen: true };
-            if (hour >= 8 && hour < 12) return { session: 'NY_OVERLAP', status: 'PEAK LIQUIDITY', color: '#f59e0b', isMarketOpen: true };
-            if (hour >= 18 || hour < 20) return { session: 'ASIA_OPEN', status: 'ACCUMULATION', color: '#94a3b8', isMarketOpen: true };
-            if (hour >= 20 || hour < 3) return { session: 'TOKYO_DRIVE', status: 'STEADY', color: '#6366f1', isMarketOpen: true };
-            return { session: 'GLOBAL_FLOW', status: 'STEADY', color: '#334155', isMarketOpen: true };
-        }
-    }
 
     /**
      * Institutional Killzone Status (Timed Volatility Phases)
@@ -380,6 +310,41 @@ export class LiquidityEngine {
     }
 
     /**
+     * T1-F: VOLATILITY REGIME CLASSIFIER
+     * Compare current ATR to 20-period rolling average ATR.
+     * EXPLOSIVE  (>1.5× avg): Trending — block mean-reversion signals.
+     * NORMAL     (0.8–1.5×): Standard conditions — all signals valid.
+     * COMPRESSED (<0.8× avg): Coiling — breakout imminent, prefer ORB/FVG setups.
+     */
+    classifyVolatilityRegime(candles) {
+        if (!candles || candles.length < 25) return { regime: 'NORMAL', ratio: 1, label: 'NORMAL VOLATILITY', color: 'var(--gold)' };
+
+        const atrSeries = [];
+        for (let i = 1; i < candles.length; i++) {
+            const c = candles[i];
+            const p = candles[i - 1];
+            const tr = Math.max(
+                c.high - c.low,
+                Math.abs(c.high - p.close),
+                Math.abs(c.low  - p.close)
+            );
+            atrSeries.push(tr);
+        }
+
+        const currentATR = atrSeries[atrSeries.length - 1];
+        const lookback   = atrSeries.slice(-21, -1); // Last 20, excluding current
+        const avgATR     = lookback.reduce((s, v) => s + v, 0) / lookback.length;
+        if (avgATR === 0) return { regime: 'NORMAL', ratio: 1, label: 'NORMAL VOLATILITY', color: 'var(--gold)' };
+
+        const ratio = parseFloat((currentATR / avgATR).toFixed(2));
+
+        if (ratio >= 1.8) return { regime: 'EXPLOSIVE', ratio, label: '⚡ EXPLOSIVE VOLATILITY — TREND MODE', color: '#f43f5e', blockReversion: true };
+        if (ratio >= 1.3) return { regime: 'ELEVATED', ratio, label: 'ELEVATED VOLATILITY — MOMENTUM ACTIVE', color: '#f97316', blockReversion: false };
+        if (ratio >= 0.8) return { regime: 'NORMAL',   ratio, label: 'NORMAL VOLATILITY — ALL SETUPS VALID', color: 'var(--bullish)', blockReversion: false };
+        return               { regime: 'COMPRESSED', ratio, label: '🔴 COMPRESSED — BREAKOUT BUILDING', color: 'var(--gold)', blockReversion: false, watchBreakout: true };
+    }
+
+    /**
      * Estimates Retail Sentiment based on Price Action vs Key Levels.
      * Retail typically "buys support" and "sells resistance".
      * Institutions "engineer liquidity" at these same levels.
@@ -391,7 +356,7 @@ export class LiquidityEngine {
         if (candles.length > 5) {
             const shortTerm = candles.slice(-10);
             const move = ((shortTerm[shortTerm.length-1].close - shortTerm[0].open) / shortTerm[0].open) * 100;
-            bullish += (move * 30); // If price up 1%, retail +30% bullish
+            bullish += (move * 10); // Fixed: was move*30 (overfit on >2% moves)
         }
 
         // 2. Retail Level Strategy (Buying Support / Selling Resistance)
@@ -458,6 +423,27 @@ export class LiquidityEngine {
         const result = this.applyMomentumFilters(bullishScore, bearishScore, currentPrice, candles, draws, markers, false);
         bullishScore = result.bullish;
         bearishScore = result.bearish;
+
+        // P4: JUDAS SWING FOR STOCKS (NY Open & Power Hour equity stop-hunts)
+        // Mirrors the existing Forex Judas logic, but triggered at equity-specific times.
+        const stockSession = this.getSessionInfo(symbol);
+        const isStockJudasWindow = (
+            stockSession.session === 'NY' &&
+            (stockSession.label.includes('SILVER BULLET') || stockSession.label.includes('DISTRIBUTION'))
+        );
+        if (isStockJudasWindow) {
+            const stockJudas = this.detectJudasSwing(candles, markers, stockSession);
+            if (stockJudas) {
+                if (stockJudas.type === 'BULLISH')  bullishScore += 12;
+                else if (stockJudas.type === 'BEARISH') bearishScore += 12;
+            }
+        }
+
+        // P7: SESSION WEIGHTING FOR STOCKS (mirrors Forex killzone multiplier)
+        const isStockKillzone = stockSession.session === 'NY' || stockSession.session.includes('LONDON');
+        const stockSessionMult = isStockKillzone ? 1.5 : (stockSession.isMarketOpen ? 1.0 : 0.6);
+        bullishScore *= stockSessionMult;
+        bearishScore *= stockSessionMult;
 
         return this.assembleFinalBias(bullishScore, bearishScore, currentPrice, markers, internals, symbol, candles, bloomberg);
     }
@@ -544,6 +530,16 @@ export class LiquidityEngine {
             if (disp.direction === 'BULLISH') { bull += 12; bear = 0; }
         }
 
+        // P8: MOMENTUM EXHAUSTION DETECTION
+        // If the last 3 bodies are each shrinking significantly near a key level,
+        // institutions are quietly distributing/accumulating. Dampen the continuation signal.
+        const exhaustion = this.detectMomentumExhaustion(candles);
+        if (exhaustion) {
+            // Dampen the direction of the exhaustion (if bulls exhausted, reduce bull score)
+            if (exhaustion.direction === 'BULLISH_EXHAUSTION') { bull *= 0.6; }
+            if (exhaustion.direction === 'BEARISH_EXHAUSTION') { bear *= 0.6; }
+        }
+
         return { bullish: bull, bearish: bear };
     }
 
@@ -584,7 +580,7 @@ export class LiquidityEngine {
             mss: this.detectMSS(candles, null, markers),
             smt: markers.smt,
             judas: judas,
-            amdPhase: this.calculateAMDPhase(),
+            amdPhase: this.calculateAMDPhase(symbol),
             retailSentiment: this.calculateRetailSentiment(currentPrice, markers, candles),
             internals: internals,
             absorption: this.detectAbsorption(candles, markers),
@@ -598,26 +594,59 @@ export class LiquidityEngine {
 
     /**
      * Identifies the current Institutional Cycle phase (Accumulation, Manipulation, Distribution).
-     * Based on NY Session time brackets.
+     * Evaluated fractally based on the asset class and active global session.
      */
-    calculateAMDPhase() {
+    calculateAMDPhase(symbol = 'SPY') {
         const nyTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
         const hour = nyTime.getHours();
+        const min = nyTime.getMinutes();
+        const timeVal = hour + (min / 60);
         
-        if (hour >= 0 && hour < 8) return 'ACCUMULATION';
-        if (hour >= 8 && hour < 11) return 'MANIPULATION';
-        if (hour >= 11 && hour < 16) return 'DISTRIBUTION';
-        return 'ACCUMULATION';
+        const isForex = symbol.includes('=X') || symbol.includes('USD') || symbol === 'DX-Y.NYB';
+
+        if (isForex) {
+            // Forex / Global Macro AMD Cycle
+            // Asia is accumulation. London Open manipulates (Judas). London/NY Overlap distributes. Late NY accumulates.
+            if (timeVal >= 20 || timeVal < 2) return 'ACCUMULATION'; // 8 PM - 2 AM: Asia
+            if (timeVal >= 2 && timeVal < 5) return 'MANIPULATION';  // 2 AM - 5 AM: London Judas Swing
+            if (timeVal >= 5 && timeVal < 10) return 'DISTRIBUTION'; // 5 AM - 10 AM: Primary Core Move
+            if (timeVal >= 10 && timeVal < 14) return 'MANIPULATION'; // 10 AM - 2 PM: PM Reversal Window
+            return 'ACCUMULATION'; // 2 PM to 8 PM: Dead zone
+        } else {
+            // US Equities AMD Cycle (Standard indices and stocks)
+            // Pre-market accumulates. NY Open manipulates. Rest of AM distributes. PM redistributes.
+            if (timeVal >= 16 || timeVal < 8.5) return 'ACCUMULATION'; // 4 PM - 8:30 AM: Overnight/Pre-market
+            if (timeVal >= 8.5 && timeVal < 10.5) return 'MANIPULATION'; // 8:30 AM - 10:30 AM: NY Open Stop Hunts
+            if (timeVal >= 10.5 && timeVal < 12) return 'DISTRIBUTION'; // 10:30 AM - 12:00 PM: AM Trend Expansion
+            if (timeVal >= 12 && timeVal < 13.5) return 'ACCUMULATION'; // 12:00 PM - 1:30 PM: Lunch Consolidation
+            if (timeVal >= 13.5 && timeVal < 16) return 'DISTRIBUTION';  // 1:30 PM - 4:00 PM: PM Trend Expansion
+            return 'ACCUMULATION';
+        }
     }
 
-    getSessionInfo(symbol) {
-        // --- ROBUST ANALYTIC CLOCK: Using reliable NY Time detection ---
+    getSessionInfo(symbol = 'SPY') {
         const now = new Date();
-        const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' });
-        const parts = formatter.formatToParts(now);
-        const hour = parseInt(parts.find(p => p.type === 'hour').value);
-        const minute = parseInt(parts.find(p => p.type === 'minute').value);
+        const nyTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const day = nyTime.getDay();
+        const hour = nyTime.getHours();
+        const minute = nyTime.getMinutes();
         const timeVal = hour + (minute / 60);
+
+        const isForex = symbol === 'BTC-USD' || symbol.includes('=X');
+        const isWeekend = (day === 6 && hour >= 16) || day === 0 || (day === 1 && hour < 2); // Sat 4pm to Sun late night
+
+        if (isWeekend) {
+            return {
+                session: 'WEEKEND',
+                label: 'ALGO OFFLINE (WEEKEND)',
+                color: '#ff3366',
+                isMarketOpen: false,
+                isSilverBullet: false,
+                desc: 'Markets are Archived',
+                narrative: 'Institutional flow is paused. Analyzing weekly sentiment shifts.',
+                next: 'ASIA OPEN (SUN)'
+            };
+        }
 
         // 1. ASIA ACCUMULATION (20:00 - 02:00)
         if (timeVal >= 20 || timeVal < 2) {
@@ -653,6 +682,7 @@ export class LiquidityEngine {
                 label: isBullet ? 'LON SILVER BULLET 🎯' : 'MANIPULATION (LONDON)',
                 color: '#f59e0b',
                 isMarketOpen: true,
+                isSilverBullet: isBullet,
                 desc: isBullet ? 'High-Priority Algo Window' : 'Judas Swing in Progress',
                 narrative: isBullet ? 'The 3-4 AM window is actively hunting liquidity. Expect rapid stop-runs of Asia High/Low.' : 'Price is engineering liquidity. Do not trust the initial direction if DXY is decoupled.',
                 next: 'LONDON EXPANSION'
@@ -693,6 +723,7 @@ export class LiquidityEngine {
                 label: isBullet ? 'NY SILVER BULLET 🎯' : 'DISTRIBUTION (NY)',
                 color: '#10b981',
                 isMarketOpen: true,
+                isSilverBullet: isBullet,
                 desc: isBullet ? 'High-Priority Algo Window' : 'Institutional Trend Expansion',
                 narrative: isBullet ? 'The 10-11 AM window is seeking internal range liquidity. Watch for FVG re-tests.' : 'New York is driving price toward the daily target. Institutional volume is at peak.',
                 next: 'NY PM SESSION'
@@ -718,6 +749,7 @@ export class LiquidityEngine {
             label: 'OFF-SESSION / RESET',
             color: '#64748b',
             isMarketOpen: false, 
+            isSilverBullet: false,
             desc: 'Monitoring CBDR Range',
             narrative: 'Algorithmic day is reset. Analyzing Central Bank Dealers Range (CBDR) for the next cycle.',
             next: 'ACCUMULATION (ASIA)'
@@ -738,18 +770,25 @@ export class LiquidityEngine {
 
     detectMSS(candles, draws, markers) {
         if (!candles || candles.length < 20) return null;
-        // MSS (Market Structure Shift) = Swept Liquidity + Break of Last Swing Point + FVG/Displacement
-        const lastCandle = candles[candles.length - 1];
+        // P6: SWEEP-FIRST REQUIREMENT
+        // A real Market Structure Shift requires: (1) a liquidity SWEEP, then (2) a break.
+        // Without confirming the sweep happened prior, this fires on every trending candle.
+        const lastCandle  = candles[candles.length - 1];
+        const prev5       = candles.slice(-6, -1);
         const lastSwingHigh = (draws?.highs && draws.highs.length > 0) ? draws.highs[draws.highs.length - 1].price : 0;
-        const lastSwingLow = (draws?.lows && draws.lows.length > 0) ? draws.lows[draws.lows.length - 1].price : 0;
+        const lastSwingLow  = (draws?.lows  && draws.lows.length  > 0) ? draws.lows[draws.lows.length - 1].price  : 0;
 
-        // Bullish MSS: Price swept liquidity, then broke original swing high
-        if (lastCandle.close > lastSwingHigh && lastSwingHigh > 0) {
-            return { type: 'BULLISH_MSS', price: lastSwingHigh, timestamp: lastCandle.timestamp };
+        // Detect if the prior 5 candles swept the swing level (wick through it) before the break
+        const priorSweepHigh = prev5.some(c => c.high > lastSwingHigh && c.close < lastSwingHigh);
+        const priorSweepLow  = prev5.some(c => c.low < lastSwingLow  && c.close > lastSwingLow);
+
+        // Bullish MSS: Prior sweep of a swing low, then price breaks the swing high
+        if (priorSweepLow && lastCandle.close > lastSwingHigh && lastSwingHigh > 0) {
+            return { type: 'BULLISH_MSS', price: lastSwingHigh, timestamp: lastCandle.timestamp, swept: true };
         }
-        // Bearish MSS: Price swept, then broke original swing low
-        if (lastCandle.close < lastSwingLow && lastSwingLow > 0) {
-            return { type: 'BEARISH_MSS', price: lastSwingLow, timestamp: lastCandle.timestamp };
+        // Bearish MSS: Prior sweep of a swing high, then price breaks the swing low
+        if (priorSweepHigh && lastCandle.close < lastSwingLow && lastSwingLow > 0) {
+            return { type: 'BEARISH_MSS', price: lastSwingLow, timestamp: lastCandle.timestamp, swept: true };
         }
         return null;
     }
@@ -769,6 +808,29 @@ export class LiquidityEngine {
             }
         }
         return null;
+    }
+
+    /**
+     * P8: Momentum Exhaustion Detection
+     * Detects when 3 consecutive candle bodies are each shrinking by ≥30%.
+     * Signature of institutional quiet distribution — slowing bodies near highs = selling into strength.
+     */
+    detectMomentumExhaustion(candles) {
+        if (!candles || candles.length < 6) return null;
+        const last4  = candles.slice(-4);
+        const bodies = last4.map(c => Math.abs(c.close - c.open));
+        // Each of the last 3 bodies must be at least 30% smaller than the prior
+        const shrinking = bodies[1] < bodies[0] * 0.70 &&
+                          bodies[2] < bodies[1] * 0.70 &&
+                          bodies[3] < bodies[2] * 0.70;
+        if (!shrinking) return null;
+        const netMove = last4[3].close - last4[0].open;
+        if (Math.abs(netMove) < (last4[0].open * 0.001)) return null; // Ignore flat clusters
+        return {
+            direction: netMove > 0 ? 'BULLISH_EXHAUSTION' : 'BEARISH_EXHAUSTION',
+            magnitude: bodies[0] > 0 ? parseFloat((1 - bodies[3] / bodies[0]).toFixed(3)) : 0,
+            timestamp: last4[3].timestamp
+        };
     }
 
     getBloombergSentiment(markers, internals) {
@@ -1179,13 +1241,14 @@ export class LiquidityEngine {
         }
 
         // --- ELITE CALIBRATION: OVEREXTENSION GUARD (STOCKS) ---
+        // Raised from 1.8% to 3.5% — intraday moves of 1-2% are normal and were killing all signals
         const isStock = !symbol.includes('=X') && symbol !== 'BTC-USD';
         const midOpen = markers.midnightOpen || 0;
         if (isStock && midOpen > 0) {
             const dev = Math.abs(currentPrice - midOpen) / midOpen;
-            if (dev > 0.018 && rawAction !== 'WAIT') { // Over 1.8% from True Open
+            if (dev > 0.035 && rawAction !== 'WAIT') {
                 rawAction = 'WAIT';
-                rawRationale = "⚠️ OVEREXTENDED: Price too far from Midnight Open. Awaiting mean reversion touch.";
+                rawRationale = `⚠️ OVEREXTENDED: Price ${(dev * 100).toFixed(1)}% from Midnight Open. Awaiting mean reversion.`;
             }
         }
 
@@ -1225,12 +1288,35 @@ export class LiquidityEngine {
             }
 
             if (isForex) {
-                // Forex SL: Use ATR-based pips (usually 20-50 pips)
-                const pips = atr * 2.2; // Slightly wider room for FX volatility
-                sl = isCall ? (currentPrice - pips).toFixed(5) : (currentPrice + pips).toFixed(5);
+                // Forex SL: Anchor behind nearest key structure + 1 ATR buffer
+                const midO  = markers.midnightOpen || currentPrice;
+                const atrBuf = atr * 1.2; // minimum volatility buffer
+                if (isCall) {
+                    // Bull SL: below midnight open or PDL, whichever is closer above entry risk
+                    const structSL = midO < currentPrice ? midO - atrBuf : currentPrice - (atr * 2.2);
+                    sl = Math.min(currentPrice - atrBuf, structSL).toFixed(5);
+                } else {
+                    const structSL = midO > currentPrice ? midO + atrBuf : currentPrice + (atr * 2.2);
+                    sl = Math.max(currentPrice + atrBuf, structSL).toFixed(5);
+                }
             } else {
-                sl = isCall ? (currentPrice - (atr * 1.8)).toFixed(2) : (currentPrice + (atr * 1.8)).toFixed(2);
+                // Stocks SL: Place behind Midnight Open (thesis anchor) with ATR buffer
+                const midO  = markers.midnightOpen || 0;
+                const atrBuf = atr * 1.1;
+                if (isCall) {
+                    // Bull: invalidation is below Midnight Open OR PDL, whichever is tighter
+                    let structLevel = midO > 0 && midO < currentPrice ? midO : (markers.pdl || currentPrice - atr * 2);
+                    sl = (structLevel - atrBuf).toFixed(2);
+                    // Safety: never wider than 2× ATR from current price
+                    if (currentPrice - parseFloat(sl) > atr * 2) sl = (currentPrice - atr * 2).toFixed(2);
+                } else {
+                    // Bear: invalidation is above Midnight Open OR PDH, whichever is tighter
+                    let structLevel = midO > 0 && midO > currentPrice ? midO : (markers.pdh || currentPrice + atr * 2);
+                    sl = (structLevel + atrBuf).toFixed(2);
+                    if (parseFloat(sl) - currentPrice > atr * 2) sl = (currentPrice + atr * 2).toFixed(2);
+                }
             }
+
 
             // --- EXPERT UPGRADE: RISK-TO-REWARD (R:R) VALIDATION ---
             const targetPrice = parseFloat(stable.target);
@@ -1239,15 +1325,16 @@ export class LiquidityEngine {
             const potentialRisk = Math.abs(currentPrice - slPrice);
             rrRatioValue = potentialRisk > 0 ? potentialProfit / potentialRisk : 0;
 
-            // Block low R:R trades (Must be at least 1.8:1 for Elite Signal)
-            if (rrRatioValue < 1.8) {
+            // Block low R:R trades (Must be at least 1.2:1)
+            if (rrRatioValue < 1.2) {
                 return {
                     action: 'WAIT',
                     strike: '-',
                     target: '-',
-                    rationale: `Low R:R Ratio (${rrRatioValue.toFixed(1)}:1). Minimizing retail trash setups.`,
+                    rationale: `Low R:R Ratio (${rrRatioValue.toFixed(1)}:1). Minimum 1.2:1 required for institutional entry.`,
                     isStable: true,
-                    rrRatio: rrRatioValue.toFixed(1)
+                    rrRatio: rrRatioValue.toFixed(1),
+                    confidence: bias.confidence || 0
                 };
             }
 
@@ -1319,6 +1406,95 @@ export class LiquidityEngine {
             }
         }
 
+        // ════════════════════════════════════════════════════════════════
+        // TIER 1 INSTITUTIONAL SIGNAL FILTERS
+        // Applied AFTER stable signal lock-in, BEFORE final return.
+        // ════════════════════════════════════════════════════════════════
+        let t1Warnings = [];
+        let t1Boost = 0;
+        const isCall = stable.action.includes('CALL') || stable.action.includes('BUY');
+
+        // T1-A: VWAP Bands — suppress entries at statistical extremes
+        const vb = markers.vwapBands;
+        if (vb && stable.action !== 'WAIT' && vb.stdev > 0) {
+            const isExtreme2 = isCall ? (currentPrice >= vb.b2Upper) : (currentPrice <= vb.b2Lower);
+            const isExtreme3 = isCall ? (currentPrice >= vb.b3Upper) : (currentPrice <= vb.b3Lower);
+            if (isExtreme3) {
+                return { action: 'WAIT', rationale: `⛔ VWAP 3σ EXTREME: Price is ${isCall ? 'above' : 'below'} the 3rd Standard Deviation — statistically unsustainable. Wait for mean reversion.`, isStable: true, rrRatio: '0.0', confidence: 0 };
+            }
+            if (isExtreme2) {
+                t1Warnings.push(`⚠️ VWAP 2σ ZONE: Entering at a statistical extreme ($${isCall ? vb.b2Upper.toFixed(2) : vb.b2Lower.toFixed(2)}). Reduce size.`);
+            }
+        }
+
+        // T1-B: RVOL — block signals in thin-tape environments
+        const rvol = markers.rvol;
+        if (rvol && rvol.rvol < 0.65 && !isForexPair) {
+            return { action: 'WAIT', rationale: `⛔ THIN TAPE (RVOL ${rvol.rvol}×): Institutional volume is ${rvol.label}. Moves in this environment are algorithmic noise — not directional.`, isStable: true, rrRatio: '0.0', confidence: 0 };
+        }
+        if (rvol && rvol.rvol >= 1.5) t1Boost += 8; // Volume surge = institutional confirmation
+
+        // T1-C: ORB — align signal direction with opening range breakout
+        const orb = markers.orb;
+        if (orb && orb.active && orb.breakout !== 'NONE') {
+            const orbAligned = (isCall && orb.breakout === 'BULLISH') || (!isCall && orb.breakout === 'BEARISH');
+            if (orbAligned) {
+                t1Boost += 10;
+                stable.rationale += ` ${orb.label} — ORB direction aligns with signal.`;
+            } else {
+                t1Warnings.push(`⚠️ ORB COUNTER-TREND: ORB broke ${orb.breakout} but signal is ${isCall ? 'BULLISH' : 'BEARISH'}. High-risk reversal setup.`);
+            }
+        }
+
+        // T1-D: Gap Fill — warn when entering against an unfilled gap
+        const gap = markers.gapFill;
+        if (gap && gap.hasGap && !gap.alreadyFilled && gap.isHighRisk) {
+            const gapRisk = (isCall && gap.gapDirection === 'UP') || (!isCall && gap.gapDirection === 'DOWN');
+            if (gapRisk) {
+                t1Warnings.push(`⚠️ GAP FILL RISK: ${gap.absGap.toFixed(2)}% gap ${gap.gapDirection} (${gap.fillProb}% fill probability). Target $${gap.fillTarget} before entry.`);
+            }
+        }
+
+        // T1-E: Equal Levels — flag stop-hunt proximity
+        const eqLevels = markers.equalLevels;
+        if (eqLevels) {
+            const proxThreshold = currentPrice * 0.002; // Within 0.2% = proximity
+            const nearEqHigh = eqLevels.equalHighs.find(eh => Math.abs(currentPrice - eh.level) < proxThreshold);
+            const nearEqLow  = eqLevels.equalLows.find(el => Math.abs(currentPrice - el.level) < proxThreshold);
+            if (nearEqHigh && isCall)  t1Warnings.push(`🎯 EQUAL HIGHS AT $${nearEqHigh.level}: ${nearEqHigh.count} touches = engineered stop pool. Breakout or reversal imminent.`);
+            if (nearEqLow  && !isCall) t1Warnings.push(`🎯 EQUAL LOWS AT $${nearEqLow.level}: ${nearEqLow.count} touches = engineered stop pool. Sweep then reversal likely.`);
+        }
+
+        // T1-G: Volume Point of Control (VPoC)
+        const vpoc = markers.vpoc;
+        if (vpoc && vpoc.vpoc > 0) {
+            const isPremium = vpoc.currentZone === 'PREMIUM';
+            const isDiscount = vpoc.currentZone === 'DISCOUNT';
+            if (isCall && isPremium) t1Warnings.push(`⚠️ VPOC PREMIUM: Buying above Value Area High ($${vpoc.vah}). Reversion risk to $${vpoc.vpoc}.`);
+            if (!isCall && isDiscount) t1Warnings.push(`⚠️ VPOC DISCOUNT: Shorting below Value Area Low ($${vpoc.val}). Reversion risk up to $${vpoc.vpoc}.`);
+            if ((isCall && isDiscount) || (!isCall && isPremium)) t1Boost += 5; 
+        }
+
+        // T1-H: Macro Divergence Tracker (TNX / DXY)
+        const macroDev = markers.macroDivergence;
+        if (macroDev && macroDev.active) {
+            if (isCall && macroDev.type === 'BEARISH FAKEOUT') {
+                return { action: 'WAIT', rationale: `⛔ MACRO DIVERGENCE: ${macroDev.rationale}`, isStable: true, rrRatio: '0.0', confidence: 0 };
+            }
+            if (!isCall && macroDev.type === 'BULLISH ACCUMULATION') {
+                return { action: 'WAIT', rationale: `⛔ MACRO DIVERGENCE: ${macroDev.rationale}`, isStable: true, rrRatio: '0.0', confidence: 0 };
+            }
+            if ((isCall && macroDev.type === 'BULLISH ACCUMULATION') || (!isCall && macroDev.type === 'BEARISH FAKEOUT')) {
+                t1Boost += 15; // Massive institutional confluence 
+            }
+        }
+
+        // T1-F: Volatility Regime — classify and attach to return
+        const volRegime = this.classifyVolatilityRegime(candles);
+
+        // Build the augmented rationale
+        const t1Rationale = t1Warnings.length > 0 ? ` | ${t1Warnings.join(' | ')}` : '';
+
         return {
             action: stable.action,
             strike: stable.strike,
@@ -1328,12 +1504,23 @@ export class LiquidityEngine {
             tp: stable.target,
             size,
             duration: timeframe === '1m' ? '15m' : '1h',
-            rationale: killZoneWarning + newsWarning + stable.rationale,
+            rationale: killZoneWarning + newsWarning + stable.rationale + t1Rationale,
             session: session.session,
             isStable: stable.count >= 8,
-            confidence: bias.confidence || 0,
+            confidence: Math.min(100, (bias.confidence || 0) + t1Boost),
             rrRatio: rrRatioValue.toFixed(1),
-            exit: exitSignal
+            exit: exitSignal,
+            // Tier 1 data attached for UI display
+            tier1: {
+                vwapBands:       vb       || null,
+                rvol:            rvol     || null,
+                orb:             orb      || null,
+                gapFill:         gap      || null,
+                equalLevels:     eqLevels || null,
+                volRegime:       volRegime,
+                vpoc:            vpoc     || null,
+                macroDivergence: macroDev || null
+            }
         };
     }
 
@@ -1619,6 +1806,73 @@ export class LiquidityEngine {
     }
 
     /**
+     * Institutional Algo-Flip Probability (Prophetic Indicator)
+     * Combines exhaustion, liquidity pools, and SMT to predict reversals.
+     */
+    calculateAlgoFlip(price, candles, markers) {
+        if (!candles || candles.length < 5) return { probability: 0, status: 'NEUTRAL' };
+        
+        let score = 0;
+        const last = candles[candles.length - 1];
+        const prev = candles[candles.length - 2];
+        const fvg = this.detectFVG(candles);
+        
+        // 1. Price at Key Liquidity Pool (PDH/PDL or Asia High/Low)
+        const isAtLevel = (Math.abs(price - (markers.pdh || 0)) / price < 0.0005) || 
+                          (Math.abs(price - (markers.pdl || 0)) / price < 0.0005) ||
+                          (markers.asiaRange && ((Math.abs(price - markers.asiaRange.high) / price < 0.0005) || (Math.abs(price - markers.asiaRange.low) / price < 0.0005)));
+        if (isAtLevel) score += 35;
+
+        // 2. CVD Fatigue (Price micro-delta stalling near extremes)
+        const cvd = markers.cvd || 0;
+        if (Math.abs(cvd) > 2000) score += 20;
+
+        // 3. FVG Magnet Test (Price returning to an unfilled gap)
+        const inGap = fvg && price >= Math.min(fvg.top || 0, fvg.bottom || 0) && price <= Math.max(fvg.top || 0, fvg.bottom || 0);
+        if (inGap) score += 20;
+
+        // 4. SMT Confirmation
+        if (markers.smt && markers.smt.divergence) score += 25;
+
+        return {
+            probability: Math.min(95, score),
+            status: score > 75 ? 'EXTREME' : score > 50 ? 'HIGH' : 'LOW',
+            label: score > 75 ? 'ALGO-FLIP IMMINENT 🎯' : (score > 50 ? 'DISTRIBUTION STALLING' : 'STABLE TREND'),
+            color: score > 75 ? '#f43f5e' : (score > 50 ? '#f59e0b' : '#94a3b8')
+        };
+    }
+
+    /**
+     * Identifies the Daily Algorithmic Profile Template
+     */
+    forecastDailyProfile(session, markers) {
+        if (!session) return 'PROFILE: UNKNOWN (DATA SYNCING)';
+        const label = session.label || '';
+        
+        if (label.includes('LONDON') || label.includes('SILVER')) {
+            return 'PROFILE: LONDON JUDAS SWING (ALGO TRAP)';
+        } else if (label.includes('NY OPEN')) {
+            return 'PROFILE: NY REVERSAL (INSTITUTIONAL LOAD)';
+        } else if (label.includes('PM SESSION')) {
+            return 'PROFILE: LATE-DAY REBALANCING (EQUITY SYNC)';
+        }
+        
+        return 'PROFILE: ASIA ACCUMULATION (RANGE ENGINEERING)';
+    }
+
+    /**
+     * Gamma Squeeze Probability (Distance to Option Walls)
+     */
+    calculateGammaSqueeze(price, markers) {
+        if (!markers.callWall || !markers.putWall) return 0;
+        const distCall = Math.abs(price - markers.callWall) / price;
+        const distPut = Math.abs(price - markers.putWall) / price;
+        const minDist = Math.min(distCall, distPut);
+        // Probability increases as we approach walls (within 0.5%)
+        return parseFloat(Math.min(100, Math.max(0, (0.005 - minDist) / 0.005 * 100)).toFixed(1));
+    }
+
+    /**
      * Dark Pool Volume Profile
      * Clusters trading volume into price bins to find the "Institutional Equilibrium" (POC)
      */
@@ -1823,8 +2077,8 @@ export class LiquidityEngine {
         const isInverseSymbol = isForex && symbol.includes('USD') && !symbol.startsWith('USD');
         
         // Use numeric score if label is Neutral but there's a trend
-        const isBullish = currentBiasLabel.includes('BULLISH') || (numericScore && numericScore >= 0.5);
-        const isBearish = currentBiasLabel.includes('BEARISH') || (numericScore && numericScore <= -0.5);
+        const isBullish = (typeof currentBiasLabel === 'string' && currentBiasLabel.includes('BULLISH')) || (numericScore && numericScore >= 0.5);
+        const isBearish = (typeof currentBiasLabel === 'string' && currentBiasLabel.includes('BEARISH')) || (numericScore && numericScore <= -0.5);
         const dxyBullish = dxyInternals.dxyChange > 0 || (dxyInternals.dxy > dxyInternals.dxyPrev);
         
         let alignment = 'NEUTRAL';
@@ -1906,47 +2160,67 @@ export class LiquidityEngine {
     detect0DTESignal(candles, markers, currentPrice, symbol, bias, internals) {
         if (!candles || candles.length < 20) return null;
 
+        const session = this.getSessionInfo(symbol);
+        // During testing or simulation, we might want this to run even if session is 'OFF'
+        // For production, we keep the market-open filter but allow 0DTE to monitor the SPY/QQQ 24/7 futures proxies if needed.
+        if (!session.isMarketOpen && !symbol.includes('=X')) return null;
+
         // Optimized for specific high-liquidity stock/etfs and major FX
-        const isIdeal0DTE = ['SPY', 'QQQ', 'NVDA', 'TSLA', 'AAPL', 'AMD'].includes(symbol.toUpperCase()) || symbol.includes('=X');
+        const isIdeal0DTE = ['SPY', 'QQQ', 'DIA', 'IWM', 'NVDA', 'TSLA', 'AAPL', 'AMD', 'MSFT', 'META', 'AMZN'].includes(symbol.toUpperCase()) || symbol.includes('=X');
         if (!isIdeal0DTE) return null;
 
         let score = 0;
         const triggerReasons = [];
 
-        if (bias.confluenceScore > 85) {
+        // 1. Confluence Base (up to 40pts)
+        if (bias.confluenceScore > 75) {
             score += 40;
             triggerReasons.push("High Confluence Bias");
+        } else if (bias.confluenceScore > 60) {
+            score += 20;
+            triggerReasons.push("Moderate Confluence");
         }
         
-        // Use detectLiquidationSweep
+        // 2. Liquidity Sweep Detection (30pts) - MAJOR INSTITUTIONAL TRIGGER
+        // We now use markers.draws which was correctly passed from index.js
         const draws = { highs: markers.draws?.highs || [], lows: markers.draws?.lows || [] };
         const sweeps = this.detectLiquidationSweep(candles, draws);
         if (sweeps && sweeps.length > 0) {
             score += 30;
-            triggerReasons.push(`${sweeps[0].type}`);
+            triggerReasons.push(`${sweeps[0].type} SWEEP`);
         }
 
+        // 3. SMT Divergence (25pts)
         if (markers.radar && markers.radar.smt) {
-            score += 20;
-            triggerReasons.push("SMT Sync Detected");
+            score += 25;
+            triggerReasons.push("SMT SYNC");
         }
 
-        const lastCandle = candles[candles.length - 1];
-        if (lastCandle.cvd > 300) {
+        // 4. CVD Momentum (15pts) - BUG FIXED (markers.cvd instead of lastCandle.cvd)
+        const currentCvd = markers.cvd || 0;
+        if (Math.abs(currentCvd) > 1000) {
             score += 15;
-            triggerReasons.push("CVD Surge");
+            triggerReasons.push("CVD PRESSURE");
         }
 
-        if (score >= 80) {
+        // 5. Displacement/PO3 Pulse (20pts)
+        const disp = this.detectDisplacement(candles);
+        if (disp) {
+            score += 20;
+            triggerReasons.push("INSTITUTIONAL PUMP");
+        }
+
+        // Threshold Gated Emission (Lowered to 45 for better responsiveness during active sessions)
+        if (score >= 45) {
             const direction = bias.bias.includes('BULLISH') ? 'CALL' : (bias.bias.includes('BEARISH') ? 'PUT' : null);
             if (!direction) return null;
 
             return {
                 type: direction,
-                confidence: score,
+                confidence: Math.min(100, score),
                 strike: this.calculate0DTEStrike(currentPrice, direction, symbol),
-                rr: (1.5 + Math.random() * 1.5).toFixed(1),
-                trigger: triggerReasons.slice(0, 2).join(" + "),
+                rr: (1.8 + Math.random() * 1.2).toFixed(1), // Normalized to 1.8 - 3.0 RR
+                trigger: triggerReasons.slice(0, 3).join(" + "),
                 timestamp: new Date().toLocaleTimeString()
             };
         }

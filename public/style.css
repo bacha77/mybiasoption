@@ -3424,3 +3424,563 @@ h3 {
     100% { box-shadow: 0 0 25px var(--bullish); }
 }
 
+/* =========================================================================
+   HOLY GRAIL #2 — OPTION CHAIN SNAPSHOT STYLES
+   ========================================================================= */
+#option-chain-card .card-header-flex {
+    align-items: center;
+    margin-bottom: 0;
+}
+
+.chain-table-header {
+    display: flex;
+    align-items: center;
+    font-size: 0.56rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    padding: 5px 4px 7px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    margin-bottom: 4px;
+}
+
+.chain-table-header span:first-child  { flex: 1; text-align: right; }
+.chain-table-header span:nth-child(2) { flex: 0.8; text-align: center; }
+.chain-table-header span:last-child   { flex: 1; text-align: left; }
+
+/* Chain row hover */
+#chain-strikes-container > div:hover {
+    background: rgba(255,255,255,0.04) !important;
+    cursor: crosshair;
+}
+
+/* =========================================================================
+   HOLY GRAIL #3 — CATALYST CALENDAR STYLES
+   ========================================================================= */
+#catalyst-calendar-card .card-header-flex {
+    align-items: center;
+    margin-bottom: 0;
+}
+
+#catalyst-rows-container > div {
+    cursor: default;
+}
+
+#catalyst-rows-container > div:hover {
+    filter: brightness(1.15);
+}
+
+/* ====================================================================
+   ST1 AI ANALYST CARD — UPGRADED COMPONENTS
+   ==================================================================== */
+.ai-analyst-card { background: linear-gradient(135deg, rgba(56,189,248,0.06) 0%, rgba(0,0,0,0.5) 100%); border: 1px solid rgba(56,189,248,0.2); margin-bottom: 0.75rem; padding: 12px 14px; }
+.ai-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(56,189,248,0.1); }
+.ai-pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: pulse-opacity 1.5s infinite alternate; flex-shrink: 0; }
+.ai-conf-gauge-wrap { position: relative; width: 60px; height: 38px; flex-shrink: 0; }
+.ai-conf-arc { width: 60px; height: 38px; }
+.ai-arc-bg { fill: none; stroke: rgba(255,255,255,0.07); stroke-width: 5; stroke-linecap: round; }
+.ai-arc-fill { fill: none; stroke: var(--cyan); stroke-width: 5; stroke-linecap: round; transition: stroke-dasharray 0.6s ease, stroke 0.4s ease; }
+.ai-conf-center { position: absolute; bottom: 0; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.ai-conf-pct { font-size: 0.65rem; font-weight: 900; font-family: 'JetBrains Mono', monospace; color: var(--cyan); transition: color 0.4s; }
+.ai-conf-label { font-size: 0.32rem; color: var(--text-dim); letter-spacing: 1px; font-weight: 800; margin-top: 1px; }
+.ai-context-strip { display: flex; align-items: center; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.05); border-radius: 4px; padding: 5px 10px; margin-bottom: 10px; }
+.ai-ctx-item { display: flex; flex-direction: column; align-items: center; flex: 1; }
+.ai-ctx-label { font-size: 0.32rem; color: var(--text-dim); font-weight: 900; letter-spacing: 1px; margin-bottom: 2px; }
+.ai-ctx-val { font-size: 0.5rem; font-weight: 900; letter-spacing: 0.5px; }
+.ai-ctx-divider { width: 1px; height: 24px; background: rgba(255,255,255,0.08); margin: 0 6px; }
+.ai-narrative-block { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.ai-section-row { display: flex; align-items: flex-start; gap: 8px; }
+.ai-section-label { font-size: 0.38rem; font-weight: 900; color: var(--text-dim); letter-spacing: 0.5px; min-width: 62px; flex-shrink: 0; padding-top: 2px; }
+.ai-section-text { font-size: 0.58rem; color: var(--text-bright); font-style: italic; line-height: 1.5; font-family: 'Inter', sans-serif; flex: 1; }
+.ai-action-row { display: flex; justify-content: space-between; align-items: flex-end; padding-top: 6px; margin-bottom: 6px; }
+.ai-action-label { font-size: 0.38rem; color: var(--text-dim); font-weight: 900; letter-spacing: 0.5px; margin-bottom: 2px; }
+.ai-action-value { font-size: 0.85rem; font-weight: 900; letter-spacing: 0.5px; font-family: 'JetBrains Mono', monospace; }
+.ai-intensity-badge { font-size: 0.42rem; font-weight: 900; color: var(--text-dim); border: 1px solid rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 2px; letter-spacing: 0.5px; transition: all 0.3s ease; }
+.ai-intensity-badge.ai-intensity-high { color: var(--cyan); border-color: var(--cyan); background: rgba(56,189,248,0.1); animation: pulse-opacity 0.8s infinite alternate; box-shadow: 0 0 6px rgba(56,189,248,0.3); }
+.ai-pcr-conflict { font-size: 0.42rem; font-weight: 900; color: var(--gold); background: rgba(255,157,0,0.08); border: 1px solid rgba(255,157,0,0.3); border-radius: 3px; padding: 4px 8px; margin: 6px 0; animation: pulse-opacity 2s infinite alternate; }
+.ai-perf-footer { display: flex; gap: 8px; align-items: center; font-size: 0.45rem; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 4px; margin-top: 6px; flex-wrap: wrap; }
+.ai-perf-divider { opacity: 0.3; }
+
+/* ====================================================================
+   INSTITUTIONAL ALERTS & PULSE EFFECTS
+   ==================================================================== */
+.silver-bullet-pulse {
+    animation: silver-bullet-glow 2s infinite ease-in-out;
+    position: relative;
+    color: var(--gold) !important;
+}
+
+@keyframes silver-bullet-glow {
+    0% { filter: drop-shadow(0 0 2px rgba(255, 157, 0, 0.4)); transform: scale(1); }
+    50% { filter: drop-shadow(0 0 15px rgba(255, 157, 0, 0.8)); transform: scale(1.02); }
+    100% { filter: drop-shadow(0 0 2px rgba(255, 157, 0, 0.4)); transform: scale(1); }
+}
+
+.pulse-glow {
+    animation: pulse-glow-anim 1.5s infinite alternate;
+}
+
+@keyframes pulse-glow-anim {
+    from { filter: brightness(1) drop-shadow(0 0 2px currentColor); }
+    to { filter: brightness(1.5) drop-shadow(0 0 10px currentColor); }
+}
+
+.whale-flash {
+    animation: whale-flash-anim 1s 5 alternate;
+}
+
+@keyframes whale-flash-anim {
+    from { border-color: var(--border); box-shadow: none; }
+    to { border-color: var(--gold); box-shadow: 0 0 25px rgba(255, 157, 0, 0.3); }
+}
+
+/* ====================================================================
+   SCALPER HUD — INSTITUTIONAL RADAR COMPONENTS
+   ==================================================================== */
+.scalper-radar-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255, 157, 0, 0.05) 0%, rgba(0, 0, 0, 0.6) 100%) !important;
+    border: 1px solid rgba(255, 157, 0, 0.2) !important;
+}
+
+.scalper-radar-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    animation: radar-sweep 2.5s infinite linear;
+    opacity: 0.3;
+    z-index: 10;
+}
+
+@keyframes radar-sweep {
+    0% { top: 0%; }
+    100% { top: 100%; }
+}
+
+.scalper-row {
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(0, 0, 0, 0.2);
+    margin: 2px 0;
+    cursor: pointer;
+}
+
+.scalper-row:hover {
+    background: rgba(255, 157, 0, 0.08);
+    border-left-width: 4px;
+    padding-left: 1.2rem;
+}
+
+.scalper-row.high-conviction {
+    border-left: 3px solid var(--gold);
+    background: linear-gradient(90deg, rgba(255, 157, 0, 0.08) 0%, transparent 100%);
+    box-shadow: inset 0 0 15px rgba(255, 157, 0, 0.05);
+}
+
+.scalper-row.reloading {
+    border-left: 3px solid var(--bullish);
+    background: linear-gradient(90deg, rgba(0, 255, 136, 0.08) 0%, transparent 100%);
+    animation: reload-pulse-bg 1.5s infinite alternate;
+}
+
+@keyframes reload-pulse-bg {
+    from { background: rgba(0, 255, 136, 0.02); }
+    to { background: rgba(0, 255, 136, 0.08); }
+}
+
+.scan-beam {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(255, 157, 0, 0.03) 1px, rgba(255, 157, 0, 0.03) 2px);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* ====================================================================
+   DAILY BIAS CONFIDENCE & CHECKLIST HUD
+   ==================================================================== */
+.bias-gauge-container {
+    padding: 1.5rem 1rem;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.03);
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+
+.bias-conf-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 10px;
+    margin: 1rem 0;
+    overflow: hidden;
+}
+
+.bias-conf-fill {
+    height: 100%;
+    width: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 10px rgba(255,157,0,0.3);
+    transition: all 0.5s ease-in-out;
+}
+
+.macro-narrative-container {
+    background: rgba(56,189,248,0.05);
+    border: 1px solid rgba(56,189,248,0.1);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.macro-narrative-container::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; width: 4px; height: 100%;
+    background: var(--cyan);
+}
+
+.checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.check-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    transition: color 0.3s ease;
+}
+
+.check-item.active {
+    color: var(--text-main);
+}
+
+.check-circle {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+.check-item.active .check-circle {
+    border-color: var(--cyan);
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+}
+
+/* ====================================================================
+   TRADE GUARDIAN — CONVICTION ENGINE CARD
+   ==================================================================== */
+.trade-guardian-card {
+    background: linear-gradient(160deg, rgba(10,15,30,0.95) 0%, rgba(5,5,15,0.98) 100%);
+    border: 1px solid rgba(99,102,241,0.25);
+    position: relative;
+    overflow: hidden;
+}
+
+.trade-guardian-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #6366f1, var(--cyan), #6366f1, transparent);
+    animation: tg-scan 3s linear infinite;
+}
+
+@keyframes tg-scan {
+    0%   { opacity: 0.3; }
+    50%  { opacity: 1; }
+    100% { opacity: 0.3; }
+}
+
+.tg-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.tg-title {
+    font-size: 0.7rem;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 1.5px;
+}
+
+.tg-subtitle {
+    font-size: 0.4rem;
+    font-weight: 700;
+    color: rgba(99,102,241,0.7);
+    letter-spacing: 2px;
+    margin-top: 2px;
+}
+
+.tg-badge {
+    font-size: 0.5rem;
+    font-weight: 900;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 1.5px;
+    transition: all 0.4s ease;
+}
+
+.tg-badge-hold {
+    background: rgba(16,185,129,0.15);
+    border: 1px solid var(--bullish);
+    color: var(--bullish);
+    box-shadow: 0 0 10px rgba(16,185,129,0.2);
+}
+
+.tg-badge-manage {
+    background: rgba(255,157,0,0.15);
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    box-shadow: 0 0 10px rgba(255,157,0,0.2);
+    animation: pulse-opacity 1s infinite alternate;
+}
+
+.tg-badge-exit {
+    background: rgba(239,68,68,0.15);
+    border: 1px solid var(--bearish);
+    color: var(--bearish);
+    box-shadow: 0 0 15px rgba(239,68,68,0.4);
+    animation: pulse-opacity 0.5s infinite alternate;
+}
+
+/* Conviction Meter */
+.tg-meter-section {
+    margin-bottom: 1rem;
+}
+
+.tg-meter-labels {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.tg-meter-label {
+    font-size: 0.45rem;
+    font-weight: 800;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+}
+
+.tg-conviction-val {
+    font-size: 1.1rem;
+    font-weight: 900;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    transition: color 0.4s ease;
+}
+
+.tg-bar-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    position: relative;
+    overflow: visible;
+}
+
+.tg-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease;
+    background: var(--bullish);
+    box-shadow: 0 0 8px currentColor;
+    position: relative;
+}
+
+.tg-threshold {
+    position: absolute;
+    top: -3px;
+    width: 1px;
+    height: 14px;
+    background: var(--bearish);
+    opacity: 0.6;
+}
+
+.tg-threshold-gold {
+    background: var(--gold);
+}
+
+.tg-meter-scale {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.38rem;
+    font-weight: 800;
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+    opacity: 0.7;
+}
+
+/* State Classifier */
+.tg-classifier {
+    text-align: center;
+    padding: 0.8rem;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(255,255,255,0.04);
+    transition: border-color 0.4s ease;
+}
+
+.tg-state {
+    font-size: 1rem;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: var(--gold);
+    transition: color 0.4s ease;
+}
+
+.tg-state-desc {
+    font-size: 0.5rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+    font-style: italic;
+    transition: color 0.4s ease;
+}
+
+/* 5-Factor Evidence Grid */
+.tg-evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    margin-bottom: 1rem;
+}
+
+.tg-factor {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 4px;
+    padding: 6px 2px;
+    transition: all 0.3s ease;
+}
+
+.tg-factor.tg-active {
+    border-color: rgba(16,185,129,0.4);
+    background: rgba(16,185,129,0.06);
+}
+
+.tg-factor.tg-warn {
+    border-color: rgba(255,157,0,0.4);
+    background: rgba(255,157,0,0.06);
+}
+
+.tg-factor.tg-danger {
+    border-color: rgba(239,68,68,0.4);
+    background: rgba(239,68,68,0.06);
+}
+
+.tg-f-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: all 0.3s ease;
+}
+
+.tg-factor.tg-active .tg-f-dot {
+    background: var(--bullish);
+    border-color: var(--bullish);
+    box-shadow: 0 0 6px var(--bullish);
+}
+
+.tg-factor.tg-warn .tg-f-dot {
+    background: var(--gold);
+    border-color: var(--gold);
+    box-shadow: 0 0 6px var(--gold);
+}
+
+.tg-factor.tg-danger .tg-f-dot {
+    background: var(--bearish);
+    border-color: var(--bearish);
+    box-shadow: 0 0 6px var(--bearish);
+}
+
+.tg-f-label {
+    font-size: 0.35rem;
+    font-weight: 800;
+    color: var(--text-dim);
+    letter-spacing: 0.3px;
+    text-align: center;
+    text-transform: uppercase;
+    transition: color 0.3s ease;
+}
+
+.tg-factor.tg-active .tg-f-label { color: var(--bullish); }
+.tg-factor.tg-warn .tg-f-label   { color: var(--gold); }
+.tg-factor.tg-danger .tg-f-label { color: var(--bearish); }
+
+/* Rationale Feed */
+.tg-rationale {
+    font-size: 0.52rem;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.5;
+    font-style: italic;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.2);
+    border-left: 2px solid rgba(99,102,241,0.4);
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 1rem;
+    min-height: 36px;
+    transition: border-color 0.4s ease;
+}
+
+/* Action Strip */
+.tg-action-strip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 0.6rem;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    transition: all 0.4s ease;
+}
+
+.tg-action-hold {
+    background: rgba(16,185,129,0.1);
+    border: 1px solid rgba(16,185,129,0.3);
+    color: var(--bullish);
+}
+
+.tg-action-manage {
+    background: rgba(255,157,0,0.1);
+    border: 1px solid rgba(255,157,0,0.4);
+    color: var(--gold);
+    animation: pulse-opacity 1.5s infinite alternate;
+}
+
+.tg-action-exit {
+    background: rgba(239,68,68,0.15);
+    border: 1px solid rgba(239,68,68,0.5);
+    color: var(--bearish);
+    box-shadow: 0 0 20px rgba(239,68,68,0.2);
+    animation: pulse-opacity 0.6s infinite alternate;
+}

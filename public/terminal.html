@@ -653,31 +653,160 @@
                         <!-- JS Loaded Levels -->
                     </div>
                 </section>
+
+                <!-- ===================================================== -->
+                <!-- HOLY GRAIL #2 — OPTION CHAIN SNAPSHOT                  -->
+                <!-- ===================================================== -->
+                <section class="card reveal-6" id="option-chain-card">
+                    <div class="card-header-flex">
+                        <div class="card-title" style="color: var(--gold); border-left: 2px solid var(--gold); padding-left: 10px;">Option Chain Snapshot (ATM ± 3 Strikes)</div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div id="chain-pcr-badge" style="font-size: 0.45rem; font-weight: 900; background: rgba(255,157,0,0.1); color: var(--gold); border: 1px solid var(--gold); padding: 2px 6px; border-radius: 3px;">PCR: --</div>
+                            <div id="chain-iv-badge" style="font-size: 0.45rem; font-weight: 900; background: rgba(56,189,248,0.1); color: var(--accent); border: 1px solid var(--accent); padding: 2px 6px; border-radius: 3px;">IV: --%</div>
+                        </div>
+                    </div>
+
+                    <!-- PCR Signal Strip -->
+                    <div id="chain-pcr-signal" style="font-size: 0.5rem; font-weight: 800; color: var(--text-dim); padding: 4px 8px; background: rgba(255,255,255,0.02); border-left: 2px solid var(--text-dim); margin-bottom: 10px; letter-spacing: 0.5px;">
+                        PCR SIGNAL: SCANNING...
+                    </div>
+
+                    <!-- Chain Table Header -->
+                    <div class="chain-table-header">
+                        <span style="flex: 1; text-align: right; color: var(--bullish);">CALLS</span>
+                        <span style="flex: 0.8; text-align: center;">STRIKE</span>
+                        <span style="flex: 1; text-align: left; color: var(--bearish);">PUTS</span>
+                    </div>
+
+                    <!-- Strike rows injected here by JS -->
+                    <div id="chain-strikes-container" style="display: flex; flex-direction: column; gap: 2px;">
+                        <div style="text-align: center; color: var(--text-dim); font-size: 0.5rem; padding: 20px 0; font-style: italic;">Select an equity to load chain...</div>
+                    </div>
+
+                    <!-- EM Range Footer -->
+                    <div id="chain-em-footer" style="display: none; margin-top: 10px; padding: 6px 10px; background: rgba(245,158,11,0.05); border: 1px solid rgba(245,158,11,0.2); border-radius: 4px; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.45rem; color: var(--text-dim); font-weight: 800;">0DTE EXPECTED MOVE</span>
+                        <div style="display: flex; gap: 12px; font-family: 'JetBrains Mono'; font-size: 0.6rem; font-weight: 900;">
+                            <span id="chain-em-lower" style="color: var(--bullish);">↑ $--</span>
+                            <span id="chain-em-upper" style="color: var(--bearish);">↓ $--</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ===================================================== -->
+                <!-- HOLY GRAIL #3 — CATALYST CALENDAR                      -->
+                <!-- ===================================================== -->
+                <section class="card reveal-6" id="catalyst-calendar-card">
+                    <div class="card-header-flex">
+                        <div class="card-title" style="color: var(--bearish); border-left: 2px solid var(--bearish); padding-left: 10px;">Catalyst Calendar — Volatility Landmines</div>
+                        <div id="catalyst-next-badge" style="font-size: 0.45rem; font-weight: 900; background: rgba(255,62,62,0.1); color: var(--bearish); border: 1px solid var(--bearish); padding: 2px 8px; border-radius: 3px; animation: pulse-opacity 2s infinite alternate;">NEXT: --</div>
+                    </div>
+
+                    <!-- Calendar rows injected by JS -->
+                    <div id="catalyst-rows-container" style="display: flex; flex-direction: column; gap: 4px;">
+                        <div style="text-align: center; color: var(--text-dim); font-size: 0.5rem; padding: 20px 0; font-style: italic;">Loading catalyst calendar...</div>
+                    </div>
+
+                    <!-- Risk Legend -->
+                    <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; gap: 12px; justify-content: flex-end;">
+                        <div style="display: flex; align-items: center; gap: 4px; font-size: 0.4rem; color: var(--text-dim);">
+                            <div style="width: 6px; height: 6px; border-radius: 50%; background: #ff3e3e;"></div> EXTREME
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 4px; font-size: 0.4rem; color: var(--text-dim);">
+                            <div style="width: 6px; height: 6px; border-radius: 50%; background: var(--gold);"></div> HIGH
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 4px; font-size: 0.4rem; color: var(--text-dim);">
+                            <div style="width: 6px; height: 6px; border-radius: 50%; background: var(--accent);"></div> MEDIUM
+                        </div>
+                    </div>
+                </section>
+
             </div>
 
             <!-- Right Column (Sidebar) -->
             <aside class="sidebar">
                 <!-- NEW: AI ANALYST (STRATEGIST FEED) -->
-                <section class="card reveal-1" style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.05) 0%, rgba(0, 0, 0, 0.4) 100%); border: 1px solid rgba(56, 189, 248, 0.2); margin-bottom: 0.75rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(56, 189, 248, 0.1); padding-bottom: 8px;">
-                         <div style="display: flex; align-items: center; gap: 8px;">
-                             <div id="ai-status-pulse" style="width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: pulse-opacity 1.5s infinite alternate;"></div>
-                             <span style="font-size: 0.6rem; font-weight: 950; letter-spacing: 1px; color: var(--cyan);">B.I.A.S AI ANALYST (ST1-ENGINE)</span>
-                         </div>
-                         <span id="ai-conviction" style="font-size: 0.5rem; font-family: 'JetBrains Mono'; background: var(--cyan-dim); color: var(--cyan); padding: 1px 6px; border-radius: 2px; font-weight: 800;">CONF: 0%</span>
+                <section class="card reveal-1 ai-analyst-card" id="st1-analyst-card">
+
+                    <!-- CARD HEADER: Title + Confidence Arc Gauge -->
+                    <div class="ai-card-header">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <div id="ai-status-pulse" class="ai-pulse-dot"></div>
+                            <div>
+                                <div style="font-size:0.6rem;font-weight:950;letter-spacing:1.5px;color:var(--cyan);">B.I.A.S AI ANALYST</div>
+                                <div style="font-size:0.38rem;color:var(--text-dim);letter-spacing:2px;margin-top:1px;">ST1-ENGINE · INSTITUTIONAL GRADE</div>
+                            </div>
+                        </div>
+                        <!-- Confidence Arc Gauge -->
+                        <div class="ai-conf-gauge-wrap">
+                            <svg class="ai-conf-arc" viewBox="0 0 60 36" xmlns="http://www.w3.org/2000/svg">
+                                <path class="ai-arc-bg"  d="M6,34 A28,28 0 0,1 54,34"/>
+                                <path id="ai-arc-fill" class="ai-arc-fill" d="M6,34 A28,28 0 0,1 54,34" stroke-dasharray="0 88"/>
+                            </svg>
+                            <div class="ai-conf-center">
+                                <span id="ai-conviction" class="ai-conf-pct">0%</span>
+                                <span class="ai-conf-label">CONF</span>
+                            </div>
+                        </div>
                     </div>
-                    <div id="ai-insight-text" style="font-size: 0.75rem; min-height: 50px; color: var(--text-bright); font-style: italic; line-height: 1.5; font-family: 'Inter';">Initializing market deep-scan... Analyzing institutional nodes...</div>
-                    <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 10px;">
-                         <div style="display: flex; flex-direction: column;">
-                             <span style="font-size: 0.45rem; color: var(--text-dim); font-weight: 800; letter-spacing: 0.5px;">STRATEGIC ACTION</span>
-                             <span id="ai-action" style="font-size: 0.8rem; font-weight: 900; color: var(--gold);">SCANNING...</span>
-                         </div>
-                         <div id="ai-intensity" style="font-size: 0.45rem; font-weight: 900; color: var(--text-dim); border: 1px solid rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 2px;">INTENSITY: LOW</div>
+
+                    <!-- CONTEXT STRIP: Session + AMD Phase + Next Killzone -->
+                    <div class="ai-context-strip">
+                        <div class="ai-ctx-item">
+                            <span class="ai-ctx-label">SESSION</span>
+                            <span id="ai-session-tag" class="ai-ctx-val" style="color:var(--text-dim);">OFF-HOURS</span>
+                        </div>
+                        <div class="ai-ctx-divider"></div>
+                        <div class="ai-ctx-item">
+                            <span class="ai-ctx-label">PHASE</span>
+                            <span id="ai-phase-tag" class="ai-ctx-val" style="color:var(--gold);">--</span>
+                        </div>
+                        <div class="ai-ctx-divider"></div>
+                        <div class="ai-ctx-item">
+                            <span class="ai-ctx-label">NEXT KZ</span>
+                            <span id="ai-kz-countdown" class="ai-ctx-val" style="color:var(--cyan);font-family:'JetBrains Mono';">--:--</span>
+                        </div>
                     </div>
-                    <div id="ai-performance-stats" style="margin-top: 10px; display: flex; gap: 10px; font-size: 0.5rem; color: var(--text-dim); font-family: 'JetBrains Mono'; background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 4px;">
-                         <span id="ai-accuracy">ACCURACY: 90.4%</span>
-                         <span style="opacity: 0.3;">|</span>
-                         <span id="ai-capture">CAPTURE: +14.2 PTS</span>
+
+                    <!-- NARRATIVE: Structured 3 sections -->
+                    <div class="ai-narrative-block">
+                        <div class="ai-section-row">
+                            <span class="ai-section-label">📍 SESSION</span>
+                            <span id="ai-section-session" class="ai-section-text">Scanning...</span>
+                        </div>
+                        <div class="ai-section-row">
+                            <span class="ai-section-label">🏗 STRUCTURE</span>
+                            <span id="ai-section-structure" class="ai-section-text">Scanning...</span>
+                        </div>
+                        <div class="ai-section-row">
+                            <span class="ai-section-label">🎯 FLOW</span>
+                            <span id="ai-section-flow" class="ai-section-text">Scanning...</span>
+                        </div>
+                        <!-- Legacy full-text element (kept for typewriter compatibility) -->
+                        <div id="ai-insight-text" style="display:none;"></div>
+                    </div>
+
+                    <!-- STRATEGIC ACTION ROW -->
+                    <div class="ai-action-row">
+                        <div>
+                            <div class="ai-action-label">STRATEGIC ACTION</div>
+                            <div id="ai-action" class="ai-action-value gold-text">SCANNING...</div>
+                        </div>
+                        <div id="ai-intensity" class="ai-intensity-badge">INTENSITY: LOW</div>
+                    </div>
+
+                    <!-- PCR CONFLICT WARNING (hidden by default) -->
+                    <div id="ai-pcr-conflict" class="ai-pcr-conflict" style="display:none;">
+                        ⚠️ PCR DIVERGENCE: Options market conflicts with AI bias — wait for confirmation
+                    </div>
+
+                    <!-- FOOTER STATS -->
+                    <div id="ai-performance-stats" class="ai-perf-footer">
+                        <span id="ai-accuracy">ACCURACY: 90.5%</span>
+                        <span class="ai-perf-divider">|</span>
+                        <span id="ai-capture">CAPTURE: +14.2 PTS</span>
+                        <span class="ai-perf-divider">|</span>
+                        <span id="ai-signal-count" style="color:var(--text-dim);">SIGNALS: --</span>
                     </div>
                 </section>
                 <!-- GLOBAL MACRO OVERNIGHT PULSE (REBUILT: INSTITUTIONAL GRADE) -->
@@ -734,6 +863,232 @@
 
                     <div id="overnight-narrative" style="font-size: 0.5rem; color: rgba(255,255,255,0.4); padding: 10px; font-style: italic; line-height: 1.4; text-align: center; min-height: 40px;">
                         Analyzing institutional global flow for SPY anchor...
+                    </div>
+                </section>
+
+                <!-- ============================================================ -->
+                <!-- TRADE GUARDIAN — CONVICTION ENGINE                            -->
+                <!-- ============================================================ -->
+                <section class="card trade-guardian-card reveal-1" id="trade-guardian-card">
+                    <!-- Header -->
+                    <div class="tg-header">
+                        <div>
+                            <div class="tg-title">🛡 TRADE GUARDIAN</div>
+                            <div class="tg-subtitle">CONVICTION ENGINE</div>
+                        </div>
+                        <div id="tg-alert-badge" class="tg-badge tg-badge-hold">HOLD</div>
+                    </div>
+
+                    <!-- Conviction Meter -->
+                    <div class="tg-meter-section">
+                        <div class="tg-meter-labels">
+                            <span class="tg-meter-label">CONVICTION</span>
+                            <span id="tg-conviction-pct" class="tg-conviction-val">--</span>
+                        </div>
+                        <div class="tg-bar-track">
+                            <div id="tg-conviction-bar" class="tg-bar-fill" style="width:0%"></div>
+                            <!-- Threshold markers -->
+                            <div class="tg-threshold" style="left:40%" title="Danger Zone"></div>
+                            <div class="tg-threshold tg-threshold-gold" style="left:65%" title="Hold Zone"></div>
+                        </div>
+                        <div class="tg-meter-scale">
+                            <span style="color:var(--bearish)">EXIT</span>
+                            <span style="color:var(--gold)">MANAGE</span>
+                            <span style="color:var(--bullish)">HOLD</span>
+                        </div>
+                    </div>
+
+                    <!-- State Classifier -->
+                    <div class="tg-classifier">
+                        <div id="tg-state-label" class="tg-state">SCANNING...</div>
+                        <div id="tg-state-desc" class="tg-state-desc">Monitoring institutional structure</div>
+                    </div>
+
+                    <!-- 5-Factor Evidence Panel -->
+                    <div class="tg-evidence-grid">
+                        <div class="tg-factor" id="tg-f-cvd">
+                            <div class="tg-f-dot"></div>
+                            <div class="tg-f-label">CVD FLOW</div>
+                        </div>
+                        <div class="tg-factor" id="tg-f-vwap">
+                            <div class="tg-f-dot"></div>
+                            <div class="tg-f-label">VWAP SIDE</div>
+                        </div>
+                        <div class="tg-factor" id="tg-f-tf">
+                            <div class="tg-f-dot"></div>
+                            <div class="tg-f-label">TF ALIGN</div>
+                        </div>
+                        <div class="tg-factor" id="tg-f-abs">
+                            <div class="tg-f-dot"></div>
+                            <div class="tg-f-label">ABSORPTION</div>
+                        </div>
+                        <div class="tg-factor" id="tg-f-struct">
+                            <div class="tg-f-dot"></div>
+                            <div class="tg-f-label">STRUCTURE</div>
+                        </div>
+                    </div>
+
+                    <!-- Rationale Feed -->
+                    <div id="tg-rationale" class="tg-rationale">
+                        Waiting for institutional data sync...
+                    </div>
+
+                    <!-- Exit / Continue Signal -->
+                    <div id="tg-action-strip" class="tg-action-strip tg-action-hold">
+                        <span id="tg-action-icon">🟡</span>
+                        <span id="tg-action-text">AWAITING SIGNAL</span>
+                    </div>
+
+                    <!-- ═══════════════════════════════════════════════════════ -->
+                    <!-- ENTRY POINT TRACKER — Position Conviction Monitor       -->
+                    <!-- ═══════════════════════════════════════════════════════ -->
+                    <div id="tg-entry-tracker" style="margin-top:12px; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px; border:1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size:0.5rem; font-weight:900; color:var(--gold); letter-spacing:1px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>📍 ENTRY POINT TRACKER</span>
+                            <span id="tg-position-health-badge" style="font-size:0.45rem; padding:1px 6px; border-radius:3px; background:rgba(255,255,255,0.05); color:var(--text-dim); border:1px solid rgba(255,255,255,0.1);">NO POSITION</span>
+                        </div>
+
+                        <!-- Entry Price Input -->
+                        <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px;">
+                            <div style="font-size:0.45rem; color:var(--text-dim); font-weight:800; flex-shrink:0;">ENTRY $</div>
+                            <input id="tg-entry-price-input"
+                                   type="number" step="0.01" min="0" placeholder="Enter price..."
+                                   style="flex:1; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:4px; padding:4px 8px; color:#fff; font-size:0.6rem; font-family:'JetBrains Mono',monospace; font-weight:700; outline:none; transition:border-color 0.2s;"
+                                   onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'"/>
+                            <button id="tg-entry-set-btn" onclick="setTradeGuardianEntry()"
+                                    style="padding:4px 10px; background:rgba(245,158,11,0.15); border:1px solid var(--gold); border-radius:4px; color:var(--gold); font-size:0.5rem; font-weight:900; cursor:pointer; letter-spacing:0.5px; transition:all 0.2s;"
+                                    onmouseover="this.style.background='rgba(245,158,11,0.3)'" onmouseout="this.style.background='rgba(245,158,11,0.15)'">SET</button>
+                            <button id="tg-entry-clear-btn" onclick="clearTradeGuardianEntry()"
+                                    style="padding:4px 8px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:4px; color:#f87171; font-size:0.5rem; font-weight:900; cursor:pointer; transition:all 0.2s;"
+                                    onmouseover="this.style.background='rgba(239,68,68,0.25)'" onmouseout="this.style.background='rgba(239,68,68,0.1)'">✕</button>
+                        </div>
+
+                        <!-- Live P&L Row -->
+                        <div id="tg-pnl-panel" style="display:none;">
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px;">
+                                <div style="background:rgba(255,255,255,0.03); border-radius:4px; padding:6px; border:1px solid rgba(255,255,255,0.05);">
+                                    <div style="font-size:0.38rem; color:var(--text-dim); font-weight:800; letter-spacing:0.5px;">UNREALIZED P&L</div>
+                                    <div id="tg-pnl-dollar" style="font-size:0.85rem; font-weight:900; font-family:'JetBrains Mono',monospace; color:var(--text-bright); margin-top:2px;">+$0.00</div>
+                                    <div id="tg-pnl-pct" style="font-size:0.48rem; font-weight:800; color:var(--text-dim);">+0.00%</div>
+                                </div>
+                                <div style="background:rgba(255,255,255,0.03); border-radius:4px; padding:6px; border:1px solid rgba(255,255,255,0.05);">
+                                    <div style="font-size:0.38rem; color:var(--text-dim); font-weight:800; letter-spacing:0.5px;">INVALIDATION</div>
+                                    <div id="tg-invalidation-price" style="font-size:0.85rem; font-weight:900; font-family:'JetBrains Mono',monospace; color:#f87171; margin-top:2px;">$---</div>
+                                    <div id="tg-invalidation-label" style="font-size:0.42rem; font-weight:800; color:var(--text-dim);">BELOW MIDNIGHT OPEN</div>
+                                </div>
+                            </div>
+
+                            <!-- Position Health Meter -->
+                            <div style="margin-bottom:6px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                                    <span style="font-size:0.42rem; color:var(--text-dim); font-weight:800;">POSITION HEALTH</span>
+                                    <span id="tg-health-label" style="font-size:0.42rem; font-weight:900; color:var(--bullish);">STRONG</span>
+                                </div>
+                                <div style="height:5px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
+                                    <div id="tg-health-bar" style="height:100%; width:80%; background:var(--bullish); border-radius:3px; transition:all 0.6s ease;"></div>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; margin-top:2px;">
+                                    <span style="font-size:0.38rem; color:var(--bearish);">EXIT</span>
+                                    <span style="font-size:0.38rem; color:var(--gold);">MANAGE</span>
+                                    <span style="font-size:0.38rem; color:var(--bullish);">HOLD</span>
+                                </div>
+                            </div>
+
+                            <!-- Context Line -->
+                            <div id="tg-position-context" style="font-size:0.45rem; color:var(--text-dim); font-style:italic; border-left:2px solid rgba(255,255,255,0.1); padding-left:6px; line-height:1.5;">
+                                Monitoring position context...
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ============================================================ -->
+                <!-- TIER 1 INSTITUTIONAL EDGE PANEL                               -->
+                <!-- ============================================================ -->
+                <section class="card reveal-1" id="tier1-edge-panel" style="background:linear-gradient(135deg,rgba(139,92,246,0.06) 0%,rgba(0,0,0,0) 100%); border:1px solid rgba(139,92,246,0.2);">
+                    <div class="card-header-flex" style="margin-bottom:10px;">
+                        <div class="card-title" style="color:#a78bfa; text-shadow:0 0 10px rgba(139,92,246,0.3);">🏦 TIER 1 INSTITUTIONAL EDGE PANEL</div>
+                        <span style="font-size:0.4rem; color:var(--text-dim); font-weight:800; letter-spacing:1px; border:1px solid rgba(255,255,255,0.1); padding:2px 6px; border-radius:3px;">PROP DESK CALIBRATION</span>
+                    </div>
+
+                    <!-- 6 Edge Grid -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+
+                        <!-- T1-A: VWAP Bands -->
+                        <div style="background:rgba(0,0,0,0.3); border-radius:5px; padding:8px; border:1px solid rgba(255,255,255,0.05);">
+                            <div style="font-size:0.38rem; color:#a78bfa; font-weight:900; letter-spacing:0.8px; margin-bottom:4px;">VWAP DEV BANDS</div>
+                            <div id="t1-vwap-zone" style="font-size:0.65rem; font-weight:900; color:var(--bullish);">LOADING...</div>
+                            <div style="display:flex; gap:4px; margin-top:4px; font-size:0.35rem; font-family:'JetBrains Mono',monospace;">
+                                <span style="color:var(--text-dim);">1σ</span><span id="t1-vwap-b1" style="color:var(--text-dim);">--</span>
+                                <span style="color:var(--text-dim); margin-left:4px;">2σ</span><span id="t1-vwap-b2" style="color:var(--gold);">--</span>
+                            </div>
+                        </div>
+
+                        <!-- T1-B: RVOL -->
+                        <div style="background:rgba(0,0,0,0.3); border-radius:5px; padding:8px; border:1px solid rgba(255,255,255,0.05);">
+                            <div style="font-size:0.38rem; color:#a78bfa; font-weight:900; letter-spacing:0.8px; margin-bottom:4px;">REL. VOLUME (RVOL)</div>
+                            <div id="t1-rvol-val" style="font-size:0.9rem; font-weight:900; color:var(--gold); font-family:'JetBrains Mono',monospace;">1.00×</div>
+                            <div style="height:3px; background:rgba(255,255,255,0.05); border-radius:2px; margin-top:4px; overflow:hidden;">
+                                <div id="t1-rvol-bar" style="height:100%; width:50%; background:var(--gold); transition:all 0.6s ease;"></div>
+                            </div>
+                            <div id="t1-rvol-label" style="font-size:0.38rem; color:var(--text-dim); margin-top:2px; font-weight:800;">NORMAL</div>
+                        </div>
+
+                        <!-- T1-C: ORB -->
+                        <div style="background:rgba(0,0,0,0.3); border-radius:5px; padding:8px; border:1px solid rgba(255,255,255,0.05);">
+                            <div style="font-size:0.38rem; color:#a78bfa; font-weight:900; letter-spacing:0.8px; margin-bottom:4px;">OPENING RANGE (ORB)</div>
+                            <div id="t1-orb-label" style="font-size:0.52rem; font-weight:900; color:var(--text-dim);">PRE-MARKET</div>
+                            <div style="display:flex; justify-content:space-between; margin-top:4px; font-family:'JetBrains Mono',monospace; font-size:0.38rem;">
+                                <span style="color:var(--bullish);">H: <span id="t1-orb-high">--</span></span>
+                                <span style="color:var(--bearish);">L: <span id="t1-orb-low">--</span></span>
+                            </div>
+                        </div>
+
+                        <!-- T1-D: Gap Fill -->
+                        <div style="background:rgba(0,0,0,0.3); border-radius:5px; padding:8px; border:1px solid rgba(255,255,255,0.05);">
+                            <div style="font-size:0.38rem; color:#a78bfa; font-weight:900; letter-spacing:0.8px; margin-bottom:4px;">GAP FILL PROB</div>
+                            <div id="t1-gap-label" style="font-size:0.52rem; font-weight:900; color:var(--text-dim);">NO GAP</div>
+                            <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
+                                <div id="t1-gap-prob-val" style="font-size:0.75rem; font-weight:900; color:var(--gold); font-family:'JetBrains Mono',monospace;">--%</div>
+                                <span id="t1-gap-target" style="font-size:0.35rem; color:var(--text-dim);">FILL TARGET: --</span>
+                            </div>
+                        </div>
+
+                        <!-- T1-E: Equal Highs / Lows -->
+                        <div style="background:rgba(0,0,0,0.3); border-radius:5px; padding:8px; border:1px solid rgba(255,255,255,0.05);">
+                            <div style="font-size:0.38rem; color:#a78bfa; font-weight:900; letter-spacing:0.8px; margin-bottom:4px;">EQUAL H/L (STOP POOLS)</div>
+                            <div id="t1-eq-highs" style="font-size:0.42rem; font-weight:800; color:var(--bullish); font-family:'JetBrains Mono',monospace;">EQH: --</div>
+                            <div id="t1-eq-lows" style="font-size:0.42rem; font-weight:800; color:var(--bearish); font-family:'JetBrains Mono',monospace; margin-top:2px;">EQL: --</div>
+                        </div>
+
+                        <!-- T1-F: Volatility Regime -->
+                        <div style="background:rgba(0,0,0,0.3); border-radius:5px; padding:8px; border:1px solid rgba(255,255,255,0.05);">
+                            <div style="font-size:0.38rem; color:#a78bfa; font-weight:900; letter-spacing:0.8px; margin-bottom:4px;">VOLATILITY REGIME</div>
+                            <div id="t1-vol-regime-label" style="font-size:0.5rem; font-weight:900; color:var(--gold);">NORMAL</div>
+                            <div style="height:3px; background:rgba(255,255,255,0.05); border-radius:2px; margin-top:4px; overflow:hidden;">
+                                <div id="t1-vol-regime-bar" style="height:100%; width:50%; background:var(--gold); transition:all 0.6s ease;"></div>
+                            </div>
+                            <div id="t1-vol-ratio" style="font-size:0.38rem; color:var(--text-dim); margin-top:2px; font-family:'JetBrains Mono',monospace;">ATR RATIO: --</div>
+                        </div>
+
+                        <!-- T1-G: VPOC Value Area -->
+                        <div style="background:rgba(0,0,0,0.3); border-radius:5px; padding:8px; border:1px solid rgba(255,255,255,0.05);">
+                            <div style="font-size:0.38rem; color:#a78bfa; font-weight:900; letter-spacing:0.8px; margin-bottom:4px;">VOLUME P.O.C.</div>
+                            <div id="t1-vpoc-val" style="font-size:0.65rem; font-weight:900; color:#fff; font-family:'JetBrains Mono',monospace;">--</div>
+                            <div id="t1-vpoc-zone" style="font-size:0.42rem; font-weight:900; color:var(--text-dim); margin-top:2px;">CALCULATING</div>
+                            <div style="display:flex; justify-content:space-between; margin-top:4px; font-family:'JetBrains Mono',monospace; font-size:0.35rem; color:var(--text-dim);">
+                                <span>VAH: <span id="t1-vpoc-vah">--</span></span>
+                                <span>VAL: <span id="t1-vpoc-val-span">--</span></span>
+                            </div>
+                        </div>
+
+                        <!-- T1-H: Macro Divergence -->
+                        <div style="background:rgba(0,0,0,0.3); border-radius:5px; padding:8px; border:1px solid rgba(255,255,255,0.05);">
+                            <div style="font-size:0.38rem; color:#a78bfa; font-weight:900; letter-spacing:0.8px; margin-bottom:4px;">MACRO DIVERGENCE</div>
+                            <div id="t1-macro-label" style="font-size:0.48rem; font-weight:900; color:var(--text-dim);">ALIGNED</div>
+                            <div id="t1-macro-rat" style="font-size:0.38rem; color:var(--text-dim); margin-top:4px; line-height:1.2;">Yields pricing aligns with equities.</div>
+                        </div>
+
                     </div>
                 </section>
 
@@ -907,7 +1262,7 @@
                                 PHASE I: Institutions are building positions. Expect tight range and low volatility.
                             </div>
                             <div style="margin-top: 8px; font-size: 0.55rem; font-weight: 800; color: #fff; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 6px;">
-                                MM EXPECTED RANGE (0DTE): <span id="expected-range-val" style="color:var(--gold);">±$0.00</span>
+                                MM EXPECTED RANGE (0DTE): <span id="po3-expected-range-val" style="color:var(--gold);">±$0.00</span>
                             </div>
                         </div>
 
@@ -930,9 +1285,30 @@
 
                         <!-- NEW: G7 SPIDER CORRELATION MATRIX (Basket Analysis) -->
                         <div id="spider-matrix-container" style="margin-top: 1rem; padding: 0.8rem; background: rgba(0,180,255,0.03); border-radius: 6px; border: 1px solid rgba(0,180,255,0.1);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <!-- Header Row -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                                 <div style="font-size: 0.55rem; font-weight: 800; color: #00f2ff; letter-spacing: 1.2px;">G7 SPIDER MATRIX</div>
                                 <div id="basket-alignment" style="font-size: 0.45rem; font-weight: 900; color: #00f2ff; opacity: 0.8;">BASKET: HARMONIOUS</div>
+                            </div>
+                            <!-- TOP / WEAK Leader Row -->
+                            <div style="display: flex; gap: 6px; margin-bottom: 8px; padding: 4px 6px; background: rgba(0,0,0,0.2); border-radius: 4px; border: 1px solid rgba(255,255,255,0.04);">
+                                <div style="flex:1;">
+                                    <div style="font-size:0.32rem; color:var(--text-dim); font-weight:900; letter-spacing:0.5px;">STRONGEST</div>
+                                    <div id="g7-top-cur" style="font-size:0.65rem; font-weight:900; color:var(--bullish); font-family:'JetBrains Mono',monospace;">--</div>
+                                    <div id="g7-top-val" style="font-size:0.45rem; color:var(--bullish); font-weight:800;">+0.00%</div>
+                                </div>
+                                <div style="width:1px; background:rgba(255,255,255,0.06);"></div>
+                                <div style="flex:1; text-align:center;">
+                                    <div style="font-size:0.32rem; color:var(--text-dim); font-weight:900; letter-spacing:0.5px;">BEST PAIR</div>
+                                    <div id="g7-best-pair" style="font-size:0.6rem; font-weight:900; color:var(--gold); font-family:'JetBrains Mono',monospace;">--/--</div>
+                                    <div id="g7-best-dir" style="font-size:0.4rem; color:var(--gold); font-weight:800;">LONG --</div>
+                                </div>
+                                <div style="width:1px; background:rgba(255,255,255,0.06);"></div>
+                                <div style="flex:1; text-align:right;">
+                                    <div style="font-size:0.32rem; color:var(--text-dim); font-weight:900; letter-spacing:0.5px;">WEAKEST</div>
+                                    <div id="g7-weak-cur" style="font-size:0.65rem; font-weight:900; color:var(--bearish); font-family:'JetBrains Mono',monospace;">--</div>
+                                    <div id="g7-weak-val" style="font-size:0.45rem; color:var(--bearish); font-weight:800;">-0.00%</div>
+                                </div>
                             </div>
                             <div id="spider-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
                                 <!-- Dynamics injected by app.js -->
@@ -942,10 +1318,10 @@
                                     <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
                                         <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
-                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
                                     </div>
                                     <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
@@ -955,10 +1331,10 @@
                                     <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
                                         <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
-                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
                                     </div>
                                     <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
@@ -968,10 +1344,10 @@
                                     <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
                                         <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
-                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
                                     </div>
                                     <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
@@ -981,10 +1357,10 @@
                                     <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
                                         <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
-                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
                                     </div>
                                     <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
@@ -994,10 +1370,10 @@
                                     <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
                                         <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
-                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
                                     </div>
                                     <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
@@ -1007,10 +1383,10 @@
                                     <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
                                         <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
-                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
                                     </div>
                                     <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
@@ -1020,24 +1396,26 @@
                                     <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
                                         <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
-                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
                                     </div>
                                     <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
-                                <div class="spider-node" data-cur="USD" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
-                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">USD</div>
+                                <!-- USD node — DXY DRIVER special treatment -->
+                                <div class="spider-node" data-cur="USD" data-usd="true" style="text-align: center; background: rgba(0,180,255,0.05); padding: 5px; border-radius: 4px; border: 1px solid rgba(0,180,255,0.15); position: relative; overflow: hidden;">
+                                    <div style="font-size: 0.65rem; font-weight: 900; color: #00f2ff; margin-bottom: 2px;">USD</div>
                                     <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
                                     <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
-                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: #00f2ff; transition: all 0.5s ease;"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display: flex; gap: 2px; justify-content: center; margin-top: 4px;">
-                                        <div class="tf-dot" data-tf="1m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="5m" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
-                                        <div class="tf-dot" data-tf="1h" style="width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
+                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
                                     </div>
+                                    <div style="font-size:0.3rem;color:#00f2ff;font-weight:900;letter-spacing:0.5px;margin-top:3px;opacity:0.8;">DXY DRIVER</div>
                                     <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
                                 </div>
                             </div>
@@ -1061,35 +1439,6 @@
                             </div>
                         </div>
 
-                        <!-- NEW: G7 CORRELATION HEATMAP (Decoupling Alerts) -->
-                        <div id="g7-correlation-container" style="margin-top: 1rem; padding: 0.8rem; background: rgba(0, 180, 255, 0.03); border-radius: 6px; border: 1px solid rgba(0, 180, 255, 0.1);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                <div style="font-size: 0.55rem; font-weight: 800; color: #00f2ff; letter-spacing: 1.2px;">G7 CORRELATION HEATMAP</div>
-                                <div id="decoupling-status" style="font-size: 0.4rem; font-weight: 900; color: #00f2ff; opacity: 0.8;">SCANNING...</div>
-                            </div>
-                            <div id="correlation-matrix" style="display: grid; grid-template-columns: 24px repeat(8, 2fr); gap: 2px;">
-                                <!-- Header Row -->
-                                <div style="background:transparent;"></div>
-                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">USD</div>
-                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">EUR</div>
-                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">GBP</div>
-                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">JPY</div>
-                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">AUD</div>
-                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">CAD</div>
-                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">CHF</div>
-                                <div style="font-size: 0.35rem; font-weight: 900; color: var(--text-dim); text-align: center;">NZD</div>
-                            </div>
-                            <div style="margin-top: 10px; display: flex; gap: 8px; justify-content: center;">
-                                <div style="display:flex; align-items:center; gap:3px;">
-                                    <div style="width:5px; height:5px; background:#00f2ff; border-radius:1px;"></div>
-                                    <span style="font-size:0.3rem; color:var(--text-dim);">COUPLED</span>
-                                </div>
-                                <div style="display:flex; align-items:center; gap:3px;">
-                                    <div style="width:5px; height:5px; background:var(--gold); border-radius:1px;"></div>
-                                    <span style="font-size:0.3rem; color:var(--text-dim);">DECOUPLED</span>
-                                </div>
-                            </div>
-                        </div>
 
                         <!-- NEW: INSTITUTIONAL WHALE TAPE -->
                         <div id="whale-tape-container" style="margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid rgba(255,255,255,0.05);">
@@ -1238,29 +1587,36 @@
                 <!-- Institutional Block Trades -->
                 <section class="card reveal-7">
                     <div class="card-title">Institutional Block Feed</div>
-
-                <!-- ELITE SCALPER SCANNER (GOLD LAYER) -->
-                <section class='card reveal-10' style='border: 1px solid var(--gold); background: linear-gradient(180deg, rgba(255,215,0,0.05) 0%, transparent 100%);'>
-                    <div class='card-header' style='display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,215,0,0.1); padding: 0.8rem 1rem;'>
-                        <button id='btn-manual-scan' style='background: var(--gold); border: none; color: #000; padding: 2px 8px; border-radius: 2px; font-weight: 900; cursor: pointer; font-size: 0.55rem; margin-right: 10px;'>SCAN NOW</button>
-                        <span style='font-weight: 800; font-size: 0.7rem; color: var(--gold); letter-spacing: 2px;'>INSTITUTIONAL SCALPER SCAN</span>
-                        <span id='scan-status' style='font-size: 0.5rem; color: var(--text-dim); background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;'>LIVE</span>
-                    </div>
-                    <div id='scalper-scan-list' style='max-height: 250px; overflow-y: auto; padding: 0.5rem;'>
-                        <div style='text-align: center; padding: 2rem; color: var(--text-dim); font-size: 0.6rem;'>INITIALIZING SCALPER FREQUENCIES...</div>
-                    </div>
-                    <div style='padding: 0.8rem; border-top: 1px solid rgba(255,255,255,0.05);'>
-                        <div style='display: flex; justify-content: space-between; margin-bottom: 4px;'>
-                            <span style='font-size: 0.5rem; color: #94a3b8;'>SCANNER SENSITIVITY</span>
-                            <span style='font-size: 0.55rem; color: var(--gold); font-weight: 900;'>ULTRA-HIGH</span>
-                        </div>
-                        <div style='width: 100%; height: 2px; background: rgba(255,215,0,0.2); border-radius: 1px;'>
-                            <div style='width: 85%; height: 100%; background: var(--gold);'></div>
-                        </div>
-                    </div>
-                </section>
                     <div id="block-trades-feed" style="max-height: 150px; overflow-y: auto; font-size: 0.7rem;">
                         <p style="color:var(--text-dim); text-align:center;">Listening for whales...</p>
+                    </div>
+                </section>
+
+                <!-- ELITE SCALPER SCANNER (GOLD LAYER) -->
+                <section class='card reveal-10 scalper-radar-card'>
+                    <div class="scan-beam"></div>
+                    <div class='card-header' style='display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,157,0,0.15); padding: 0.8rem 1rem; position: relative; z-index: 5;'>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <button id='btn-manual-scan' style='background: var(--gold); border: none; color: #000; padding: 4px 12px; border-radius: 2px; font-weight: 900; cursor: pointer; font-size: 0.55rem; letter-spacing: 0.5px; box-shadow: 0 0 10px rgba(255, 157, 0, 0.4);'>SCAN NOW</button>
+                            <span style='font-weight: 900; font-size: 0.7rem; color: var(--gold); letter-spacing: 2px; text-transform: uppercase;'>INSTITUTIONAL SCALPER SCAN</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id='scan-status' style='font-size: 0.5rem; font-weight: 900; color: #fff; background: rgba(0,255,136,0.2); border: 1px solid var(--bullish); padding: 2px 8px; border-radius: 4px;'>LIVE</span>
+                        </div>
+                    </div>
+                    <div id='scalper-scan-list' style='max-height: 280px; min-height: 120px; overflow-y: auto; padding: 0.5rem; position: relative; z-index: 5;'>
+                        <div style='text-align: center; padding: 3rem 1rem; color: var(--text-dim); font-size: 0.6rem; letter-spacing: 1px;'>
+                            INITIALIZING SCALPER FREQUENCIES...
+                        </div>
+                    </div>
+                    <div style='padding: 0.8rem 1.2rem; border-top: 1px solid rgba(255,157,0,0.1); position: relative; z-index: 5; background: rgba(0,0,0,0.3);'>
+                        <div style='display: flex; justify-content: space-between; margin-bottom: 6px;'>
+                            <span style='font-size: 0.55rem; color: #94a3b8; font-weight: 800; letter-spacing: 0.5px;'>SCANNER SENSITIVITY</span>
+                            <span style='font-size: 0.55rem; color: var(--gold); font-weight: 900;'>ULTRA-HIGH [85%]</span>
+                        </div>
+                        <div style='width: 100%; height: 3px; background: rgba(255,157,0,0.1); border-radius: 5px; overflow: hidden;'>
+                            <div style='width: 85%; height: 100%; background: linear-gradient(90deg, #b45309, var(--gold)); box-shadow: 0 0 10px var(--gold);'></div>
+                        </div>
                     </div>
                 </section>
 

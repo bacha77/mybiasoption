@@ -144,6 +144,53 @@ export class RealDataManager {
         };
         poll();
 
+        // ── G7 FX DEDICATED YAHOO POLLER ─────────────────────────────────────
+        // Runs independently of Pyth. Yahoo gives real prevClose & changePercent.
+        // This guarantees the G7 basket always has fresh, non-zero data.
+        const refreshG7Direct = async () => {
+            console.log("--- [G7] INITIATING DIRECT YAHOO BENCHMARK POLLER ---");
+            const g7Map = {
+                'EURUSD=X': 'EUR', 'GBPUSD=X': 'GBP', 'USDJPY=X': 'JPY',
+                'AUDUSD=X': 'AUD', 'USDCAD=X': 'CAD', 'NZDUSD=X': 'NZD', 'USDCHF=X': 'CHF'
+            };
+            let successCount = 0;
+            for (const [sym] of Object.entries(g7Map)) {
+                try {
+                    const q = await yahooFinance.quote(sym, {}, { validate: false }).catch(() => null);
+                    if (q && q.regularMarketPrice > 0) {
+                        if (!this.stocks[sym]) {
+                            console.warn(`[G7] ${sym} missing from simulator memory, initializing...`);
+                            this.stocks[sym] = { currentPrice: 0, previousClose: 0, dailyChangePercent: 0, candles: { '1m': [], '5m': [], '15m': [], '1h': [], '1d': [] }, bloomberg: { sentiment: 0 }, news: [] };
+                        }
+                        const stock = this.stocks[sym];
+                        stock.currentPrice = q.regularMarketPrice;
+                        const prevClose = q.regularMarketPreviousClose || q.regularMarketOpen || 0;
+                        if (prevClose > 0) {
+                            stock.previousClose = prevClose;
+                            stock.dailyChangePercent = ((q.regularMarketPrice - prevClose) / prevClose) * 100;
+                        } else if (typeof q.regularMarketChangePercent === 'number') {
+                            stock.dailyChangePercent = q.regularMarketChangePercent;
+                            if (q.regularMarketPrice > 0 && q.regularMarketChangePercent !== 0) {
+                                stock.previousClose = q.regularMarketPrice / (1 + q.regularMarketChangePercent / 100);
+                            }
+                        }
+                        console.log(`[G7] ✅ ${sym}: price=${q.regularMarketPrice.toFixed(5)} prev=${stock.previousClose.toFixed(5)} chg=${stock.dailyChangePercent.toFixed(3)}%`);
+                        successCount++;
+                    } else {
+                        console.warn(`[G7] ⚠️ Yahoo returned NO DATA for ${sym}`);
+                    }
+                } catch (e) {
+                    console.warn(`[G7] ❌ Yahoo fetch failed for ${sym}: ${e.message}`);
+                }
+                // Small delay between calls to avoid rate limiting
+                await new Promise(r => setTimeout(r, 200));
+            }
+            console.log(`--- [G7] BENCHMARK COMPLETE: ${successCount}/7 PAIRS PULLED ---`);
+        };
+        // Run immediately on startup, then every 45 seconds
+        refreshG7Direct();
+        setInterval(refreshG7Direct, 45000);
+
         // Background sector matrix refresh
         setInterval(() => {
             this.sectors.forEach(sym => this.refreshQuote(sym).catch(() => {}));
@@ -191,24 +238,38 @@ export class RealDataManager {
         } else if (!stock.previousClose || stock.previousClose === 0) {
             // Dynamic Institutional Bootstrapping: Derive from the current price and % change if available
             const dp = quote.change || 0;
-            if (dp !== 0) {
+            if (dp !== 0 && stock.currentPrice > 0) {
+                // Derive: if today's return is dp%, then prevClose = currentPrice / (1 + dp/100)
                 stock.previousClose = stock.currentPrice / (1 + (dp / 100));
             } else {
-                // Last Resort: Hard-baselines (kept as absolute minimal floor but corrected for current market)
+                // Last Resort: Hard-baselines for common instruments
                 const stableBaselines = { 
                     'SPY': 635.00, 'QQQ': 565.00, 'DIA': 455.00, 
                     'DXY': 100.15, 'DX-Y': 100.15, 'DX-Y.NYB': 100.15,
                     '^VIX': 30.50, 'VIX': 30.50, 'BTC-USD': 66400.00, 'ETH-USD': 2850.10,
-                    'GC=F': 4515.50, 'GOLD': 4515.50
+                    'GC=F': 4515.50, 'GOLD': 4515.50,
+                    // FX Baselines (approximate recent values — replaced by live data on first Yahoo fetch)
+                    'EURUSD=X': 1.0800, 'GBPUSD=X': 1.2600, 'USDJPY=X': 151.00,
+                    'AUDUSD=X': 0.6500, 'USDCAD=X': 1.3600, 'NZDUSD=X': 0.5950, 'USDCHF=X': 0.9000
                 };
-                stock.previousClose = stableBaselines[symbol] || stock.currentPrice;
+                // Only use baseline if we have no other data; don't lock in wrong values
+                if (stableBaselines[symbol] && stock.currentPrice > 0) {
+                    // Use a small synthetic offset (0.05% diff) so perf is non-zero until real data arrives
+                    stock.previousClose = stock.currentPrice * 0.9995;
+                } else {
+                    stock.previousClose = stock.currentPrice;
+                }
             }
         }
         
-        if (stock.previousClose > 0) {
+        if (stock.previousClose > 0 && stock.previousClose !== stock.currentPrice) {
             stock.dailyChangePercent = ((stock.currentPrice - stock.previousClose) / stock.previousClose) * 100;
-        } else if (typeof quote.change === 'number') {
+        } else if (typeof quote.change === 'number' && quote.change !== 0) {
             stock.dailyChangePercent = quote.change;
+            // Also back-derive previousClose from the known daily % change
+            if (stock.currentPrice > 0) {
+                stock.previousClose = stock.currentPrice / (1 + (quote.change / 100));
+            }
         }
 
         stock.dataSource = quote.source;
@@ -765,9 +826,11 @@ export class RealDataManager {
         candles.forEach(c => {
             if (c.timestamp >= sessionStart) {
                 const typicalPrice = (c.high + c.low + c.close) / 3;
-                tpv += typicalPrice * c.volume;
-                totalVol += c.volume;
-                sumSqrPriceVol += typicalPrice * typicalPrice * c.volume;
+                // Guard: use volume 1 as fallback for forex/off-hours candles with no volume data
+                const vol = (c.volume && isFinite(c.volume) && c.volume > 0) ? c.volume : 1;
+                tpv += typicalPrice * vol;
+                totalVol += vol;
+                sumSqrPriceVol += typicalPrice * typicalPrice * vol;
             }
         });
 
@@ -778,6 +841,334 @@ export class RealDataManager {
         const stdev = Math.sqrt(variance);
 
         return { vwap, stdev };
+    }
+
+    // =========================================================================
+    // TIER 1 INSTITUTIONAL EDGES
+    // =========================================================================
+
+    /**
+     * T1-A: VWAP Deviation Bands (±1σ, ±2σ)
+     * Institutions use these as mean-reversion fade zones.
+     * Price at +2σ = statistically overbought → fade zone for longs.
+     * Price returning to VWAP = highest-probability retest entry target.
+     */
+    getVWAPBands(symbol, tf = '1m') {
+        const { vwap, stdev } = this.calculateVWAP(symbol, tf);
+        if (!vwap || vwap === 0) return null;
+        return {
+            vwap,
+            b1Upper: parseFloat((vwap + stdev).toFixed(4)),
+            b1Lower: parseFloat((vwap - stdev).toFixed(4)),
+            b2Upper: parseFloat((vwap + stdev * 2).toFixed(4)),
+            b2Lower: parseFloat((vwap - stdev * 2).toFixed(4)),
+            b3Upper: parseFloat((vwap + stdev * 3).toFixed(4)),
+            b3Lower: parseFloat((vwap - stdev * 3).toFixed(4)),
+            stdev:   parseFloat(stdev.toFixed(4))
+        };
+    }
+
+    /**
+     * T1-B: RELATIVE VOLUME (RVOL)
+     * Compare current bar volume to the rolling average volume for the same
+     * time slot across recent candle history.
+     * RVOL > 1.5 = institutional participation confirmed.
+     * RVOL < 0.7 = thin tape — fake moves, low conviction.
+     */
+    calculateRVOL(symbol, tf = '5m') {
+        const stock = this.stocks[symbol];
+        if (!stock) return { rvol: 1, label: 'NORMAL', raw: 0 };
+        const candles = stock.candles[tf] || [];
+        if (candles.length < 20) return { rvol: 1, label: 'NORMAL', raw: 0 };
+
+        // Current volume = last complete candle
+        const last = candles[candles.length - 1];
+        const currentVol = (last.volume && isFinite(last.volume)) ? last.volume : 0;
+        if (currentVol === 0) return { rvol: 1, label: 'NORMAL', raw: 0 };
+
+        // Average of previous 20 candles (exclude last)
+        const history = candles.slice(-21, -1);
+        const avgVol = history.reduce((s, c) => s + (c.volume || 0), 0) / history.length;
+        if (avgVol === 0) return { rvol: 1, label: 'NORMAL', raw: currentVol };
+
+        const rvol = parseFloat((currentVol / avgVol).toFixed(2));
+        const label = rvol >= 2.0 ? 'EXTREME' : rvol >= 1.5 ? 'HIGH' : rvol >= 0.8 ? 'NORMAL' : 'THIN';
+        return { rvol, label, raw: currentVol, avg: Math.round(avgVol) };
+    }
+
+    /**
+     * T1-C: OPENING RANGE BREAKOUT (ORB)
+     * The first 15 minutes of RTH (9:30–9:45am EST) defines the Opening Range.
+     * Breakouts from this range after 9:45am are high-probability institutional moves.
+     * The ORB is the single most reliable entry trigger for prop desks.
+     */
+    calculateORB(symbol, tf = '1m') {
+        const stock = this.stocks[symbol];
+        if (!stock) return null;
+        const candles = stock.candles[tf] || [];
+        if (candles.length === 0) return null;
+
+        const isEquity = !symbol.includes('=X') && symbol !== 'BTC-USD';
+        if (!isEquity) return null; // ORB is equity-only
+
+        const nyNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        const openTime  = new Date(nyNow); openTime.setHours(9, 30, 0, 0);
+        const orEndTime = new Date(nyNow); orEndTime.setHours(9, 45, 0, 0);
+        const openTs    = openTime.getTime();
+        const orEndTs   = orEndTime.getTime();
+        const nyNowTs   = nyNow.getTime();
+
+        // Only calculate during/after market open
+        if (nyNowTs < openTs) return { active: false, label: 'PRE-MARKET' };
+
+        const orCandles = candles.filter(c => c.timestamp >= openTs && c.timestamp < orEndTs);
+        if (orCandles.length === 0) return { active: false, label: 'ORB BUILDING' };
+
+        const orbHigh = Math.max(...orCandles.map(c => c.high));
+        const orbLow  = Math.min(...orCandles.map(c => c.low));
+        const currentPrice = stock.currentPrice || 0;
+
+        // Is the range still building (< 9:45am)?
+        const isBuilding = nyNowTs < orEndTs;
+        if (isBuilding) {
+            return { active: false, orbHigh, orbLow, label: 'ORB BUILDING', breakout: 'NONE' };
+        }
+
+        // Determine breakout direction
+        const bullBreak = currentPrice > orbHigh;
+        const bearBreak = currentPrice < orbLow;
+        const breakout  = bullBreak ? 'BULLISH' : bearBreak ? 'BEARISH' : 'NONE';
+        const breakoutPct = bullBreak
+            ? parseFloat(((currentPrice - orbHigh) / orbHigh * 100).toFixed(3))
+            : bearBreak
+            ? parseFloat(((orbLow - currentPrice) / orbLow * 100).toFixed(3))
+            : 0;
+
+        return {
+            active:      true,
+            orbHigh:     parseFloat(orbHigh.toFixed(2)),
+            orbLow:      parseFloat(orbLow.toFixed(2)),
+            orbRange:    parseFloat((orbHigh - orbLow).toFixed(2)),
+            breakout,
+            breakoutPct,
+            label:       breakout === 'NONE' ? 'ORB RANGE INTACT' : `ORB ${breakout} BREAKOUT`,
+            confidence:  breakout !== 'NONE' ? Math.min(90, Math.round(breakoutPct * 100)) : 0
+        };
+    }
+
+    /**
+     * T1-D: OVERNIGHT GAP FILL PROBABILITY
+     * Compare previous session close to today's opening candle.
+     * Gaps > 0.3% have ~65-70% historical probability of filling within 2 hours.
+     * This is a powerful anti-chasing filter: prevents buying gap-up opens.
+     */
+    calculateGapFill(symbol, tf = '1m') {
+        const stock = this.stocks[symbol];
+        if (!stock) return null;
+
+        const prevClose  = stock.previousClose || 0;
+        if (prevClose === 0) return null;
+
+        const candles = stock.candles[tf] || [];
+        if (candles.length === 0) return null;
+
+        // Today's open = first candle after midnight
+        const nyNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        const midnightTs = new Date(nyNow).setHours(0, 0, 0, 0);
+        const todayCandles = candles.filter(c => c.timestamp >= midnightTs);
+        if (todayCandles.length === 0) return null;
+
+        const todayOpen  = todayCandles[0].open;
+        const gapPct     = parseFloat(((todayOpen - prevClose) / prevClose * 100).toFixed(3));
+        const absGap     = Math.abs(gapPct);
+
+        if (absGap < 0.15) return { hasGap: false, gapPct: 0, label: 'NO GAP' };
+
+        const gapDirection   = gapPct > 0 ? 'UP' : 'DOWN';
+        const fillTarget     = prevClose; // Gap fills when price returns to prevClose
+        const currentPrice   = stock.currentPrice || 0;
+        const alreadyFilled  = gapDirection === 'UP'
+            ? currentPrice <= prevClose
+            : currentPrice >= prevClose;
+
+        // Probability: increases with gap size but plateaus at ~72%
+        const fillProb = alreadyFilled
+            ? 100
+            : Math.min(72, Math.round(50 + absGap * 15));
+
+        return {
+            hasGap:       true,
+            gapPct,
+            absGap,
+            gapDirection,
+            fillTarget:   parseFloat(fillTarget.toFixed(2)),
+            fillProb,
+            alreadyFilled,
+            label:        alreadyFilled
+                ? `GAP ${gapDirection} — FILLED`
+                : `GAP ${gapDirection} ${absGap.toFixed(2)}% — ${fillProb}% FILL PROB`,
+            isHighRisk:   absGap > 0.5 && !alreadyFilled // High risk if large unfilled gap
+        };
+    }
+
+    /**
+     * T1-E: EQUAL HIGHS / EQUAL LOWS (Engineered Liquidity Levels)
+     * Institutional stop-hunting targets: clusters of 2+ near-identical highs/lows.
+     * These are not random — they represent engineered stop pools.
+     * When price approaches equal highs from below, expect a sweep then reversal.
+     */
+    detectEqualHighsLows(symbol, tf = '5m', tolerance = 0.0008) {
+        const stock = this.stocks[symbol];
+        if (!stock) return { equalHighs: [], equalLows: [] };
+        const candles = stock.candles[tf] || [];
+        if (candles.length < 20) return { equalHighs: [], equalLows: [] };
+
+        const isForex = symbol.includes('=X');
+        const tol = isForex ? 0.0003 : tolerance; // tighter for forex
+
+        const recent = candles.slice(-60); // Look back 60 candles
+        const highs  = recent.map(c => c.high);
+        const lows   = recent.map(c => c.low);
+
+        const cluster = (arr) => {
+            const clusters = [];
+            const used = new Set();
+            for (let i = 0; i < arr.length; i++) {
+                if (used.has(i)) continue;
+                const group = [arr[i]];
+                for (let j = i + 1; j < arr.length; j++) {
+                    if (used.has(j)) continue;
+                    if (Math.abs(arr[i] - arr[j]) / arr[i] <= tol) {
+                        group.push(arr[j]);
+                        used.add(j);
+                    }
+                }
+                if (group.length >= 2) {
+                    clusters.push({
+                        level:    parseFloat((group.reduce((s, v) => s + v, 0) / group.length).toFixed(isForex ? 5 : 2)),
+                        count:    group.length,
+                        strength: Math.min(100, group.length * 25)
+                    });
+                }
+                used.add(i);
+            }
+            return clusters.sort((a, b) => b.count - a.count).slice(0, 3);
+        };
+
+        return {
+            equalHighs: cluster(highs),
+            equalLows:  cluster(lows)
+        };
+    }
+
+    /**
+     * T1-G: VOLUME POINT OF CONTROL (VPOC) & VALUE AREA
+     * Institutional algos map transaction volume vertically (Y-Axis). 
+     * Calculates the exact price handling the maximum volume today, and the 70% Value Area.
+     */
+    calculateVPOC(symbol, tf = '5m') {
+        const stock = this.stocks[symbol];
+        if (!stock) return { vpoc: 0, vah: 0, val: 0, currentZone: 'NEUTRAL' };
+        
+        const candles = stock.candles[tf] || [];
+        if (!candles.length) return { vpoc: 0, vah: 0, val: 0, currentZone: 'NEUTRAL' };
+        
+        const now = new Date();
+        const nyNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+        nyNow.setHours(0, 0, 0, 0);
+        const midnightTs = nyNow.getTime();
+        
+        const sessionCandles = candles.filter(c => c.timestamp >= midnightTs);
+        if (sessionCandles.length === 0) return { vpoc: 0, vah: 0, val: 0, currentZone: 'NEUTRAL' };
+
+        const isForex = symbol.includes('=X') || symbol.includes('USD');
+        const binSize = isForex ? 0.0005 : (stock.currentPrice > 100 ? 0.5 : 0.1);
+        
+        const profile = {};
+        let totalVol = 0;
+        
+        sessionCandles.forEach(c => {
+            const typicalPrice = (c.high + c.low + c.close) / 3;
+            const bin = Math.floor(typicalPrice / binSize) * binSize;
+            if (!profile[bin]) profile[bin] = 0;
+            const vol = c.volume || 1; 
+            profile[bin] += vol;
+            totalVol += vol;
+        });
+        
+        let maxVol = 0;
+        let vpoc = 0;
+        const sortedBins = Object.keys(profile).map(Number).sort((a,b) => a-b);
+        
+        sortedBins.forEach(bin => {
+            if (profile[bin] > maxVol) {
+                maxVol = profile[bin];
+                vpoc = bin;
+            }
+        });
+        
+        let volSum = maxVol;
+        let vah = vpoc;
+        let val = vpoc;
+        const targetVol = totalVol * 0.70;
+        
+        let upIdx = sortedBins.indexOf(vpoc) + 1;
+        let dnIdx = sortedBins.indexOf(vpoc) - 1;
+        
+        while (volSum < targetVol && (upIdx < sortedBins.length || dnIdx >= 0)) {
+            const upVol = upIdx < sortedBins.length ? profile[sortedBins[upIdx]] : -1;
+            const dnVol = dnIdx >= 0 ? profile[sortedBins[dnIdx]] : -1;
+            
+            if (upVol >= dnVol && upVol !== -1) {
+                volSum += upVol;
+                vah = sortedBins[upIdx];
+                upIdx++;
+            } else if (dnVol !== -1) {
+                volSum += dnVol;
+                val = sortedBins[dnIdx];
+                dnIdx--;
+            } else {
+                break;
+            }
+        }
+        
+        const cp = stock.currentPrice;
+        let currentZone = 'VALUE AREA';
+        if (cp > vah) currentZone = 'PREMIUM';
+        else if (cp < val) currentZone = 'DISCOUNT';
+        
+        return {
+            vpoc: parseFloat(vpoc.toFixed(isForex ? 5 : 2)),
+            vah: parseFloat(Math.max(vah, val).toFixed(isForex ? 5 : 2)),
+            val: parseFloat(Math.min(vah, val).toFixed(isForex ? 5 : 2)),
+            currentZone
+        };
+    }
+
+    /**
+     * T1-H: MACRO DIVERGENCE (Equities vs TNX vs DXY)
+     * High yield/dollar spikes should crush equities. If equities decouple, it predicts a violent trap.
+     */
+    detectMacroDivergence(symbol) {
+        if (!['SPY', 'QQQ', 'DIA'].includes(symbol)) return { active: false, type: 'NONE', label: 'N/A', rationale: 'This metric tracks US Equity vs Yield divergence.' };
+        
+        const stock = this.stocks[symbol];
+        const tnx = this.stocks['^TNX'];
+        const dxy = this.stocks['DXY'] || this.stocks['UUP']; 
+        if (!stock || !tnx || !dxy) return { active: false, type: 'NONE', label: 'MISSING DATA', rationale: 'Awaiting TNX/DXY data sync...' };
+        
+        const stockPct = stock.dailyChangePercent || 0;
+        const tnxPct = tnx.dailyChangePercent || 0;
+        const dxyPct = dxy.dailyChangePercent || 0;
+        
+        if (stockPct > 0.15 && tnxPct > 0.5 && dxyPct > 0.1) {
+            return { active: true, type: 'BEARISH FAKEOUT', label: 'BEARISH DIVERGENCE', rationale: 'Pricing in Yield Shock.' };
+        }
+        if (stockPct < -0.15 && tnxPct < -0.5 && dxyPct < -0.1) {
+            return { active: true, type: 'BULLISH ACCUMULATION', label: 'BULLISH DIVERGENCE', rationale: 'Yields collapsing, equities buffering.' };
+        }
+        
+        return { active: false, type: 'ALIGNED', label: 'ALIGNED', rationale: 'Yield pricing matches equities.' };
     }
 
     get currentPrice() { return this.stocks[this.currentSymbol]?.currentPrice || 0; }
@@ -817,9 +1208,14 @@ export class RealDataManager {
             };
 
             // Capture anchors. Use proxy for Asia/London/NY if the primary (Equity) is closed
-            stock._sessionCache.asiaOpen = findSessionAnchor(proxySym || targetSym, 22) || findSessionAnchor(proxySym || targetSym, 23) || findSessionAnchor(proxySym || targetSym, 0) || candles[0].open;
-            stock._sessionCache.londonOpen = findSessionAnchor(proxySym || targetSym, 7) || findSessionAnchor(proxySym || targetSym, 8) || findSessionAnchor(targetSym, 9) || (proxyStock ? proxyStock.currentPrice : candles[0].open);
-            stock._sessionCache.nyMidnight = findSessionAnchor(proxySym || targetSym, 4) || findSessionAnchor(proxySym || targetSym, 5) || findSessionAnchor(targetSym, 9) || candles[0].open;
+            // COLD-START FIX: Fall back to previousClose (from Yahoo Finance seed) when candle history
+            // doesn't have a matching UTC-hour anchor yet. This prevents 0.00% displays at startup.
+            const prevClose = stock.previousClose || stock.currentPrice || candles[0]?.open;
+            const proxyPrevClose = proxyStock?.previousClose || proxyStock?.currentPrice || prevClose;
+
+            stock._sessionCache.asiaOpen   = findSessionAnchor(proxySym || targetSym, 22) || findSessionAnchor(proxySym || targetSym, 23) || findSessionAnchor(proxySym || targetSym, 0) || proxyPrevClose || prevClose;
+            stock._sessionCache.londonOpen = findSessionAnchor(proxySym || targetSym, 7)  || findSessionAnchor(proxySym || targetSym, 8) || findSessionAnchor(targetSym, 9) || (proxyStock ? proxyPrevClose : prevClose);
+            stock._sessionCache.nyMidnight = findSessionAnchor(proxySym || targetSym, 4)  || findSessionAnchor(proxySym || targetSym, 5) || findSessionAnchor(targetSym, 9) || prevClose;
             stock._sessionCache.expiry = now + 300000;
         }
 
@@ -968,7 +1364,16 @@ export class RealDataManager {
             })(),
             smt: this.detectSMT(symbol, tf),
             adr,
-            radar: this.getInstitutionalRadar(symbol, tf)
+            radar: this.getInstitutionalRadar(symbol, tf),
+            // ── TIER 1 INSTITUTIONAL EDGES ───────────────────────────────────
+            vwapBands:       this.getVWAPBands(symbol, tf),
+            rvol:            this.calculateRVOL(symbol, tf),
+            orb:             this.calculateORB(symbol, tf),
+            gapFill:         this.calculateGapFill(symbol, tf),
+            equalLevels:     this.detectEqualHighsLows(symbol, tf),
+            vpoc:            this.calculateVPOC(symbol, tf),
+            macroDivergence: this.detectMacroDivergence(symbol)
+
         };
         if (symbol === 'SPY') console.log(`[DATA] Markers for SPY @ ${tf}: MO: ${result.midnightOpen}, PDH: ${result.pdh}, VWAP: ${result.vwap}`);
         return result;

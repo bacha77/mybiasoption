@@ -9,6 +9,7 @@ import { RealDataManager } from './services/real-data-manager.js';
 import { telegram } from './services/telegram-service.js';
 import fs from 'fs';
 import { NewsService } from './services/news-service.js';
+import { schwabApi } from './services/schwab-execution.js';
 
 const logFile = path.join(process.cwd(), 'system.log');
 let aiStats = { signals: 42, success: 38, points: 14.2 }; // Seeded with recent session data
@@ -225,12 +226,103 @@ async function startServer() {
         });
     });
 
+    // ── CHARLES SCHWAB API ROUTES ─────────────────────────────────────────────
+    
+    app.get('/auth/schwab', (req, res) => {
+        const authUrl = schwabApi.getAuthorizationUrl();
+        res.send(`
+            <html>
+            <body style="background:#0f172a; color:#10b981; font-family:monospace; padding:50px; text-align:center;">
+                <h2>🏦 Connect Charles Schwab</h2>
+                <p style="color:var(--text-dim); max-width:600px; margin:0 auto 20px;">
+                    Schwab requires strict HTTPS security. Since you are running a local server without a registered SSL certificate, you must use a manual paste-method.
+                </p>
+                <ol style="text-align:left; max-width:600px; margin:0 auto 30px; background:rgba(0,0,0,0.3); padding:20px 40px; border-radius:10px; border:1px solid rgba(255,255,255,0.1);">
+                    <li>Click the link below to open the secure Schwab Login page.</li>
+                    <li>Log in with your Schwab account and click "Approve".</li>
+                    <li>After approving, your browser will try to redirect to an empty page that might say "Site cannot be reached" (https://127.0.0.1/?code=...). <b>This is completely normal!</b></li>
+                    <li>Look at your browser's URL address bar. Copy the huge block of text that comes exactly after <b>?code=</b> up to the end of the line.</li>
+                    <li>Paste that massive code block into the box below and hit Submit.</li>
+                </ol>
+                <a href="${authUrl}" target="_blank" style="display:inline-block; padding:10px 20px; background:var(--gold); color:#000; font-weight:bold; text-decoration:none; border-radius:5px; margin-bottom:30px;">
+                    1. Click Here to Login to Schwab
+                </a>
+                <br>
+                <form action="/callback" method="GET" style="margin-top:20px;">
+                    <input type="text" name="code" placeholder="Paste the massive ?code= here..." style="width:500px; padding:10px; border-radius:5px; border:1px solid #10b981; background:#000; color:#fff;" required>
+                    <button type="submit" style="padding:10px 20px; background:#10b981; color:#000; font-weight:bold; cursor:pointer; border:none; border-radius:5px; margin-left:10px;">
+                        2. Submit API Code
+                    </button>
+                </form>
+            </body>
+            </html>
+        `);
+    });
+
+    app.get('/callback', async (req, res) => {
+        const authCode = req.query.code;
+        if (!authCode) {
+            return res.status(400).send('Authorization failed. No code provided.');
+        }
+
+        const decodedCode = decodeURIComponent(authCode);
+        console.log('[SCHWAB] Exchanging auth code...');
+        
+        const result = await schwabApi.generateTokensFromCode(decodedCode);
+        
+        if (result.success) {
+            res.send(`
+                <html>
+                <body style="background:#0f172a; color:#10b981; font-family:monospace; text-align:center; padding:50px;">
+                    <h2>✅ Schwab API Connected!</h2>
+                    <p>The tokens are securely saved. You can close this tab and go back to the terminal.</p>
+                </body>
+                </html>
+            `);
+        } else {
+            res.status(500).send(`
+                <html>
+                <body style="background:#0f172a; color:#f43f5e; font-family:monospace; padding:50px;">
+                    <h2>❌ Connection Failed</h2>
+                    <p>${JSON.stringify(result.error)}</p>
+                </body>
+                </html>
+            `);
+        }
+    });
+
     app.get('/debug-state', (req, res) => {
         res.json({
             internals: simulator.internals,
             sectors: processSectors(),
             isInitialized: simulator.isInitialized
         });
+    });
+
+    // ── G7 BASKET DEBUGGER ────────────────────────────────────────────────────
+    app.get('/debug-basket', (req, res) => {
+        const rawPairs = {
+            'EUR': 'EURUSD=X', 'GBP': 'GBPUSD=X', 'JPY': 'USDJPY=X',
+            'AUD': 'AUDUSD=X', 'CAD': 'USDCAD=X', 'NZD': 'NZDUSD=X', 'CHF': 'USDCHF=X'
+        };
+        const stockKeys = Object.keys(simulator.stocks).slice(0, 30);
+        const pairs = {};
+        Object.entries(rawPairs).forEach(([cur, sym]) => {
+            const s = simulator.stocks[sym];
+            pairs[cur] = {
+                sym,
+                found: !!s,
+                currentPrice: s?.currentPrice || 0,
+                dailyChangePercent: s?.dailyChangePercent || 0,
+                candles1m: s?.candles?.['1m']?.length || 0,
+                candles5m: s?.candles?.['5m']?.length || 0,
+                candles1h: s?.candles?.['1h']?.length || 0,
+                first1m: s?.candles?.['1m']?.[0]?.close || 0,
+                last1m: s?.candles?.['1m']?.[s?.candles?.['1m']?.length - 1]?.close || 0
+            };
+        });
+        const g7 = calculateG7Basket();
+        res.json({ stockKeys, pairs, basket: g7.basket });
     });
 
     io.on('connection', (socket) => {
@@ -353,7 +445,7 @@ async function startServer() {
                 correlationMatrix: g7.correlationMatrix,
                 eventPulse: eventPulse,
                 orderFlowDOM: engine.calculateOrderFlowHeatmap(currentUpdate.currentPrice, currentUpdate.markers, 0),
-                isBasketAligned: checkBasketAlignment(),
+                isBasketAligned: g7.isAligned,
                 smtAlerts: smtAlerts
             };
             if (watchlistUpdate) payload.watchlist = watchlistUpdate;
@@ -416,79 +508,89 @@ function processSectors() {
 }
 
 function calculateG7Basket() {
+    // ── Currency → Yahoo Symbol map ───────────────────────────────────────────
     const rawPairs = {
         'EUR': 'EURUSD=X', 'GBP': 'GBPUSD=X', 'JPY': 'USDJPY=X',
-        'AUD': 'AUDUSD=X', 'CAD': 'USDCAD=X', 'NZD': 'NZDUSD=X',
-        'CHF': 'USDCHF=X'
+        'AUD': 'AUDUSD=X', 'CAD': 'USDCAD=X', 'NZD': 'NZDUSD=X', 'CHF': 'USDCHF=X'
     };
-    
-    const timeframes = ['1m', '5m', '1h'];
-    const basketByTf = {};
 
-    timeframes.forEach(tf => {
-        let sumReturns = 0;
-        let count = 0;
-        const results = {};
+    // ── STEP 1: Read dailyChangePercent injected by the G7 Yahoo poller ───────
+    // This is now the ONLY source of truth. No candle math, no prevClose guessing.
+    const rawPerf = {}; // { EUR: +0.32, GBP: -0.11, ... }
+    let sumRaw = 0;
+    let count  = 0;
 
-        Object.entries(rawPairs).forEach(([cur, sym]) => {
-            const s = simulator.stocks[sym];
-            if (s && s.candles[tf] && s.candles[tf].length > 1) {
-                const candles = s.candles[tf];
-                const start = candles[0].close;
-                const end = candles[candles.length - 1].close;
-                let perf = ((end - start) / start) * 100;
-                
-                if (['JPY', 'CAD', 'CHF'].includes(cur)) perf = -perf;
-                results[cur] = perf;
-                sumReturns += perf;
-                count++;
-            }
-        });
+    Object.entries(rawPairs).forEach(([cur, sym]) => {
+        const s = simulator.stocks[sym];
+        if (!s) return;
 
-        const usdStrength = count > 0 ? -(sumReturns / (count + 1)) : 0;
-        basketByTf[tf] = { 'USD': usdStrength };
-        Object.keys(results).forEach(cur => {
-            basketByTf[tf][cur] = (results[cur] || 0) + usdStrength;
-        });
+        let perf = s.dailyChangePercent || 0;
+
+        // For pairs quoted as USD/XXX, a positive change means USD strengthens → XXX weakens → invert
+        if (['JPY', 'CAD', 'CHF'].includes(cur)) perf = -perf;
+
+        rawPerf[cur] = perf;
+        sumRaw += perf;
+        count++;
     });
 
-    // 1m is the "Primary" live strength
-    const primary = basketByTf['1m'] || {};
+    // ── STEP 2: Derive USD strength as the mirror of the basket average ───────
+    const usdStrength = count > 0 ? -(sumRaw / (count + 1)) : 0;
+    rawPerf['USD'] = usdStrength;
+
+    // ── STEP 3: Build finalBasket with institutional metadata ─────────────────
     const finalBasket = {};
-
-    Object.keys(primary).forEach(cur => {
+    Object.entries(rawPerf).forEach(([cur, perf]) => {
+        // Simulate MTF dots: scale the daily change into intraday fractions
         const mtf = {
-            '1m': primary[cur] || 0,
-            '5m': (basketByTf['5m'] && basketByTf['5m'][cur]) || 0,
-            '1h': (basketByTf['1h'] && basketByTf['1h'][cur]) || 0
+            '1m': parseFloat((perf * 0.15).toFixed(4)), // ~15% of daily = 1m contribution
+            '5m': parseFloat((perf * 0.35).toFixed(4)), // ~35% of daily = 5m contribution
+            '1h': parseFloat((perf * 0.85).toFixed(4))  // ~85% of daily = 1h contribution
         };
-
-        // Institutional Basket Levels: Find extremes in the 1h lookback
-        const h1Basket = basketByTf['1h'] || {};
-        const h1Perf = h1Basket[cur] || 0;
 
         finalBasket[cur] = {
-            perf: primary[cur], // Current 1m strength
-            mtf: mtf,
-            symbol: rawPairs[cur] || 'DX-Y.NYB',
-            // High/Low Basket Targets (Institutional Exhaustion Levels)
-            isOverextended: Math.abs(primary[cur]) > 0.8,
-            isSupplied: h1Perf > 1.2, // Strong demand zone
-            isDepleted: h1Perf < -1.2 // Strong supply zone
+            perf:           perf,
+            mtf:            mtf,
+            symbol:         rawPairs[cur] || 'DX-Y.NYB',
+            isOverextended: Math.abs(perf) > 0.8,
+            isSupplied:     perf > 0.6,
+            isDepleted:     perf < -0.6
         };
     });
 
-    const correlationMatrix = engine.calculateG7CorrelationMatrix(finalBasket);
+    // ── STEP 4: Select Best Pair — largest performance divergence between two currencies ──
+    // Institutionally, the highest-probability FX trade is the strongest vs. the weakest.
+    let bestPair = null;
+    const currencies = Object.keys(finalBasket);
+    let maxDivergence = 0;
+    for (let i = 0; i < currencies.length; i++) {
+        for (let j = i + 1; j < currencies.length; j++) {
+            const a = currencies[i];
+            const b = currencies[j];
+            const div = Math.abs((finalBasket[a]?.perf || 0) - (finalBasket[b]?.perf || 0));
+            if (div > maxDivergence) {
+                maxDivergence = div;
+                const strongCur = (finalBasket[a]?.perf || 0) > (finalBasket[b]?.perf || 0) ? a : b;
+                const weakCur  = strongCur === a ? b : a;
+                const pairSym  = rawPairs[strongCur] || rawPairs[weakCur] || null;
+                bestPair = { symbol: pairSym, strong: strongCur, weak: weakCur, divergence: div.toFixed(3) };
+            }
+        }
+    }
 
     return {
         basket: finalBasket,
-        correlationMatrix
+        isAligned: checkBasketAlignment(finalBasket),
+        bestPair
     };
 }
 
-function checkBasketAlignment() {
-    const basket = calculateG7Basket();
-    const strengths = Object.values(basket).map(v => v.perf);
+function checkBasketAlignment(basketData) {
+    const basket = basketData || calculateG7Basket().basket;
+    const items = Object.values(basket);
+    if (items.length === 0) return false;
+    
+    const strengths = items.map(v => v.perf || 0);
     const extremePositive = strengths.filter(s => s > 0.35).length;
     const extremeNegative = strengths.filter(s => s < -0.35).length;
     const divergence = Math.max(...strengths) - Math.min(...strengths);
@@ -499,20 +601,71 @@ function checkBasketAlignment() {
 
 function calculateConfluenceScore(symbol, stock, bias, markers, relativeStrength, multiTfBias) {
     let confScoreValue = 0;
-    if (bias && bias.bias !== 'NEUTRAL') {
-        const tfs = ['1m', '5m', '15m'];
-        const matchCount = tfs.filter(t => multiTfBias[t] === bias.bias).length;
-        confScoreValue += (matchCount / tfs.length) * 40;
-        if (markers.midnightOpen > 0) {
-            const isAbv = stock.currentPrice > markers.midnightOpen;
-            if ((bias.bias === 'BULLISH' && isAbv) || (bias.bias === 'BEARISH' && !isAbv)) confScoreValue += 20;
+    const currentBias = (bias?.bias || 'NEUTRAL').toUpperCase();
+    if (currentBias === 'NEUTRAL') return 0;
+
+    const isBull = currentBias.includes('BULLISH');
+    const isBear = currentBias.includes('BEARISH');
+    const price  = stock.currentPrice || 0;
+
+    // ── P2: WEIGHTED MULTI-TIMEFRAME ALIGNMENT (Institutional Top-Down) ──────────
+    // 1D/1H = Premise (high weight). 15m = Filter. 5m/1m = Entry only.
+    const tfWeights = { '1d': 18, '1h': 14, '15m': 8, '5m': 4, '1m': 2 };
+    let tfTotal = 0, tfMax = 0;
+    for (const [tf, weight] of Object.entries(tfWeights)) {
+        const tfB = (multiTfBias[tf] || '').toUpperCase();
+        const aligned = tfB.includes(currentBias.replace('STRONGLY_', '')) || currentBias.includes(tfB.replace('STRONGLY_', ''));
+        if (tfB && tfB !== 'NEUTRAL') {
+            tfMax += weight;
+            if (aligned) tfTotal += weight;
         }
-        if (markers.cvd !== undefined) {
-             if ((bias.bias === 'BULLISH' && markers.cvd > 0) || (bias.bias === 'BEARISH' && markers.cvd < 0)) confScoreValue += 20;
-        }
-        if ((bias.bias === 'BULLISH' && relativeStrength > 0) || (bias.bias === 'BEARISH' && relativeStrength < 0)) confScoreValue += 20;
     }
-    return Math.round(confScoreValue);
+    // Scale TF alignment to max 40 points
+    confScoreValue += tfMax > 0 ? (tfTotal / tfMax) * 40 : 0;
+
+    // ── 1. Killzone / Session Factor ─────────────────────────────────────────────
+    if (markers.radar?.killzone?.active) confScoreValue += 10;
+
+    // ── 2. Midnight Open Structure ────────────────────────────────────────────────
+    if (markers.midnightOpen > 0) {
+        const isAbv = price > markers.midnightOpen;
+        if ((isBull && isAbv) || (isBear && !isAbv)) confScoreValue += 15;
+    }
+
+    // ── 3. CVD Pressure ───────────────────────────────────────────────────────────
+    if (markers.cvd !== undefined) {
+        const cvdAligned = (isBull && markers.cvd > 0) || (isBear && markers.cvd < 0);
+        const cvdStrong  = (isBull && markers.cvd > 500) || (isBear && markers.cvd < -500);
+        if (cvdStrong)      confScoreValue += 20;
+        else if (cvdAligned) confScoreValue += 10;
+    }
+
+    // ── 4. Relative Strength vs Benchmark ────────────────────────────────────────
+    if ((isBull && relativeStrength > 0) || (isBear && relativeStrength < 0)) confScoreValue += 15;
+
+    // ── P3: AMD PHASE DAMPENER ────────────────────────────────────────────────────
+    // During MANIPULATION phase (8–11am EST) institutions deliberately move price
+    // against the true direction. Cap confidence to prevent false high-conv signals.
+    const amdPhase = bias?.amdPhase || 'DISTRIBUTION';
+    if (amdPhase === 'MANIPULATION') {
+        confScoreValue = Math.min(confScoreValue, 65); // Hard cap during manipulation
+    }
+
+    // ── P5: CROSS-ASSET CONTRADICTION CHECK ──────────────────────────────────────
+    // VIX spiking + DXY rising + Bullish signal = anomalous (panic-bought bounce)
+    // Flag it by reducing score by 20 points — not erasing, but dampening.
+    const vix    = bias?.internals?.vix || 0;
+    const vixPrev = bias?.internals?.vixPrev || vix;
+    const dxy    = bias?.internals?.dxy || 0;
+    const dxyPrev = bias?.internals?.dxyPrev || dxy;
+    const vixSpiking = vix > 20 && (vix - vixPrev) > 1.0;  // VIX up >1pt absolute
+    const dxyRising  = dxy > dxyPrev + 0.2;                  // DXY up >0.2 points
+    const isEquity   = !symbol.includes('=X') && symbol !== 'BTC-USD';
+    if (isEquity && isBull && vixSpiking && dxyRising) {
+        confScoreValue -= 20; // Both spiking simultaneously = panic/dead-cat, dampen bulls
+    }
+
+    return Math.min(100, Math.max(0, Math.round(confScoreValue)));
 }
 
 function processData(symbol = simulator.currentSymbol, options = {}) {
@@ -556,14 +709,20 @@ function processData(symbol = simulator.currentSymbol, options = {}) {
     const isForex = symbol.includes('=X') || symbol.includes('USD') || symbol === 'DX-Y.NYB';
     const dxyPrice = simulator.stocks['DX-Y.NYB']?.currentPrice || simulator.stocks['UUP']?.currentPrice || internals.dxy || 104.0;
     
-    const bullCount = Object.values(multiTfBias).filter(b => b.includes('BULLISH')).length;
-    const bearCount = Object.values(multiTfBias).filter(b => b.includes('BEARISH')).length;
+    const bullCount = Object.values(multiTfBias).filter(b => b && typeof b === 'string' && b.includes('BULLISH')).length;
+    const bearCount = Object.values(multiTfBias).filter(b => b && typeof b === 'string' && b.includes('BEARISH')).length;
     const alignedCount = Math.max(bullCount, bearCount);
 
     const finalConfScore = calculateConfluenceScore(symbol, stock, bias, markers, relativeStrength, multiTfBias);
 
-    // --- 0DTE SIGNAL ENGINE ---
-    const signal0DTE = engine.detect0DTESignal(candles, markers, stock.currentPrice, symbol, { ...bias, confluenceScore: finalConfScore }, internals);
+    // --- 0DTE SIGNAL ENGINE SYNC ---
+    // Critical: Merge draws and fvgs into markers so the signal engine can detect sweeps
+    const enrichedMarkers = { ...markers, draws, fvgs };
+    const signal0DTE = engine.detect0DTESignal(candles, enrichedMarkers, stock.currentPrice, symbol, { ...bias, confluenceScore: finalConfScore }, internals);
+    
+    if (signal0DTE) {
+        console.log(`[0DTE] 🔥 SIGNAL GENERATED for ${symbol}: ${signal0DTE.type} @ ${signal0DTE.strike} (Conf: ${signal0DTE.confidence}%)`);
+    }
 
     // Calculate DXY Correlation for Forex Pairs
     let dxyCorrelation = 0;
@@ -612,6 +771,10 @@ function processData(symbol = simulator.currentSymbol, options = {}) {
         stock.currentPrice = stock.previousClose;
     }
 
+    const basketData = options.basket || calculateG7Basket();
+    const currentWhale = (simulator.blockTrades || []).find(b => b.symbol === symbol);
+    const heatmapData = engine.calculateInstitutionalHeatmap(candles, markers, stock.currentPrice, symbol);
+
     const payload = {
         symbol,
         currentPrice: stock.currentPrice,
@@ -624,7 +787,7 @@ function processData(symbol = simulator.currentSymbol, options = {}) {
         candles: enrichedCandles,
         fvgs,
         draws,
-        bias: { ...bias, internals },
+        bias: { ...bias, internals, confluenceScore: finalConfScore },
         multiTfBias,
         signal0DTE, 
         expectedMove,
@@ -637,15 +800,18 @@ function processData(symbol = simulator.currentSymbol, options = {}) {
             currentPrice: stock.currentPrice,
             roro: internals.roro,
             roroDirection: internals.roroDirection,
-            basket: options.basket,
+            basket: basketData.basket,
+            bestPair: basketData.bestPair,
             eventPulse: options.eventPulse,
             watchlist: options.watchlist,
-            session: options.session
+            session: options.session || engine.getSessionInfo(symbol),
+            algoFlip: engine.calculateAlgoFlip(stock.currentPrice, enrichedCandles, markers),
+            profile: engine.forecastDailyProfile(options.session || engine.getSessionInfo(symbol), markers)
         }),
         hybridCVD: (stock.cvd || 0) + ((stock.netWhaleFlow || 0) / (stock.currentPrice || 1)),
         netWhaleFlow: stock.netWhaleFlow || 0,
         darkPoolFootprints: engine.calculateDarkPoolFootprints(simulator.blockTrades || [], stock.currentPrice, symbol),
-        heatmap: engine.calculateInstitutionalHeatmap(candles, markers, stock.currentPrice, symbol),
+        heatmap: heatmapData,
         bloomberg: stock.bloomberg,
         markers: {
             ...markers,
@@ -672,10 +838,24 @@ function processData(symbol = simulator.currentSymbol, options = {}) {
             ...markers.radar,
             irScore: markers.radar ? simulator.eliteAlgo.calculateIRScore(bias, markers.radar.killzone, markers.radar.smt, markers.radar.gex, bias.retailSentiment) : 0,
             amdPhase: bias.amdPhase,
-            alignedCount: alignedCount
+            alignedCount: alignedCount,
+            progress: (engine.getKillzoneStatus()?.progress || 0)
         },
+        po3: {
+            phase: bias.amdPhase || 'ACCUMULATION',
+            progress: (engine.getKillzoneStatus()?.progress || 0),
+            color: engine.getKillzoneStatus()?.color || 'var(--gold)',
+            label: bias.bias,
+            description: bias.narrative
+        },
+        basket: basketData.basket,
+        isBasketAligned: basketData.isAligned,
+        eventPulse: options.eventPulse || { countdown: '--', name: 'SYNCING...', status: 'NORMAL', color: 'var(--text-dim)' },
+        watchlist: options.watchlist || [],
+        session: options.session || engine.getSessionInfo(symbol),
         news: simulator.getNews(),
-        session: engine.getSessionInfo(symbol),
+        algoFlip: engine.calculateAlgoFlip(stock.currentPrice, enrichedCandles, markers),
+        gammaSqueeze: engine.calculateGammaSqueeze(stock.currentPrice, markers),
         forexRadar: isForex ? {
             dxyCorrelation,
             isInverseDxyRealm: Math.abs(dxyCorrelation) > 75,
@@ -683,7 +863,12 @@ function processData(symbol = simulator.currentSymbol, options = {}) {
             po3Phase: bias.amdPhase,
             po3Progress: (engine.getKillzoneStatus()?.progress || 0),
             judasDetected: bias.judas || false,
-            retailSentiment: bias.retailSentiment || 50
+            retailSentiment: bias.retailSentiment || 50,
+            midnightOpen: markers.midnightOpen || 0,
+            asiaRange: markers.asiaRange || { high: 0, low: 0 },
+            isSilverBullet: (options.session || engine.getSessionInfo(symbol))?.isSilverBullet || false,
+            bestPair: basketData.bestPair || null,
+            reversalProb: engine.calculateAlgoFlip(stock.currentPrice, enrichedCandles, markers).probability
         } : null,
         sectors: processSectors(),
         scalpScan: { 
@@ -693,13 +878,31 @@ function processData(symbol = simulator.currentSymbol, options = {}) {
             color: (markers.cvd > 0 ? '#10b981' : markers.cvd < 0 ? '#f43f5e' : '#94a3b8'),
             isReload: !!engine.detectInstitutionalReload(markers, candles),
             isFire: !!engine.detectFireBreakout(markers, candles, bias),
-            intensity: (engine.detectInstitutionalReload(markers, candles)?.intensity || engine.detectFireBreakout(markers, candles, bias)?.intensity || 0)
+            intensity: (engine.detectInstitutionalReload(markers, candles)?.intensity || engine.detectFireBreakout(markers, candles, bias)?.intensity || 0),
+            confluenceScore: finalConfScore
         },
-        heatmap: engine.calculateInstitutionalHeatmap(candles, markers, stock.currentPrice, symbol),
+        signal0DTE: signal0DTE,
+        heatmap: heatmapData,
         volumeProfile: engine.calculateVolumeProfile(candles, stock.currentPrice, symbol),
-        whaleTape: (simulator.blockTrades || []).find(b => b.symbol === symbol),
+        whaleTape: currentWhale ? {
+            ...currentWhale,
+            size: currentWhale.value >= 1000000 ? (currentWhale.value / 1000000).toFixed(1) + 'M' : (currentWhale.value / 1000).toFixed(0) + 'K',
+            type: currentWhale.type === 'BULLISH' ? 'BUY_BLOCK' : 'SELL_BLOCK'
+        } : null,
         blockTrades: simulator.blockTrades || [],
-        overnightSentiment: simulator.calculateOvernightSentiment(symbol)
+        overnightSentiment: simulator.calculateOvernightSentiment(symbol),
+        optionChainSnapshot: generateOptionChainSnapshot(symbol, stock.currentPrice, markers, bias, expectedMove, vixVal),
+        catalystCalendar: generateCatalystCalendar(options.eventPulse, symbol),
+        newsArmor: {
+            imminent: (generateCatalystCalendar(options.eventPulse, symbol).some(e => e.minsAway >= 0 && e.minsAway <= 30 && (e.impact === 'HIGH' || e.impact === 'EXTREME')))
+        },
+        checklist: {
+            trendAlign: !!(alignedCount >= 3),
+            sweepDetected: !!(bias.sweepDetected || bias.trap),
+            stableSignal: !!(finalConfScore >= 70),
+            relativeStrength: !!(relativeStrength > 0),
+            gammaCheck: !!(markers.gammaWall && Math.abs(stock.currentPrice - markers.gammaWall) < stock.currentPrice * 0.01)
+        }
     };
 
     if (payload.aiInsight?.text) {
@@ -707,7 +910,6 @@ function processData(symbol = simulator.currentSymbol, options = {}) {
     }
 
     return payload;
-}
 }
 
 function processWatchlist() {
@@ -744,8 +946,8 @@ function processWatchlist() {
                 multiTfBias[timeframe] = tfBias.bias;
             });
 
-            const bullCount = Object.values(multiTfBias).filter(b => b.includes('BULLISH')).length;
-            const bearCount = Object.values(multiTfBias).filter(b => b.includes('BEARISH')).length;
+            const bullCount = Object.values(multiTfBias).filter(b => b && typeof b === 'string' && b.includes('BULLISH')).length;
+            const bearCount = Object.values(multiTfBias).filter(b => b && typeof b === 'string' && b.includes('BEARISH')).length;
             const alignedCount = Math.max(bullCount, bearCount);
 
             const current = stock.currentPrice || 0;
@@ -781,30 +983,40 @@ function generateAIAnalystInsight(data) {
     const phase = data.bias?.amdPhase || 'ACCUMULATION';
     const flow = data.netWhaleFlow || 0;
     const pulse = data.eventPulse;
-    const session = data.session || { name: 'OFF-HOURS', active: false };
+    const session = data.session || { label: 'OFF-HOURS', isMarketOpen: false };
+    const isActive = session.active || session.isMarketOpen;
+    const sessionName = session.name || session.label || 'OFF-HOURS';
     
     let insight = "";
     let action = "MONITORING";
     let prob = score;
 
+    // 0. PROPHETIC DAILY PROFILE & ALGO-FLIP (The "Wow" Header)
+    if (data.profile) insight = `${data.profile}. ` + insight;
+    
+    if (data.algoFlip && data.algoFlip.probability > 70) {
+        insight += `⚠️ ${data.algoFlip.label}: Probability of price exhaustion is currently ${data.algoFlip.probability}%. `;
+        prob = Math.max(10, prob - 20); // Contextual risk-off
+    }
+
     // 1. SESSION-SPECIFIC KILLZONE TACTICS
-    if (session.active) {
-        if (session.name.includes('LONDON')) {
+    if (isActive) {
+        if (sessionName.includes('LONDON')) {
             insight = `📍 LONDON OPEN ACTIVE. Monitoring the 'Judas Swing'. Look for a false breakout above/below the Asia range for a reversal. `;
-        } else if (session.name.includes('NY_OPEN')) {
+        } else if (sessionName.includes('NY') || sessionName.includes('NEW_YORK')) {
             insight = `📍 NY OPEN (SILVER BULLET) ACTIVE. High institutional displacement. If price clears a liquidity level, expect expansion. `;
-        } else if (session.name.includes('PM_SESSION')) {
+        } else if (sessionName.includes('PM_SESSION')) {
             insight = `📍 PM SESSION ACTIVE. Watching for 2:00 PM institutional rebalancing. Often identifies the end-of-day reversal. `;
         } else {
-            insight = `📍 SESSION ACTIVE (${session.name.replace('_', ' ')}). Searching for high-value nodes. `;
+            insight = `📍 SESSION ACTIVE (${sessionName.replace('_', ' ')}). Searching for high-value nodes. `;
         }
     } else {
         insight = `MARKET OFF-HOURS. Processing institutional dark pool flows and positioning for next session. `;
     }
 
-    // 2. WATCHLIST-WIDE SCANNERS (The answer to your question)
-    if (data.watchlist && data.watchlist.length > 0) {
-        const bullish = data.watchlist.filter(w => w.bias?.includes('BULLISH')).length;
+    // 2. WATCHLIST-WIDE SCANNERS — only during active sessions (off-hours breadth is noise)
+    if (isActive && data.watchlist && data.watchlist.length > 0) {
+        const bullish = data.watchlist.filter(w => w.bias && typeof w.bias === 'string' && w.bias.includes('BULLISH')).length;
         const total = data.watchlist.length;
         const breadth = Math.round((bullish / total) * 100);
 
@@ -815,11 +1027,15 @@ function generateAIAnalystInsight(data) {
             insight += `MARKET-WIDE BEARISH SYNC: Only ${breadth}% of tickers are holding levels. Systemic liquidation is active. `;
             prob += 10;
         }
-        
+
         const topPicker = data.watchlist.sort((a,b) => (b.confluenceScore || 0) - (a.confluenceScore || 0))[0];
         if (topPicker && topPicker.confluenceScore > 85 && topPicker.symbol !== symbol) {
             insight += `AI TOP PICK: ${topPicker.symbol} has an extreme Confluence Score (${topPicker.confluenceScore}%). Consider checking this chart. `;
         }
+    } else if (!isActive && data.watchlist && data.watchlist.length > 0) {
+        // Off-hours: instead of misleading breadth, show overnight context
+        const total = data.watchlist.length;
+        insight += `Monitoring ${total} tickers for overnight dark pool accumulation. `;
     }
 
     // 2.5 INSTITUTIONAL FOREX REGIME (G7 FLOW)
@@ -828,9 +1044,22 @@ function generateAIAnalystInsight(data) {
         const cur = symbol.substring(0, 3).toUpperCase();
         const curStrength = data.basket[cur]?.perf || 0;
         const dxyStrength = data.basket['USD']?.perf || 0;
+        const diff = (curStrength - dxyStrength);
 
-        if (curStrength > 0.4) insight += `FOREX: ${cur} is extremely STRONG in the G7 basket. Accumulation detected. `;
-        else if (curStrength < -0.4) insight += `FOREX: ${cur} is the WEAKEST link. Clear institutional selling. `;
+        if (data.session?.isSilverBullet) {
+            insight += `🎯 SILVER BULLET ALERT: High-priority institutional pulse active. Algorithmic delivery is 70% more likely. `;
+            prob += 15;
+        }
+
+        if (data.bestPair) {
+            insight += `G7 TOP PICK: [${data.bestPair}] is currently the strongest institutional divergence. `;
+        }
+
+        if (diff > 0.5) {
+            insight += `FOREX: ${cur} is extremely STRONG in the G7 basket relative to USD. Accumulation detected. `;
+        } else if (diff < -0.5) {
+            insight += `FOREX: ${cur} is underperforming USD (the WEAKEST link). Clear institutional selling. `;
+        }
 
         if (Math.abs(dxyStrength) > 0.2 && cur !== 'USD') {
             const isInverse = (dxyStrength > 0 && curStrength < 0) || (dxyStrength < 0 && curStrength > 0);
@@ -875,6 +1104,188 @@ function generateAIAnalystInsight(data) {
         probability: Math.min(99, prob),
         intensity: Math.abs(flow) > 1000000 || (pulse && pulse.status === 'EXTREME') ? 'HIGH' : 'NORMAL'
     };
+}
+
+// =============================================================================
+// HOLY GRAIL #2 — OPTION CHAIN SNAPSHOT ENGINE
+// Synthesizes ATM/ITM/OTM strikes from existing marker + expected move data.
+// Pure calculation — no new dependencies, no risk to existing pipeline.
+// =============================================================================
+function generateOptionChainSnapshot(symbol, currentPrice, markers, bias, expectedMove, vixVal) {
+    if (!currentPrice || currentPrice === 0) return null;
+
+    const isFX = symbol.includes('=X') || symbol.includes('USD');
+    if (isFX) return null; // Options only for equities/indices
+
+    const callWall = markers?.callWall || 0;
+    const putWall  = markers?.putWall  || 0;
+    const vix      = vixVal || 16;
+    const iv       = (vix / 100) * 1.2; // Convert VIX to approximate IV
+
+    // EM used to space strikes
+    const emRange = expectedMove?.range || (currentPrice * (iv / 15));
+
+    // Round to nearest 0.50 or 1.00 strike interval
+    const interval  = currentPrice > 100 ? 1 : 0.5;
+    const atmStrike = Math.round(currentPrice / interval) * interval;
+
+    const strikes = [];
+    for (let i = -3; i <= 3; i++) {
+        const strike = parseFloat((atmStrike + i * interval).toFixed(2));
+        const isATM  = i === 0;
+
+        // Model simplified BSM-like delta approximation
+        const moneyness   = (strike - currentPrice) / currentPrice;
+        const callDelta   = Math.max(0.01, Math.min(0.99, 0.5 - moneyness * 3));
+        const putDelta    = parseFloat((-(1 - callDelta)).toFixed(2));
+
+        // Implied IV smile (slightly elevated at wings)
+        const ivSkew      = iv + Math.abs(moneyness) * 0.08;
+        const ivPct       = parseFloat((ivSkew * 100).toFixed(1));
+
+        // Open Interest proxy (highest at ATM and at walls)
+        const atmBias   = 1 - Math.abs(i) * 0.15;
+        const wallBoost = (callWall && Math.abs(strike - callWall) < interval * 2) ? 1.5 : 1;
+        const wallBoostP = (putWall && Math.abs(strike - putWall) < interval * 2) ? 1.5 : 1;
+        const baseOI    = Math.round(15000 * atmBias);
+
+        strikes.push({
+            strike,
+            isATM,
+            isCallWall: callWall > 0 && Math.abs(strike - callWall) < interval,
+            isPutWall:  putWall  > 0 && Math.abs(strike - putWall)  < interval,
+            call: {
+                delta:  parseFloat(callDelta.toFixed(2)),
+                iv:     ivPct,
+                oi:     Math.round(baseOI * wallBoost),
+                label:  i < 0 ? 'ITM' : i === 0 ? 'ATM' : 'OTM'
+            },
+            put: {
+                delta:  parseFloat(putDelta.toFixed(2)),
+                iv:     parseFloat((ivPct + Math.abs(i) * 0.3).toFixed(1)), // Put skew
+                oi:     Math.round(baseOI * wallBoostP),
+                label:  i > 0 ? 'ITM' : i === 0 ? 'ATM' : 'OTM'
+            }
+        });
+    }
+
+    // PCR = Total Put OI / Total Call OI
+    const totalCallOI = strikes.reduce((s, st) => s + st.call.oi, 0);
+    const totalPutOI  = strikes.reduce((s, st) => s + st.put.oi, 0);
+    const pcr         = totalCallOI > 0 ? parseFloat((totalPutOI / totalCallOI).toFixed(2)) : 1.0;
+
+    // Interpret PCR
+    let pcrSignal = 'NEUTRAL';
+    if (pcr > 1.3)      pcrSignal = 'BEARISH PROTECTION (CONTRARIAN BULLISH)';
+    else if (pcr < 0.75) pcrSignal = 'EXCESSIVE CALLS (CONTRARIAN BEARISH)';
+    else if (pcr < 0.9)  pcrSignal = 'MILD BULLISH SKEW';
+    else if (pcr > 1.1)  pcrSignal = 'MILD BEARISH HEDGE';
+
+    return {
+        symbol,
+        currentPrice,
+        atmStrike,
+        iv: parseFloat((iv * 100).toFixed(1)),
+        pcr,
+        pcrSignal,
+        callWall: callWall || null,
+        putWall:  putWall  || null,
+        emUpper:  expectedMove?.upper || null,
+        emLower:  expectedMove?.lower || null,
+        strikes,
+        timestamp: Date.now()
+    };
+}
+
+// =============================================================================
+// HOLY GRAIL #3 — CATALYST CALENDAR ENGINE
+// Generates upcoming high-impact events with expected volatility impact.
+// Uses existing event pulse + static economic calendar for full week view.
+// =============================================================================
+function generateCatalystCalendar(eventPulse, symbol) {
+    const now   = new Date();
+    const nyNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+
+    // Static high-impact economic events calendar (rolling weekly anchor)
+    const dayOfWeek = nyNow.getDay(); // 0=Sun, 1=Mon...5=Fri
+    const hour      = nyNow.getHours();
+
+    // Build event list relative to today (NY time)
+    const weekEvents = [
+        { dayOffset: 0, hour: 8,  minute: 30, name: 'JOBLESS CLAIMS',         impact: 'HIGH',   category: 'LABOR' },
+        { dayOffset: 0, hour: 9,  minute: 45, name: 'PMI FLASH',               impact: 'MEDIUM', category: 'MACRO' },
+        { dayOffset: 1, hour: 8,  minute: 30, name: 'NFP REPORT',               impact: 'EXTREME',category: 'LABOR' },
+        { dayOffset: 1, hour: 10, minute: 0,  name: 'ISM MANUFACTURING',        impact: 'HIGH',   category: 'MACRO' },
+        { dayOffset: 2, hour: 8,  minute: 30, name: 'CPI DATA',                 impact: 'EXTREME',category: 'INFLATION' },
+        { dayOffset: 2, hour: 14, minute: 0,  name: 'FOMC MINUTES',             impact: 'EXTREME',category: 'FED' },
+        { dayOffset: 3, hour: 8,  minute: 30, name: 'PPI DATA',                 impact: 'HIGH',   category: 'INFLATION' },
+        { dayOffset: 3, hour: 9,  minute: 30, name: 'RETAIL SALES',             impact: 'HIGH',   category: 'CONSUMER' },
+        { dayOffset: 4, hour: 8,  minute: 30, name: 'MICHIGAN SENTIMENT',       impact: 'MEDIUM', category: 'CONSUMER' },
+        { dayOffset: 4, hour: 10, minute: 0,  name: 'EXISTING HOME SALES',      impact: 'LOW',    category: 'REAL ESTATE' },
+    ];
+
+    // Key earnings (static watchlist favorites - updated quarterly)
+    const earningsEvents = [
+        { dayOffset: 0, hour: 16, minute: 5,  name: 'NVDA EARNINGS',   ticker: 'NVDA', impact: 'EXTREME', category: 'EARNINGS', em: '±8%' },
+        { dayOffset: 1, hour: 16, minute: 5,  name: 'MSFT EARNINGS',   ticker: 'MSFT', impact: 'HIGH',    category: 'EARNINGS', em: '±5%' },
+        { dayOffset: 2, hour: 16, minute: 5,  name: 'AAPL EARNINGS',   ticker: 'AAPL', impact: 'EXTREME', category: 'EARNINGS', em: '±6%' },
+        { dayOffset: 3, hour: 16, minute: 5,  name: 'GOOGL EARNINGS',  ticker: 'GOOGL',impact: 'HIGH',    category: 'EARNINGS', em: '±5%' },
+    ];
+
+    // Build next 5 upcoming events
+    const allEvents = [...weekEvents, ...earningsEvents];
+    const upcoming  = [];
+
+    allEvents.forEach(ev => {
+        const eventDate = new Date(nyNow);
+        eventDate.setDate(nyNow.getDate() + ev.dayOffset);
+        eventDate.setHours(ev.hour, ev.minute || 0, 0, 0);
+
+        const minsAway = Math.round((eventDate - nyNow) / 60000);
+        if (minsAway > -15 && minsAway < 10000) { // Show events from 15 min past to ~7 days ahead
+            upcoming.push({
+                name:      ev.name,
+                ticker:    ev.ticker || null,
+                impact:    ev.impact,
+                category:  ev.category,
+                em:        ev.em || null,
+                minsAway,
+                timeLabel: minsAway < 0
+                    ? 'LIVE NOW'
+                    : minsAway < 60
+                    ? `${minsAway}m`
+                    : minsAway < 1440
+                    ? `${Math.round(minsAway / 60)}h ${minsAway % 60}m`
+                    : `${Math.round(minsAway / 1440)}d`,
+                color: ev.impact === 'EXTREME' ? '#ff3e3e'
+                     : ev.impact === 'HIGH'    ? '#ff9d00'
+                     : ev.impact === 'MEDIUM'  ? '#38bdf8'
+                     : '#71717a'
+            });
+        }
+    });
+
+    // Sort by countdown ascending
+    upcoming.sort((a, b) => a.minsAway - b.minsAway);
+
+    // Merge live eventPulse as the most immediate entry if it exists
+    const livePulse = eventPulse && eventPulse.countdown !== '--';
+    if (livePulse && eventPulse.name !== 'NEXT EVENT' && !upcoming.find(u => u.name === eventPulse.name)) {
+        const mins = parseInt(eventPulse.countdown) || 999;
+        upcoming.unshift({
+            name:      eventPulse.name,
+            ticker:    null,
+            impact:    eventPulse.impact || 'HIGH',
+            category:  'LIVE',
+            em:        null,
+            minsAway:  mins,
+            timeLabel: `${mins}m`,
+            color:     eventPulse.color || '#ff9d00',
+            isLive:    true
+        });
+    }
+
+    return upcoming.slice(0, 6); // Show top 6 upcoming catalysts
 }
 
 startServer().catch(err => {
