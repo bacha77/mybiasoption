@@ -1,0 +1,298 @@
+/**
+ * B.I.A.S Terminal | Institutional Aesthetics & Layout Engine
+ * (C) 2026 - Advanced Institutional Signal Engine
+ * Version 4.0.0 - STABILIZED
+ */
+
+ :root {
+    /* Institutional Color Palette */
+    --bg: #050505;
+    --card-bg: rgba(14, 18, 27, 0.7);
+    --gold: #d4af37;
+    --gold-glow: rgba(212, 175, 55, 0.3);
+    --cyan: #00f2ff;
+    --accent: #3b82f6;
+    --bullish: #10b981;
+    --bearish: #f43f5e;
+    --text-main: #e2e8f0;
+    --text-dim: #94a3b8;
+    --text-bright: #ffffff;
+    --border: rgba(255, 255, 255, 0.08);
+    --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    
+    /* Layout Constants */
+    --header-height: 80px;
+    --sidebar-width: 380px; /* Increased to 380px for stability */
+    --glass: blur(12px) saturate(180%);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Outfit', sans-serif;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text-main);
+    overflow: hidden; /* App container handles scrolling */
+    height: 100vh;
+    font-size: 0.9rem;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+
+/* --- App Layout --- */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: 
+        radial-gradient(circle at 0% 0%, rgba(212, 175, 55, 0.03) 0%, transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(0, 242, 255, 0.03) 0%, transparent 50%);
+}
+
+/* --- Status Ribbon --- */
+.status-ribbon {
+    height: 28px;
+    background: #000;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 15px;
+    gap: 20px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    z-index: 100;
+}
+
+.status-item { display: flex; align-items: center; gap: 6px; color: var(--text-dim); }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; }
+.status-dot.green { background: var(--bullish); box-shadow: 0 0 8px var(--bullish); }
+.status-spacer { flex: 1; }
+.clock { font-family: 'JetBrains Mono', monospace; color: var(--text-bright); }
+
+/* --- Header --- */
+header {
+    height: var(--header-height);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: var(--glass);
+    z-index: 90;
+}
+
+.logo-main {
+    font-size: 1.8rem;
+    font-weight: 950;
+    letter-spacing: 5px;
+    color: var(--text-bright);
+}
+
+.logo-sub {
+    display: block;
+    font-size: 0.5rem;
+    letter-spacing: 3px;
+    color: var(--gold);
+    font-weight: 800;
+    margin-top: -5px;
+}
+
+.protocol-status-ribbon {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.03);
+    padding: 8px 15px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+}
+
+.p-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); animation: pulse-opacity 2s infinite; }
+.p-text { font-size: 0.7rem; font-weight: 900; letter-spacing: 1px; color: var(--gold); text-transform: uppercase; }
+
+/* --- Dashboard Grid --- */
+.dashboard-main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.main-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.sidebar {
+    width: var(--sidebar-width);
+    border-left: 1px solid var(--border);
+    background: rgba(0,0,0,0.2);
+    backdrop-filter: var(--glass);
+    overflow-y: auto !important; /* Force scroll for stability */
+    padding: 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+}
+
+/* --- Cards --- */
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover { border-color: rgba(255, 255, 255, 0.15); box-shadow: var(--card-shadow); }
+
+.card-header-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.card-title {
+    font-size: 0.75rem;
+    font-weight: 900;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+/* --- Watchlist UI --- */
+.watchlist-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.watchlist-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.watchlist-item:hover {
+    background: rgba(255,255,255,0.05);
+    border-color: var(--border);
+    transform: translateX(4px);
+}
+
+.watchlist-item .sym { font-weight: 900; font-size: 0.85rem; color: #fff; }
+.watchlist-item .price { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; text-align: right; }
+.watchlist-item .bias { font-size: 0.55rem; font-weight: 900; color: var(--gold); text-align: right; margin-top: 2px; }
+
+/* --- Loulou Cognitive --- */
+.loulou-card {
+    background: linear-gradient(135deg, rgba(8, 145, 178, 0.1) 0%, rgba(0,0,0,0) 100%);
+    border: 1px solid rgba(0, 242, 255, 0.2);
+    overflow: hidden;
+}
+
+.loulou-avatar {
+    width: 32px; height: 32px; background: var(--cyan); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #000; font-weight: 900; font-size: 1.1rem;
+    box-shadow: 0 0 15px rgba(0, 242, 255, 0.4);
+}
+
+.loulou-response-box {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 1rem 0;
+    min-height: 80px;
+    position: relative;
+}
+
+.loulou-text {
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-bright);
+}
+
+.loulou-btn {
+    background: rgba(0, 242, 255, 0.1);
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-size: 0.65rem;
+    font-weight: 900;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.loulou-btn:hover { background: var(--cyan); color: #000; box-shadow: 0 0 15px var(--cyan); }
+
+/* --- Indicators & Gauges --- */
+.bias-gauge-container {
+    padding: 1.5rem 0;
+    text-align: center;
+}
+
+.bias-large { font-size: 2.2rem; font-weight: 950; letter-spacing: -1px; margin-bottom: 5px; }
+.bias-conf-bar { height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+.bias-conf-fill { height: 100%; width: 50%; background: var(--gold); transition: all 1s ease; }
+
+/* --- Chart Overlays --- */
+.tf-selector { display: inline-flex; gap: 4px; margin-left: 15px; }
+.tf-btn {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    color: var(--text-dim); font-size: 0.65rem; font-weight: 800;
+    padding: 4px 10px; border-radius: 4px; cursor: pointer;
+}
+.tf-btn.active { color: var(--gold); border-color: var(--gold); background: rgba(212,175,55,0.1); }
+
+/* --- Animations --- */
+@keyframes pulse-opacity { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+@keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+
+.shimmer {
+    background: linear-gradient(90deg, #fff 25%, #d4af37 50%, #fff 75%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 6s infinite linear;
+}
+
+/* --- Utilities --- */
+.bullish-text { color: var(--bullish) !important; text-shadow: 0 0 10px rgba(16, 185, 129, 0.2); }
+.bearish-text { color: var(--bearish) !important; text-shadow: 0 0 10px rgba(244, 63, 94, 0.2); }
+.gold-text { color: var(--gold) !important; }
+.accent-text { color: var(--cyan) !important; }
+
+/* --- Responsive Stability --- */
+@media (max-width: 1400px) {
+    :root { --sidebar-width: 350px; }
+}
+
+@media (max-width: 1024px) {
+    .dashboard-main { flex-direction: column; overflow-y: auto; }
+    .sidebar { width: 100%; border-left: none; border-top: 1px solid var(--border); }
+    .main-content { overflow-y: visible; }
+}

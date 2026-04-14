@@ -1,0 +1,50 @@
+
+/* --- Pyth Confidence Indicator (Improvement 1) --- */
+.confidence-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(15, 23, 42, 0.6);
+    padding: 2px 10px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.c-label {
+    font-size: 0.5rem;
+    font-weight: 800;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+}
+
+.c-bar-wrap {
+    width: 60px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.c-bar {
+    height: 100%;
+    width: 100%;
+    background: var(--bullish);
+    transition: width 0.3s ease, background 0.3s ease;
+    box-shadow: 0 0 10px var(--bullish);
+}
+
+/* Discordance Heatwave Effect */
+.discordance-heatwave {
+    animation: heatwave 0.5s infinite alternate ease-in-out;
+}
+
+@keyframes heatwave {
+    from { color: var(--bullish); text-shadow: 0 0 5px var(--bullish); }
+    to { color: var(--bearish); text-shadow: 0 0 15px var(--bearish); }
+}
+
+.confidence-glow-red {
+    background: rgba(244, 63, 94, 0.1) !important;
+    border-color: var(--bearish) !important;
+    box-shadow: 0 0 15px rgba(244, 63, 94, 0.2);
+}

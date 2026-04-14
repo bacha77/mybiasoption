@@ -15,6 +15,54 @@ export class LiquidityEngine {
         return parseInt(LiquidityEngine.nyFormatter.format(new Date(timestamp)));
     }
 
+    /**
+     * Calculates the Central Bank Dealers Range (CBDR).
+     * Range: 14:00 - 20:00 EST (The previous day's institutional consolidation)
+     */
+    calculateCBDR(candles) {
+        if (!candles || candles.length < 50) return null;
+        
+        // --- 1. Find the 14:00 - 20:00 Segment ---
+        // institutional algorithms identify the 'dead zone' to define the next expansion
+        const targetStart = 14; 
+        const targetEnd   = 20;
+
+        const segment = candles.filter(c => {
+            const hr = this.getNYHour(c.timestamp);
+            return hr >= targetStart && hr < targetEnd;
+        });
+
+        if (segment.length === 0) return null;
+
+        const high = Math.max(...segment.map(c => c.high));
+        const low  = Math.min(...segment.map(c => c.low));
+        const range = high - low;
+
+        return {
+            high,
+            low,
+            range,
+            sd: {
+                one:   high + range,
+                two:   high + (range * 2),
+                three: high + (range * 3),
+                sell_one:   low - range,
+                sell_two:   low - (range * 2),
+                sell_three: low - (range * 3)
+            }
+        };
+    }
+
+    /**
+     * Converts a timestamp to the current hour in New York.
+     */
+    getNYHour(timestamp) {
+        const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date();
+        const nyTime = new Date(date.toLocaleString("en-US", { timeZone: "America/New_York" }));
+        return nyTime.getHours();
+    }
+
+
     constructor() {
         this.liquidityZones = [];
         this.signalState = {}; // Tracks { [key]: { action, count } }
@@ -555,14 +603,24 @@ export class LiquidityEngine {
         else if (totalScore >= 4) biasLabel = 'BULLISH';
         else if (totalScore <= -12) biasLabel = 'STRONG BEARISH';
         else if (totalScore <= -4) biasLabel = 'BEARISH';
+        
+        // --- 🧭 INSTITUTIONAL CVD ANCHOR (Conflicting Signal Guard) ---
+        // If the score is Bullish but CVD is heavily negative (Bearish), dampen the signal.
+        // This prevents the HUD from saying BULLISH when institutions are dumping.
+        const cvd = markers.cvd || 0;
+        if (biasLabel.includes('BULLISH') && cvd < -1500) {
+            biasLabel = 'NEUTRAL (BULLISH TRAP)';
+        } else if (biasLabel.includes('BEARISH') && cvd > 1500) {
+            biasLabel = 'NEUTRAL (BEARISH TRAP)';
+        }
 
         let confPoints = 0;
         const vwap = markers.vwap || 0;
         if (vwap > 0 && Math.abs(currentPrice - vwap) / vwap < 0.002) confPoints += 25;
-        if (Math.abs(markers.cvd || 0) > 1000) confPoints += 25;
+        if (Math.abs(cvd) > 1000) confPoints += 25;
         if (Math.abs(totalScore) >= 12) confPoints += 50;
 
-        const dxyAnchor = this.calculateDXYAnchorPulse(symbol, biasLabel, internals, totalScore);
+        const dxyAnchor = this.calculateDXYAnchorPulse(symbol, biasLabel, internals);
         
         return {
             bias: biasLabel,
@@ -587,8 +645,37 @@ export class LiquidityEngine {
             squeeze: this.detectSqueeze(candles),
             ote: this.calculateOTE(candles),
             cbdr: this.calculateCBDR(candles),
-            fvg: this.detectFVG(candles),
-            dxyAnchor: this.calculateDXYAnchorPulse(symbol, biasLabel, internals)
+            fvg: this.detectFVG(candles)
+        };
+    }
+
+    /**
+     * DXY Anchor Pulse (Global Dollar Correlation Filter)
+     * Detects if the current move is supported by the global dollar trend or a "Trap".
+     */
+    calculateDXYAnchorPulse(symbol, bias, internals) {
+        if (!internals || !internals.dxyChange) return { alignment: 'NEUTRAL', label: 'NO DXY PIVOT' };
+        
+        const isUSDQuote = symbol.includes('USD') && (symbol.indexOf('USD') > 0); // e.g. EURUSD
+        const dxyBullish = internals.dxyChange > 0;
+        
+        let alignment = 'STABLE';
+        if (isUSDQuote) {
+            // Correlation: EURUSD Up means DXY Down
+            if (bias.includes('BULLISH') && dxyBullish) alignment = 'CORRELATION_TRAP';
+            else if (bias.includes('BEARISH') && !dxyBullish) alignment = 'CORRELATION_TRAP';
+            else alignment = 'ALIGNED';
+        } else {
+            // e.g. DXY itself or USDJPY
+            if (bias.includes('BULLISH') && dxyBullish) alignment = 'ALIGNED';
+            else if (bias.includes('BEARISH') && !dxyBullish) alignment = 'ALIGNED';
+            else alignment = 'DECOUPLED';
+        }
+
+        return {
+            alignment,
+            dxyChange: internals.dxyChange.toFixed(3) + '%',
+            label: alignment === 'CORRELATION_TRAP' ? '⚠️ CORRELATION TRAP' : 'SYNCED WITH DOLLAR'
         };
     }
 
@@ -2238,4 +2325,9 @@ export class LiquidityEngine {
             return (Math.floor(price / step) * step).toFixed(2);
         }
     }
+    /**
+     * Calculates the Optimal Trade Entry (OTE) levels.
+     * Defined as 62%, 70.5%, and 79% Fibonacci retracements.
+     */
 }
+
