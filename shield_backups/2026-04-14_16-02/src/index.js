@@ -1133,43 +1133,59 @@ function calculateSectorSpider() {
 }
 
 function calculateG7Basket() {
+    // ── Currency → Yahoo Symbol map ───────────────────────────────────────────
     const rawPairs = {
         'EUR': 'EURUSD=X', 'GBP': 'GBPUSD=X', 'JPY': 'USDJPY=X',
         'AUD': 'AUDUSD=X', 'CAD': 'USDCAD=X', 'NZD': 'NZDUSD=X', 'CHF': 'USDCHF=X'
     };
 
-    const rawPerf = {};
+    // ── STEP 1: Read dailyChangePercent injected by the G7 Yahoo poller ───────
+    // This is now the ONLY source of truth. No candle math, no prevClose guessing.
+    const rawPerf = {}; // { EUR: +0.32, GBP: -0.11, ... }
     let sumRaw = 0;
     let count  = 0;
 
     Object.entries(rawPairs).forEach(([cur, sym]) => {
         const s = simulator.stocks[sym];
         if (!s) return;
+
         let perf = s.dailyChangePercent || 0;
+
+        // For pairs quoted as USD/XXX, a positive change means USD strengthens → XXX weakens → invert
         if (['JPY', 'CAD', 'CHF'].includes(cur)) perf = -perf;
+
         rawPerf[cur] = perf;
         sumRaw += perf;
         count++;
     });
 
+    // ── STEP 2: Derive Weighted Basket Strengths ─────────────────────────────
+    // To find the "True Strength" of each currency, we normalize them against 
+    // an equally weighted basket. The sum of all strengths must be zero.
     const basketAvg = count > 0 ? (sumRaw / (count + 1)) : 0;
     const finalPerf = {};
+    
+    // USD Strength is the mirror of the average
     finalPerf['USD'] = -basketAvg;
+    
+    // All other currencies are normalized: (Strength vs USD) - (Basket Average)
     Object.entries(rawPerf).forEach(([cur, perf]) => {
         finalPerf[cur] = perf - basketAvg;
     });
 
+    // ── STEP 3: Build finalBasket with institutional metadata ─────────────────
     const finalBasket = {};
     Object.entries(finalPerf).forEach(([cur, perf]) => {
+        // STEP 2B: Real-Time MTF Impulse (Actual Candle Velocity)
+        // Instead of scaling daily, we look at the specific candle return for 1m/5m/1h
         const stock = simulator.stocks[rawPairs[cur] || 'DX-Y.NYB'];
-        
-        // Multi-TF Impulse
         const getImpulse = (tf) => {
             const candles = stock?.candles?.[tf] || [];
             if (candles.length < 2) return 0;
             const last = candles[candles.length - 1];
             const prev = candles[candles.length - 2];
             let ret = ((last.close - prev.close) / prev.close) * 100;
+            // Invert for USD-base pairs to get currency-specific impulse
             if (['JPY', 'CAD', 'CHF'].includes(cur)) ret = -ret;
             return parseFloat(ret.toFixed(4));
         };
@@ -1180,21 +1196,18 @@ function calculateG7Basket() {
             '1h': getImpulse('1h')  
         };
 
-        // NEW: EXHAUSTION DETECTION (SD 2.2 Threshold)
-        const isExhausted = Math.abs(perf) > 0.85; // 0.85% relative move is high for G7
-
         finalBasket[cur] = {
-            val:            parseFloat(perf.toFixed(4)),
             perf:           parseFloat(perf.toFixed(4)),
             mtf:            mtf,
             symbol:         rawPairs[cur] || 'DX-Y.NYB',
-            exhausted:      isExhausted,
-            isOverextended: isExhausted,
+            isOverextended: Math.abs(perf) > 0.8,
             isSupplied:     perf > 0.6,
             isDepleted:     perf < -0.6
         };
     });
 
+    // ── STEP 4: Select Best Pair — largest performance divergence between two currencies ──
+    // Institutionally, the highest-probability FX trade is the strongest vs. the weakest.
     let bestPair = null;
     const currencies = Object.keys(finalBasket);
     let maxDivergence = 0;

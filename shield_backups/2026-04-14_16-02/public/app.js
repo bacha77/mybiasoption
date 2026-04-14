@@ -1023,12 +1023,6 @@ function updateInstitutionalRadar(r, score, fullData) {
         dxyBadge.style.color = r.dxySync ? 'var(--bullish)' : 'var(--bearish)';
     }
 
-    // Whale Sync
-    const whaleBadge = document.getElementById('tg-whale-sync');
-    if (whaleBadge) {
-        whaleBadge.style.display = r.whaleSync ? 'inline-block' : 'none';
-    }
-
     // Precision Meter
     const precBar = document.getElementById('confidence-bar');
     if (precBar) precBar.style.width = (score || 50) + '%';
@@ -1154,52 +1148,6 @@ function updateInstitutionalRadar(r, score, fullData) {
     const rFill = document.getElementById('retail-sentiment-fill');
     if (rFill) rFill.style.width = (r.retailSentiment || 50) + '%';
     setEl('retail-strategy-text', (r.retailSentiment > 65 ? 'CONTRARIAN BIAS: BEARISH' : (r.retailSentiment < 35 ? 'CONTRARIAN BIAS: BULLISH' : 'CONTRARIAN BIAS: NEUTRAL')));
-}
-
-// --- G7 Spider Matrix Upgrade ---
-function updateG7SpiderMatrix(basket) {
-    if (!basket) return;
-    Object.entries(basket).forEach(([cur, data]) => {
-        const node = document.querySelector(`.spider-node[data-cur="${cur}"]`);
-        if (!node) return;
-
-        // 1. Value & Bar
-        const valEl = node.querySelector('.val');
-        const fill = node.querySelector('.strength-bar-fill');
-        if (valEl) {
-            valEl.innerText = (data.val >= 0 ? '+' : '') + data.val.toFixed(2) + '%';
-            valEl.style.color = data.val > 0 ? 'var(--bullish)' : (data.val < 0 ? 'var(--bearish)' : 'var(--gold)');
-        }
-        if (fill) {
-            const pct = 50 + (data.val * 15); // Dynamic scaling for visualization
-            fill.style.width = Math.max(5, Math.min(95, pct)) + '%';
-            fill.style.background = data.val > 0 ? 'var(--bullish)' : (data.val < 0 ? 'var(--bearish)' : 'var(--gold)');
-        }
-
-        // 2. Multi-TF Dots
-        if (data.mtf) {
-            Object.entries(data.mtf).forEach(([tf, strength]) => {
-                const dot = node.querySelector(`.tf-dot[data-tf="${tf}"]`);
-                if (dot) {
-                    dot.style.background = strength > 0.01 ? 'var(--bullish)' : (strength < -0.01 ? 'var(--bearish)' : 'rgba(255,255,255,0.1)');
-                }
-            });
-        }
-
-        // 3. Exhaustion Badge
-        const badge = node.querySelector('.exhaustion-badge');
-        if (badge) {
-            if (data.exhausted) {
-                badge.style.display = 'block';
-                badge.innerText = 'EXHAUSTED';
-                badge.style.background = data.val > 0 ? 'var(--bearish)' : 'var(--bullish)'; 
-                node.style.borderColor = data.val > 0 ? 'var(--bearish)' : 'var(--bullish)';
-            } else {
-                badge.style.display = 'none';
-                node.style.borderColor = 'rgba(255,255,255,0.05)';
-            }
-        }
-    });
 }
 
 // --- Multi-Utilities ---

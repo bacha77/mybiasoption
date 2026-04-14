@@ -1566,33 +1566,31 @@ export class RealDataManager {
         const currentPrice = stock.currentPrice;
         const gex = this.eliteAlgo.calculateGEX(currentPrice, symbol, stock.optionsChain);
         
-        // 1. STANDARD CORRELATIVE SMT
+        // 1. STANDARD CORRELATIVE SMT (e.g., SPY vs QQQ)
         let smt = this.detectSMT(symbol, tf);
         
-        // 2. MASTER INVERSE SMT (DXY Sync)
+        // 2. MASTER INVERSE SMT (DXY Sync - The Highest Priority Signal)
         const dxy = this.stocks['DXY'] || this.stocks['DX-Y.NYB'];
         if (dxy && dxy.candles[tf] && dxy.currentPrice > 0) {
             const isFX = symbol.includes('=X') || symbol.includes('USD');
             const isEquity = ['SPY', 'QQQ', 'DIA'].includes(symbol);
+            
+            // Only compare against DXY if it's an asset that SHOULD move inversely
             if (isFX || isEquity) {
                 const inverseSmt = this.eliteAlgo.detectInverseSMT(
                     symbol, stock.currentPrice, stock.candles[tf],
                     dxy.currentPrice, dxy.candles[tf]
                 );
+                // Inverse SMT is the True Master; it overrides standard correlation
                 if (inverseSmt) smt = inverseSmt;
             }
         }
         
-        // 3. INSTITUTIONAL IMBALANCE
+        // 3. INSTITUTIONAL IMBALANCE (FVG & MSS)
         const fvg = this.eliteAlgo.detectLiquidityVoids(stock.candles[tf]);
         const mss = this.eliteAlgo.detectMSS(stock.candles[tf]);
         
-        // 4. --- 🛡️ CVD GATING (WHALE SYNC) ---
-        // We only allow high-conviction scores if CVD confirms the move.
-        const whaleSync = (stock.dailyChangePercent > 0 && stock.cvd > 0) || (stock.dailyChangePercent < 0 && stock.cvd < 0);
-        const cvdMultiplier = whaleSync ? 1.2 : 0.7;
-
-        // 5. FINAL SCORE (IR-SCORE)
+        // 4. FINAL INSTITUTIONAL REALITY SCORE (IR-SCORE)
         const irScore = this.eliteAlgo.calculateIRScore(
             { score: stock.dailyChangePercent, confidence: 70 }, 
             killzone,
@@ -1600,10 +1598,6 @@ export class RealDataManager {
             gex,
             50 
         );
-
-        if (irScore) {
-            irScore.score = Math.min(100, Math.round(irScore.score * cvdMultiplier));
-        }
 
         const mtf = {};
         this.timeframes.forEach(timeframe => {
@@ -1638,50 +1632,9 @@ export class RealDataManager {
             mtf: mtf,
             progress: killzone?.progress || 0,
             vwapAlign: (currentPrice > 0 && stock.markers?.vwap > 0) ? (currentPrice > stock.markers.vwap) : false,
-            dxySync: this.detectMacroDivergence(symbol).active === false,
-            whaleSync: whaleSync,
+            dxySync:   this.detectMacroDivergence(symbol).active === false, // Aligned = true
             retailSentiment: stock.institutionalSentiment?.sentiment || 50
         };
-    }
-
-    calculateG7Basket() {
-        const currencies = ['EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD'];
-        const basket = {};
-        
-        currencies.forEach(cur => {
-            const sym = cur === 'JPY' || cur === 'CHF' || cur === 'CAD' ? `USD${cur}=X` : `${cur}USD=X`;
-            const stock = this.stocks[sym];
-            if (!stock) return;
-
-            // Calculate Multi-TF Strength
-            const mtfStrength = {
-                '1m': this.getTfStrength(sym, '1m'),
-                '5m': this.getTfStrength(sym, '5m'),
-                '1h': this.getTfStrength(sym, '1h')
-            };
-
-            // Exhaustion Logic (SD 2.5)
-            const isExhausted = Math.abs(stock.dailyChangePercent) > 2.2; 
-            
-            basket[cur] = {
-                val: stock.dailyChangePercent,
-                strength: stock.dailyChangePercent,
-                mtf: mtfStrength,
-                exhausted: isExhausted,
-                status: isExhausted ? 'EXHAUSTED' : 'TRENDING'
-            };
-        });
-
-        return basket;
-    }
-
-    getTfStrength(symbol, tf) {
-        const candles = this.stocks[symbol]?.candles[tf] || [];
-        if (candles.length < 5) return 0;
-        const current = candles[candles.length - 1].close;
-        const prev = candles[candles.length - 5].close;
-        const pct = ((current - prev) / prev) * 100;
-        return pct;
     }
 
     generateHeatmapData(liquidityDraws) {
