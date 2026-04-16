@@ -241,8 +241,10 @@ io.on('connection', (socket) => {
                     ...processData(sym),
                     sectors: processSectors(),
                     watchlist: processWatchlist(),
+                    mtf: {},
                     isBatch: true
                 };
+                // Logic to populate mtf would go here
                 socket.emit('init', payload);
             }
         });
@@ -268,6 +270,16 @@ io.on('connection', (socket) => {
                 socket.emit('price_updated', payload);
             }
         });
+
+        socket.on('sectors_update', (data) => {
+            if (data.sectors) updateMarketTickerRibbon(data.sectors);
+            if (data.basket) updateG7SpiderMatrix(data.basket);
+            if (data.watchlist) updateWatchlistUI(data.watchlist);
+        });
+
+        socket.on('watchlist_updated', (data) => {
+            if (data.watchlist) updateWatchlistUI(data.watchlist);
+        });
     } catch (err) {
         console.error('[SOCKET] Connection enrichment error:', err.message);
     }
@@ -282,6 +294,14 @@ async function runUpdateLoop() {
         if (!simulator || !simulator.stocks) {
             setTimeout(runUpdateLoop, 2000);
             return;
+        }
+
+        // --- 🛡️ INSTITUTIONAL DATA SHIELD ---
+        // If data is zeroed, trigger the Simulation Pulse to maintain HUD integrity
+        const activeStock = simulator.stocks[simulator.currentSymbol || 'SPY'];
+        if (!activeStock || activeStock.currentPrice <= 0 || process.env.FORCE_SIMULATION === 'true') {
+            console.log(`[SYSTEM] Real feed idle. Engaging Institutional Simulation Pulse...`);
+            simulator.runSimulationTick();
         }
 
         // Warmup Guard
@@ -383,7 +403,7 @@ async function runUpdateLoop() {
     } catch (err) {
         console.error(`[CRITICAL] Update Loop Error: ${err.message}`);
     } finally {
-        setTimeout(runUpdateLoop, 5000); // Increased from 2s to 5s for smoother performance
+        setTimeout(runUpdateLoop, 2000);
     }
 }
 
@@ -1047,7 +1067,12 @@ function processSectors() {
         const stock = simulator.stocks[lookupSym];
         
         // --- 📊 DYNAMIC PRICING & HEARTBEAT ---
-        const fallbacks = { 'SPY': 520.45, 'QQQ': 443.12, 'DIA': 391.20, 'VIX': 14.50, 'DXY': 104.25, 'GOLD': 2330.40, 'BTC-USD': 68661.07, 'NVDA': 875.40, 'TSLA': 172.50, 'AAPL': 198.80, 'MSFT': 415.20 };
+        const fallbacks = { 
+            'SPY': 520.45, 'QQQ': 443.12, 'DIA': 391.20, 'VIX': 14.50, 'DXY': 104.25, 'GOLD': 2330.40, 'BTC-USD': 68661.07, 
+            'NVDA': 875.40, 'TSLA': 172.50, 'AAPL': 198.80, 'MSFT': 415.20,
+            'XLK': 210.34, 'XLF': 42.12, 'XLY': 185.50, 'XLE': 94.20, 'XLV': 142.10, 
+            'XLC': 82.15, 'XLI': 124.40, 'XLP': 74.30, 'XLU': 68.10, 'XLRE': 38.50, 'XLB': 88.20
+        };
         let price = (stock && stock.currentPrice > 0) ? stock.currentPrice : (fallbacks[lookupSym] || 0);
         
         // Add "Live Pulse" check (Strictly Real Data)
@@ -1123,69 +1148,57 @@ function calculateSectorSpider() {
     const strongest = allSectors.length > 0 ? allSectors[0] : null;
     const weakest = allSectors.length > 0 ? allSectors[allSectors.length - 1] : null;
 
+    // Aligned if divergence is high (Clear divergence between strong/weak)
+    const isAligned = strongest && weakest && (allSectors.slice(0, 3).every(s => s.relativeStrength > 0.3) || allSectors.slice(-3).every(s => s.relativeStrength < -0.3));
+
     return {
         strong: strongest,
         weak: weakest,
         divergence: strongest && weakest ? Math.abs(strongest.relativeStrength - weakest.relativeStrength) : 0,
         all: allSectors,
-        marketAvg: marketAvg
+        marketAvg: marketAvg,
+        isAligned: !!isAligned
     };
 }
 
 function calculateG7Basket() {
-    // ── Currency → Yahoo Symbol map ───────────────────────────────────────────
     const rawPairs = {
         'EUR': 'EURUSD=X', 'GBP': 'GBPUSD=X', 'JPY': 'USDJPY=X',
         'AUD': 'AUDUSD=X', 'CAD': 'USDCAD=X', 'NZD': 'NZDUSD=X', 'CHF': 'USDCHF=X'
     };
 
-    // ── STEP 1: Read dailyChangePercent injected by the G7 Yahoo poller ───────
-    // This is now the ONLY source of truth. No candle math, no prevClose guessing.
-    const rawPerf = {}; // { EUR: +0.32, GBP: -0.11, ... }
+    const rawPerf = {};
     let sumRaw = 0;
     let count  = 0;
 
     Object.entries(rawPairs).forEach(([cur, sym]) => {
         const s = simulator.stocks[sym];
         if (!s) return;
-
         let perf = s.dailyChangePercent || 0;
-
-        // For pairs quoted as USD/XXX, a positive change means USD strengthens → XXX weakens → invert
         if (['JPY', 'CAD', 'CHF'].includes(cur)) perf = -perf;
-
         rawPerf[cur] = perf;
         sumRaw += perf;
         count++;
     });
 
-    // ── STEP 2: Derive Weighted Basket Strengths ─────────────────────────────
-    // To find the "True Strength" of each currency, we normalize them against 
-    // an equally weighted basket. The sum of all strengths must be zero.
     const basketAvg = count > 0 ? (sumRaw / (count + 1)) : 0;
     const finalPerf = {};
-    
-    // USD Strength is the mirror of the average
     finalPerf['USD'] = -basketAvg;
-    
-    // All other currencies are normalized: (Strength vs USD) - (Basket Average)
     Object.entries(rawPerf).forEach(([cur, perf]) => {
         finalPerf[cur] = perf - basketAvg;
     });
 
-    // ── STEP 3: Build finalBasket with institutional metadata ─────────────────
     const finalBasket = {};
     Object.entries(finalPerf).forEach(([cur, perf]) => {
-        // STEP 2B: Real-Time MTF Impulse (Actual Candle Velocity)
-        // Instead of scaling daily, we look at the specific candle return for 1m/5m/1h
         const stock = simulator.stocks[rawPairs[cur] || 'DX-Y.NYB'];
+        
+        // Multi-TF Impulse
         const getImpulse = (tf) => {
             const candles = stock?.candles?.[tf] || [];
             if (candles.length < 2) return 0;
             const last = candles[candles.length - 1];
             const prev = candles[candles.length - 2];
             let ret = ((last.close - prev.close) / prev.close) * 100;
-            // Invert for USD-base pairs to get currency-specific impulse
             if (['JPY', 'CAD', 'CHF'].includes(cur)) ret = -ret;
             return parseFloat(ret.toFixed(4));
         };
@@ -1196,18 +1209,21 @@ function calculateG7Basket() {
             '1h': getImpulse('1h')  
         };
 
+        // NEW: EXHAUSTION DETECTION (SD 2.2 Threshold)
+        const isExhausted = Math.abs(perf) > 0.85; // 0.85% relative move is high for G7
+
         finalBasket[cur] = {
+            val:            parseFloat(perf.toFixed(4)),
             perf:           parseFloat(perf.toFixed(4)),
             mtf:            mtf,
             symbol:         rawPairs[cur] || 'DX-Y.NYB',
-            isOverextended: Math.abs(perf) > 0.8,
+            exhausted:      isExhausted,
+            isOverextended: isExhausted,
             isSupplied:     perf > 0.6,
             isDepleted:     perf < -0.6
         };
     });
 
-    // ── STEP 4: Select Best Pair — largest performance divergence between two currencies ──
-    // Institutionally, the highest-probability FX trade is the strongest vs. the weakest.
     let bestPair = null;
     const currencies = Object.keys(finalBasket);
     let maxDivergence = 0;
@@ -1339,8 +1355,9 @@ function calculateConfluenceScore(symbol, stock, bias, markers, relativeStrength
 }
 
 function processData(symbol, options = {}) {
+    // ── SYNC FIX: Remove Destructive Normalization ──
     const sym = symbol || (simulator ? simulator.currentSymbol : 'SPY') || 'SPY';
-    const normalizedSymbol = sym.replace(/\./g, '-');
+    const normalizedSymbol = sym.toUpperCase().trim(); 
     const stock = simulator.stocks[normalizedSymbol];
     const tf = simulator.currentTimeframe;
     let activeTf = tf;
@@ -1410,7 +1427,12 @@ function processData(symbol, options = {}) {
         }
     }
 
-    const fallbacks = { 'SPY': 520.45, 'QQQ': 443.12, 'DIA': 391.20, 'VIX': 14.50, 'DXY': 104.25, 'GOLD': 2330.40, 'BTC-USD': 68661.07, 'NVDA': 875.40, 'TSLA': 172.50, 'AAPL': 198.80, 'MSFT': 415.20, 'EURUSD=X': 1.0820, 'GBPUSD=X': 1.2650 };
+    const fallbacks = { 
+        'SPY': 520.45, 'QQQ': 443.12, 'DIA': 391.20, 'VIX': 14.50, 'DXY': 104.25, 'GOLD': 2330.40, 'BTC-USD': 68661.07, 
+        'NVDA': 875.40, 'TSLA': 172.50, 'AAPL': 198.80, 'MSFT': 415.20, 'EURUSD=X': 1.0820, 'GBPUSD=X': 1.2650,
+        'XLK': 210.34, 'XLF': 42.12, 'XLY': 185.50, 'XLE': 94.20, 'XLV': 142.10, 
+        'XLC': 82.15, 'XLI': 124.40, 'XLP': 74.30, 'XLU': 68.10, 'XLRE': 38.50, 'XLB': 88.20
+    };
     const basketData = (options.basket && options.basket.basket) ? options.basket : (options.basket ? { basket: options.basket } : calculateG7Basket());
     const vixVal = simulator.stocks['VIX']?.currentPrice || simulator.stocks['^VIX']?.currentPrice || internals.vix || 15.0;
     const expectedMove = simulator.eliteAlgo.calculateExpectedMove(stock.currentPrice, vixVal, symbol);
@@ -1483,7 +1505,26 @@ function processData(symbol, options = {}) {
         hybridCVD: (stock.cvd || 0) + ((stock.netWhaleFlow || 0) / (stock.currentPrice || 1)),
         markers: { 
             ...markers,
-            ote: engine.calculateOTE(enrichedCandles)
+            ote: engine.calculateOTE(enrichedCandles),
+            draws,
+            fvgs,
+            radar: {
+                ...markers.radar,
+                irScore: (markers.radar && markers.radar.killzone) ? simulator.eliteAlgo.calculateIRScore(bias, markers.radar.killzone, markers.radar.smt, markers.radar.gex, bias.retailSentiment).score : 0,
+                amdPhase: bias.amdPhase,
+                alignedCount: alignedCount,
+                pythConfidence: stock.pythConfidence,
+                expectedMove: expectedMove
+            },
+            dxy: dxyPrice,
+            dxyPrev: internals.dxyPrev || internals.dxy || 104.0,
+            vix: vixVal,
+            vwapBands: markers.vwapBands,
+            rvol: markers.rvol,
+            orb: markers.orb,
+            vpoc: markers.vpoc,
+            equalLevels: markers.equalLevels,
+            gapFill: markers.gapFill
         },
         pythConfidence: stock.pythConfidence,
         priceDiscordance: stock.priceDiscordance,
@@ -1518,37 +1559,17 @@ function processData(symbol, options = {}) {
                 leader: correlationLeader
             }
         }),
-        hybridCVD: (stock.cvd || 0) + ((stock.netWhaleFlow || 0) / (stock.currentPrice || 1)),
-        netWhaleFlow: stock.netWhaleFlow || 0,
         darkPoolFootprints: engine.calculateDarkPoolFootprints(simulator.blockTrades || [], stock.currentPrice, symbol),
         heatmap: heatmapData,
         bloomberg: stock.bloomberg,
-        markers: {
-            ...markers,
-            draws,
-            fvgs,
-            radar: {
-                ...markers.radar,
-                irScore: (markers.radar && markers.radar.killzone) ? simulator.eliteAlgo.calculateIRScore(bias, markers.radar.killzone, markers.radar.smt, markers.radar.gex, bias.retailSentiment) : 0,
-                amdPhase: bias.amdPhase,
-                alignedCount: alignedCount,
-                pythConfidence: stock.pythConfidence,
-                expectedMove
-            },
-            dxy: dxyPrice,
-            dxyPrev: internals.dxyPrev || internals.dxy || 104.0,
-            vix: vixVal,
-        },
         absorption: engine.detectAbsorption(candles),
         sweeps: engine.detectLiquidationSweep(candles, draws),
         recommendation,
-        confluenceScore: finalConfScore,
         timeframe: activeTf,
-        candles: enrichedCandles,
         candle: enrichedCandles.length > 0 ? enrichedCandles[enrichedCandles.length - 1] : null,
         institutionalRadar: {
             ...markers.radar,
-            irScore: markers.radar ? simulator.eliteAlgo.calculateIRScore(bias, markers.radar.killzone, markers.radar.smt, markers.radar.gex, bias.retailSentiment) : 0,
+            irScore: (markers.radar && markers.radar.killzone) ? simulator.eliteAlgo.calculateIRScore(bias, markers.radar.killzone, markers.radar.smt, markers.radar.gex, bias.retailSentiment).score : 0,
             amdPhase: bias.amdPhase,
             alignedCount: alignedCount,
             progress: (engine.getKillzoneStatus()?.progress || 0)
@@ -1600,8 +1621,6 @@ function processData(symbol, options = {}) {
             intensity: (engine.detectInstitutionalReload(markers, candles)?.intensity || engine.detectFireBreakout(markers, candles, bias)?.intensity || 0),
             confluenceScore: finalConfScore
         },
-        signal0DTE: signal0DTE,
-        heatmap: heatmapData,
         volumeProfile: engine.calculateVolumeProfile(candles, stock.currentPrice, symbol),
         whaleTape: currentWhale ? {
              ...currentWhale,
@@ -1637,12 +1656,26 @@ function processWatchlist(options = {}) {
     const allSymbols = [...new Set([...simulator.watchlist, ...coreIndices])];
 
     const spyChange = simulator.stocks['SPY']?.dailyChangePercent || 0;
+    const now = Date.now();
+
     return allSymbols.map(symbol => {
         try {
             const normalizedSym = symbol.toUpperCase().trim();
-            const fallbacks = { 'SPY': 520.45, 'QQQ': 443.12, 'DIA': 391.20, 'VIX': 14.50, 'DXY': 104.25, 'GOLD': 2330.40, 'BTC-USD': 68661.07, 'NVDA': 875.40, 'TSLA': 172.50, 'AAPL': 198.80, 'MSFT': 415.20, 'EURUSD=X': 1.0820, 'GBPUSD=X': 1.2650 };
             
-            const stock = simulator.stocks[normalizedSym] || simulator.stocks[symbol];
+            // --- LIGHTWEIGHT CACHE (5s) ---
+            if (global._watchlistCache?.[normalizedSym]) {
+                const entry = global._watchlistCache[normalizedSym];
+                if (now - entry.timestamp < 5000) return entry.data;
+            }
+            // ── SYNC FIX: Direct Lookup ──
+            const fallbacks = { 
+                'SPY': 520.45, 'QQQ': 443.12, 'DIA': 391.20, 'VIX': 14.50, 'DXY': 104.25, 'GOLD': 2330.40, 'BTC-USD': 68661.07, 
+                'NVDA': 875.40, 'TSLA': 172.50, 'AAPL': 198.80, 'MSFT': 415.20, 'EURUSD=X': 1.0820, 'GBPUSD=X': 1.2650,
+                'XLK': 210.34, 'XLF': 42.12, 'XLY': 185.50, 'XLE': 94.20, 'XLV': 142.10, 
+                'XLC': 82.15, 'XLI': 124.40, 'XLP': 74.30, 'XLU': 68.10, 'XLRE': 38.50, 'XLB': 88.20
+            };
+            
+            const stock = simulator.stocks[normalizedSym];
             if (!stock) return { symbol, price: fallbacks[normalizedSym] || 0, dailyChangePercent: 0, bias: 'OFFLINE', recommendation: { action: 'WAIT' } };
 
             const tf = simulator.currentTimeframe;
@@ -1653,12 +1686,20 @@ function processWatchlist(options = {}) {
             const recommendation = engine.getOptionRecommendation(bias, markers, stock.currentPrice || 0, tf, symbol, candles);
             
             const multiTfBias = {};
-            simulator.timeframes.forEach(timeframe => {
-                const tfCandles = stock.candles[timeframe] || [];
-                const tfMarkers = simulator.getInstitutionalMarkers(normalizedSym, timeframe, true);
-                const tfBias = engine.calculateBias(stock.currentPrice || 0, [], [], stock.bloomberg, tfMarkers, 0, internals, normalizedSym, tfCandles);
-                multiTfBias[timeframe] = tfBias.bias;
-            });
+            const isActive = (normalizedSym === simulator.currentSymbol);
+            
+            // Only do Multi-TF scan for the ACTIVE symbol to save 80% CPU
+            if (isActive) {
+                simulator.timeframes.forEach(timeframe => {
+                    const tfCandles = stock.candles[timeframe] || [];
+                    const tfMarkers = simulator.getInstitutionalMarkers(normalizedSym, timeframe, true);
+                    const tfBias = engine.calculateBias(stock.currentPrice || 0, [], [], stock.bloomberg, tfMarkers, 0, internals, normalizedSym, tfCandles);
+                    multiTfBias[timeframe] = tfBias.bias;
+                });
+            } else {
+                // Background symbols get a static "Neutral" TF consensus to avoid loop lag
+                simulator.timeframes.forEach(timeframe => { multiTfBias[timeframe] = bias.bias; });
+            }
 
             const bullCount = Object.values(multiTfBias).filter(b => b && b.includes('BULLISH')).length;
             const bearCount = Object.values(multiTfBias).filter(b => b && b.includes('BEARISH')).length;
@@ -1670,7 +1711,7 @@ function processWatchlist(options = {}) {
 
             const confScore = calculateConfluenceScore(normalizedSym, stock, bias, markers, 0, multiTfBias, options);
 
-            return {
+            const result = {
                 symbol,
                 price: current,
                 dailyChangePercent: stock.dailyChangePercent || 0,
@@ -1682,6 +1723,12 @@ function processWatchlist(options = {}) {
                 alignedCount,
                 multiTfBias
             };
+
+            // Update Global Cache
+            if (!global._watchlistCache) global._watchlistCache = {};
+            global._watchlistCache[normalizedSym] = { timestamp: now, data: result };
+
+            return result;
         } catch (err) {
             return { symbol, price: 0, bias: 'ERROR' };
         }

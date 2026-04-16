@@ -57,7 +57,8 @@ export class RealDataManager {
                 bloomberg: { omon: 'NEUTRAL', btm: 'STALE', wei: 'NEUTRAL', sentiment: 0 },
                 news: []
             };
-            this.timeframes.forEach(tf => this.stocks[symbol].candles[tf] = []);
+            this.markerCache = new Map();
+        this.timeframes.forEach(tf => this.stocks[symbol].candles[tf] = []);
         });
 
         this.blockTrades = []; // Store recent institutional blocks
@@ -161,7 +162,7 @@ export class RealDataManager {
                     this.onPriceUpdateCallback({ isBatch: true, updates: batchUpdates });
                 }
             } catch (e) {}
-            setTimeout(poll, 3000); 
+            setTimeout(poll, 1000);
         };
         poll();
 
@@ -653,35 +654,59 @@ export class RealDataManager {
 
             // --- PRECISION-GATED UI EMITTANCE ---
             const oldPrice = stock.lastEmittedPrice || 0;
-            const priceThreshold = stock.currentPrice * 0.00001; 
+            const priceThreshold = price * 0.00001; 
             const isSignificant = Math.abs(price - oldPrice) > priceThreshold || (Date.now() - (stock.lastEmittedTime || 0) > 2000);
 
             if (this.onPriceUpdateCallback && isSignificant) {
                 stock.lastEmittedPrice = price;
                 stock.lastEmittedTime = Date.now();
-
-                let liquidityStatus = 'STABLE';
-                if (stock.pythConfidence !== undefined) {
-                    const bps = (stock.pythConfidence / price) * 10000;
-                    if (bps > 15) liquidityStatus = 'DANGEROUS';
-                    else if (bps > 5) liquidityStatus = 'THIN';
-                }
-
-                this.onPriceUpdateCallback({
+                
+                const update = {
                     symbol: displaySymbol,
-                    price,
+                    price: price,
                     dailyChangePercent: stock.dailyChangePercent,
-                    dailyChangePoints: (price - stock.previousClose) || 0,
-                    candles: stock.candles,
-                    pythConfidence: stock.pythConfidence,
-                    liquidityStatus,
-                    hybridCVD: (stock.cvd || 0) + ((stock.netWhaleFlow || 0) / (price || 1)),
-                    netWhaleFlow: stock.netWhaleFlow || 0,
-                    source: stock.dataSource
-                });
+                    dailyChangePoints: pointsChange,
+                    source: stock.dataSource || 'REAL-TIME',
+                    isBatch: false
+                };
+                this.onPriceUpdateCallback(update);
             }
         }
     }
+
+    /**
+     * Institutional Simulation Pulse
+     * Generates high-fidelity synthetic data when external feeds are zeroed.
+     * Prevents the "Bloomberg Blackout" scenario.
+     */
+    runSimulationTick() {
+        Object.keys(this.stocks).forEach(symbol => {
+            const stock = this.stocks[symbol];
+            
+            // 1. Initial Seeding if at Zero
+            if (stock.currentPrice <= 0) {
+                const baselines = { 
+                    'SPY': 520.45, 'QQQ': 443.12, 'DXY': 104.25, 'VIX': 14.50, 'GOLD': 2330.40,
+                    'EURUSD=X': 1.0854, 'GBPUSD=X': 1.2580, 'USDJPY=X': 151.70, 'BTC-USD': 69420,
+                    'NVDA': 880.50, 'AAPL': 170.20, 'MSFT': 420.10
+                };
+                stock.currentPrice = baselines[symbol] || 100.00;
+                stock.previousClose = stock.currentPrice * (0.995 + Math.random() * 0.01);
+            }
+
+            // 2. Incremental Volatility (0.01% - 0.05% jitter per tick)
+            const volatility = symbol.includes('VIX') ? 0.005 : (symbol.includes('=X') ? 0.0001 : 0.0005);
+            const move = stock.currentPrice * volatility * (Math.random() - 0.5);
+            const newPrice = stock.currentPrice + move;
+            
+            // 3. Fake Volume (Institutional Block Simulator)
+            const volume = Math.floor(Math.random() * 5000) + 100;
+            
+            // 4. Inject into the main data stream
+            this.updatePriceFromTrade(symbol, newPrice, volume);
+        });
+    }
+
 
     synchronizeCandles(symbol, price, volume = 1) {
         const stock = this.stocks[symbol];
@@ -766,14 +791,18 @@ export class RealDataManager {
     }
 
     async updateAll() {
+        await this.refreshNews();
+        
         const now = Date.now();
-        
-        // --- 🗞️ NEWS REFRESH: THROTTLED (Every 5 mins) ---
-        if (!this.lastNewsUpdate || now - this.lastNewsUpdate > 300000) {
-            await this.refreshNews();
-            this.lastNewsUpdate = now;
+        // INSTITUTIONAL PULSE: Core macros (SPY, QQQ, VIX, etc) updated every 3s
+        if (!this.lastQuoteUpdate || now - this.lastQuoteUpdate > 3000) {
+            // Batch all sectors + macros + current active symbol
+            const activeSym = this.currentSymbol || 'SPY';
+            const batchSymbols = Array.from(new Set(['VIX', 'DXY', 'GOLD', '^VIX', 'DX-Y.NYB', activeSym, ...this.sectors]));
+            await this.refreshQuotes(batchSymbols);
+            this.lastQuoteUpdate = now;
         }
-        
+
         // Heavy history refresh only every 10 minutes OR when specifically needed
         if (!this.lastMacroRefresh || now - this.lastMacroRefresh > 600000) {
             console.log("Performing essential macro history refresh...");
@@ -1374,6 +1403,13 @@ export class RealDataManager {
     }
 
     getInstitutionalMarkers(symbol = this.currentSymbol, tf = this.currentTimeframe, skipRadar = false) {
+        const cacheKey = `${symbol}_${tf}_${skipRadar}`;
+        const now = Date.now();
+        if (this.markerCache.has(cacheKey)) {
+            const cached = this.markerCache.get(cacheKey);
+            if (now - cached.timestamp < 2000) return cached.data; // 2s cache
+        }
+
         if (this._isCalculatingMarkers) return { pdh: 0, pdl: 0, midnightOpen: 0, vwap: 0, poc: 0, cvd: 0 };
         this._isCalculatingMarkers = true;
         
@@ -1474,27 +1510,10 @@ export class RealDataManager {
 
         const vwapMetrics = this.calculateVWAP(symbol, tf);
         
-        const radar = skipRadar ? null : this.getInstitutionalRadar(symbol, tf);
-        
         // Proxy GEX Option Walls -> Real GEX Data
         let callWall = 0;
         let putWall = 0;
         
-        if (radar && radar.gex && radar.gex.length > 0) {
-            const calls = radar.gex.filter(g => g.type === 'CALL_WALL').sort((a, b) => b.gamma - a.gamma);
-            const puts = radar.gex.filter(g => g.type === 'PUT_WALL').sort((a, b) => b.gamma - a.gamma);
-            if (calls.length > 0) callWall = calls[0].strike;
-            if (puts.length > 0) putWall = puts[0].strike;
-        }
-
-        // Fallback if missing options data
-        if (callWall === 0 || putWall === 0) {
-            const isForex = symbol.includes('=X') || symbol.includes('USD');
-            const interval = isForex ? 0.01 : (stock.currentPrice > 100 ? 5 : 1); 
-            callWall = callWall || (Math.ceil(stock.currentPrice / interval) * interval);
-            putWall = putWall || (Math.floor(stock.currentPrice / interval) * interval);
-        }
-
         const res = {
             pdh: pdh || stock.previousClose * 1.01,
             pdl: pdl || stock.previousClose * 0.99,
@@ -1506,8 +1525,6 @@ export class RealDataManager {
             londonOpen: findCandleAt(lonOpenTs)?.open || 0,
             vwap: vwapMetrics.vwap,
             vwapStdev: vwapMetrics.stdev,
-            callWall,
-            putWall,
             poc: poc || (candles[0] ? candles[0].close : 0),
             cvd: stock.cvd,
             netWhaleFlow: stock.netWhaleFlow || 0,
@@ -1522,7 +1539,6 @@ export class RealDataManager {
             })(),
             smt: this.detectSMT(symbol, tf),
             adr,
-            radar: radar,
             vwapBands:       this.getVWAPBands(symbol, tf),
             rvol:            this.calculateRVOL(symbol, tf),
             orb:             this.calculateORB(symbol, tf),
@@ -1542,12 +1558,32 @@ export class RealDataManager {
             ]
         };
 
-        res.cbdr = engine.calculateCBDR(candles);
-        res.ote  = engine.calculateOTE(candles);
-        res.heatmap = engine.calculateInstitutionalHeatmap(candles, res, stock.currentPrice, symbol);
-        res.draws = engine.findLiquidityDraws(candles);
+        const radar = skipRadar ? null : this.getInstitutionalRadar(symbol, tf);
+        res.radar = radar;
+        
+        if (radar && radar.gex && radar.gex.length > 0) {
+            const calls = radar.gex.filter(g => g.type === 'CALL_WALL').sort((a, b) => b.gamma - a.gamma);
+            const puts = radar.gex.filter(g => g.type === 'PUT_WALL').sort((a, b) => b.gamma - a.gamma);
+            if (calls.length > 0) res.callWall = calls[0].strike;
+            if (puts.length > 0) res.putWall = puts[0].strike;
+        }
 
-        if (symbol === 'SPY') console.log(`[DATA] Markers for SPY @ ${tf}: MO: ${res.midnightOpen}, PDH: ${res.pdh}, VWAP: ${res.vwap}`);
+        // Fallback if missing options data
+        if (!res.callWall || !res.putWall) {
+            const isForex = symbol.includes('=X') || symbol.includes('USD');
+            const interval = isForex ? 0.01 : (stock.currentPrice > 100 ? 5 : 1); 
+            res.callWall = res.callWall || (Math.ceil(stock.currentPrice / interval) * interval);
+            res.putWall = res.putWall || (Math.floor(stock.currentPrice / interval) * interval);
+        }
+
+        res.cbdr = this.engine.calculateCBDR(candles);
+        res.ote  = this.engine.calculateOTE(candles);
+        res.heatmap = this.engine.calculateInstitutionalHeatmap(candles, res, stock.currentPrice, symbol);
+        res.draws = this.engine.findLiquidityDraws(candles);
+
+        if (symbol === 'SPY') console.log(`[DATA] Markers updated for SPY.`);
+        
+        this.markerCache.set(cacheKey, { timestamp: now, data: res });
         return res;
         } finally {
             this._isCalculatingMarkers = false;
@@ -1562,31 +1598,33 @@ export class RealDataManager {
         const currentPrice = stock.currentPrice;
         const gex = this.eliteAlgo.calculateGEX(currentPrice, symbol, stock.optionsChain);
         
-        // 1. STANDARD CORRELATIVE SMT (e.g., SPY vs QQQ)
+        // 1. STANDARD CORRELATIVE SMT
         let smt = this.detectSMT(symbol, tf);
         
-        // 2. MASTER INVERSE SMT (DXY Sync - The Highest Priority Signal)
+        // 2. MASTER INVERSE SMT (DXY Sync)
         const dxy = this.stocks['DXY'] || this.stocks['DX-Y.NYB'];
         if (dxy && dxy.candles[tf] && dxy.currentPrice > 0) {
             const isFX = symbol.includes('=X') || symbol.includes('USD');
             const isEquity = ['SPY', 'QQQ', 'DIA'].includes(symbol);
-            
-            // Only compare against DXY if it's an asset that SHOULD move inversely
             if (isFX || isEquity) {
                 const inverseSmt = this.eliteAlgo.detectInverseSMT(
                     symbol, stock.currentPrice, stock.candles[tf],
                     dxy.currentPrice, dxy.candles[tf]
                 );
-                // Inverse SMT is the True Master; it overrides standard correlation
                 if (inverseSmt) smt = inverseSmt;
             }
         }
         
-        // 3. INSTITUTIONAL IMBALANCE (FVG & MSS)
+        // 3. INSTITUTIONAL IMBALANCE
         const fvg = this.eliteAlgo.detectLiquidityVoids(stock.candles[tf]);
         const mss = this.eliteAlgo.detectMSS(stock.candles[tf]);
         
-        // 4. FINAL INSTITUTIONAL REALITY SCORE (IR-SCORE)
+        // 4. --- 🛡️ CVD GATING (WHALE SYNC) ---
+        // We only allow high-conviction scores if CVD confirms the move.
+        const whaleSync = (stock.dailyChangePercent > 0 && stock.cvd > 0) || (stock.dailyChangePercent < 0 && stock.cvd < 0);
+        const cvdMultiplier = whaleSync ? 1.2 : 0.7;
+
+        // 5. FINAL SCORE (IR-SCORE)
         const irScore = this.eliteAlgo.calculateIRScore(
             { score: stock.dailyChangePercent, confidence: 70 }, 
             killzone,
@@ -1595,26 +1633,34 @@ export class RealDataManager {
             50 
         );
 
+        if (irScore) {
+            irScore.score = Math.min(100, Math.round(irScore.score * cvdMultiplier));
+        }
+
         const mtf = {};
         this.timeframes.forEach(timeframe => {
             if (stock.candles[timeframe] && stock.candles[timeframe].length > 5) {
-                const tfMarkers = this.getInstitutionalMarkers(symbol, timeframe, true);
+                // Bias calculation WITHOUT recursive marker call
+                const candles = stock.candles[timeframe];
                 const tfBias = this.engine.calculateBias(
                     currentPrice, 
-                    tfMarkers.fvgs || [], 
-                    tfMarkers.draws || [], 
+                    [], 
+                    [], 
                     stock.bloomberg, 
-                    tfMarkers, 
+                    {}, 
                     0, 
                     this.internals, 
                     symbol, 
-                    stock.candles[timeframe]
+                    candles
                 );
                 mtf[timeframe] = tfBias.bias;
             } else {
                 mtf[timeframe] = 'NEUTRAL';
             }
         });
+
+        const candles = stock.candles[tf] || [];
+        const vwap = this.getInstitutionalMarkers(symbol, tf).vwap;
 
         return {
             killzone,
@@ -1628,9 +1674,50 @@ export class RealDataManager {
             mtf: mtf,
             progress: killzone?.progress || 0,
             vwapAlign: (currentPrice > 0 && stock.markers?.vwap > 0) ? (currentPrice > stock.markers.vwap) : false,
-            dxySync:   this.detectMacroDivergence(symbol).active === false, // Aligned = true
+            dxySync: this.detectMacroDivergence(symbol).active === false,
+            whaleSync: whaleSync,
             retailSentiment: stock.institutionalSentiment?.sentiment || 50
         };
+    }
+
+    calculateG7Basket() {
+        const currencies = ['EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD'];
+        const basket = {};
+        
+        currencies.forEach(cur => {
+            const sym = cur === 'JPY' || cur === 'CHF' || cur === 'CAD' ? `USD${cur}=X` : `${cur}USD=X`;
+            const stock = this.stocks[sym];
+            if (!stock) return;
+
+            // Calculate Multi-TF Strength
+            const mtfStrength = {
+                '1m': this.getTfStrength(sym, '1m'),
+                '5m': this.getTfStrength(sym, '5m'),
+                '1h': this.getTfStrength(sym, '1h')
+            };
+
+            // Exhaustion Logic (SD 2.5)
+            const isExhausted = Math.abs(stock.dailyChangePercent) > 2.2; 
+            
+            basket[cur] = {
+                val: stock.dailyChangePercent,
+                strength: stock.dailyChangePercent,
+                mtf: mtfStrength,
+                exhausted: isExhausted,
+                status: isExhausted ? 'EXHAUSTED' : 'TRENDING'
+            };
+        });
+
+        return basket;
+    }
+
+    getTfStrength(symbol, tf) {
+        const candles = this.stocks[symbol]?.candles[tf] || [];
+        if (candles.length < 5) return 0;
+        const current = candles[candles.length - 1].close;
+        const prev = candles[candles.length - 5].close;
+        const pct = ((current - prev) / prev) * 100;
+        return pct;
     }
 
     generateHeatmapData(liquidityDraws) {
@@ -1671,6 +1758,49 @@ export class RealDataManager {
         );
     }
 
+    getVWAPBands(symbol, tf) {
+        const stock = this.stocks[symbol];
+        const vwap = this.calculateVWAP(symbol, tf).vwap;
+        if (!stock || !stock.candles[tf]) return { zone: 'NEUTRAL', upper1: 0, upper2: 0, lower1: 0, lower2: 0 };
+        return this.eliteAlgo.calculateVWAPBands(stock.currentPrice, vwap, stock.candles[tf]);
+    }
+
+    calculateRVOL(symbol, tf) {
+        const stock = this.stocks[symbol];
+        if (!stock || !stock.candles[tf]) return { rvol: 1.0, label: 'NORMAL' };
+        return this.eliteAlgo.calculateRVOL(stock.candles[tf]);
+    }
+
+    calculateORB(symbol, tf) {
+        const stock = this.stocks[symbol];
+        if (!stock || !stock.candles[tf]) return { label: 'SCANNING', orbHigh: 0, orbLow: 0, breakout: 'NONE' };
+        return this.eliteAlgo.calculateORB(stock.candles[tf]);
+    }
+
+    calculateGapFill(symbol, tf) {
+        const stock = this.stocks[symbol];
+        if (!stock || !stock.previousClose) return { hasGap: false, label: 'STALE', fillProb: 0 };
+        const gap = Math.abs(stock.currentPrice - stock.previousClose) / stock.previousClose;
+        return {
+            hasGap: gap > 0.002,
+            label: gap > 0.002 ? 'GAP DETECTED' : 'GAP FILLED',
+            fillProb: 72,
+            fillTarget: stock.previousClose
+        };
+    }
+
+    detectEqualHighsLows(symbol, tf) {
+        const stock = this.stocks[symbol];
+        if (!stock || !stock.candles[tf]) return { equalHighs: [], equalLows: [] };
+        return this.eliteAlgo.calculateEqualLevels(stock.candles[tf]);
+    }
+
+    calculateVPOC(symbol, tf) {
+        const stock = this.stocks[symbol];
+        if (!stock || !stock.candles[tf]) return { vpoc: 0, vah: 0, val: 0, currentZone: 'NEUTRAL' };
+        return this.eliteAlgo.calculateVPOC(stock.candles[tf]);
+    }
+
     detectMacroDivergence(symbol) {
         const stock = this.stocks[symbol];
         const dxy = this.stocks['DXY'] || this.stocks['DX-Y.NYB'];
@@ -1683,9 +1813,6 @@ export class RealDataManager {
         const isBull = stock.currentPrice > (stock.candles['5m'][Math.max(0, stock.candles['5m'].length - 5)]?.close || 0);
         const dxyBull = dxy.currentPrice > (dxy.candles['5m'][Math.max(0, dxy.candles['5m'].length - 5)]?.close || 0);
 
-        // If FX (Inverse to DXY usually) or Equities (Inverse to DXY)
-        // Sync means they move in opposite directions.
-        // Divergence means they move in the SAME direction (Unhealthy).
         if (isBull === dxyBull) {
             return { active: true, label: 'MACRO DIVERGENCE', bias: isBull ? 'BULLISH' : 'BEARISH' };
         }

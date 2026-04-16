@@ -12,6 +12,8 @@ let chart, candleSeries;
 let priceLines = [];
 const TG_ENTRY_KEY = 'bias_tg_entry_price';
 window._tgEntryPrice = parseFloat(localStorage.getItem(TG_ENTRY_KEY)) || 0;
+let _voiceEnabled = false;
+let _lastSquawkState = "";
 window._chartLoaded = false;
 
 // --- Initialization ---
@@ -411,48 +413,94 @@ function updateG7SpiderMatrix(basket) {
     }
 }
 
+let spiderRadarChartInstance = null;
+
 function updateEquitySpiderMatrix(sectors) {
     if (!sectors) return;
-    const grid = document.getElementById('equity-spider-grid');
-    if (!grid) return;
+    const canvas = document.getElementById('spiderRadarCanvas');
+    if (!canvas) return; // Wait for DOM if needed
 
     const data = Array.isArray(sectors) ? sectors : Object.values(sectors);
     
-    // Clear and Redraw to ensure no zombie symbols
-    grid.innerHTML = '';
+    // Sort alphabetically so the Radar shape stays consistent across ticks
+    data.sort((a,b) => a.symbol.localeCompare(b.symbol));
     
-    data.sort((a,b) => b.relativeStrength - a.relativeStrength).forEach(s => {
-        const node = document.createElement('div');
-        node.className = 'spider-node';
-        node.setAttribute('data-sector', s.symbol);
-        node.style.background = 'rgba(255,255,255,0.03)';
-        node.style.padding = '8px 4px';
-        node.style.borderRadius = '2px';
-        node.style.textAlign = 'center';
-        node.style.border = '1px solid rgba(255,157,0,0.05)';
-        
-        const rs = s.relativeStrength || 0;
-        const color = rs > 0 ? 'var(--bullish)' : (rs < 0 ? 'var(--bearish)' : '#fff');
-        
-        node.innerHTML = `
-            <div style="font-size:0.6rem; color:var(--text-dim); font-weight:800; letter-spacing:1px;">${s.symbol}</div>
-            <div style="font-size:0.8rem; font-weight:900; color:${color}; margin: 2px 0;">
-                ${rs >= 0 ? '+' : ''}${rs.toFixed(2)}%
-            </div>
-            <div style="font-size:0.5rem; color:rgba(255,255,255,0.4);">B: ${s.perf.toFixed(2)}%</div>
-        `;
-        grid.appendChild(node);
-    });
+    const labels = data.map(s => s.symbol);
+    const rsData = data.map(s => s.relativeStrength || 0);
+    const pointColors = rsData.map(rs => rs >= 0 ? '#00f2ff' : '#ff0055');
 
-    // Update Header
-    const sorted = [...data].sort((a,b) => b.relativeStrength - a.relativeStrength);
+    if (!spiderRadarChartInstance) {
+        // Initialize Radar Chart
+        const ctx = canvas.getContext('2d');
+        spiderRadarChartInstance = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Relative Strength',
+                    data: rsData,
+                    backgroundColor: 'rgba(56, 189, 248, 0.1)', // #38bdf8 w/ opacity
+                    borderColor: '#38bdf8',
+                    pointBackgroundColor: pointColors,
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: '#38bdf8',
+                    borderWidth: 2,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        pointLabels: {
+                            color: '#94a3b8',
+                            font: { family: 'JetBrains Mono', size: 10, weight: 'bold' }
+                        },
+                        ticks: {
+                            display: false,
+                            backdropColor: 'transparent',
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#fff',
+                        bodyColor: '#38bdf8',
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: function(context) {
+                                const val = context.parsed.r;
+                                return ` RS: ${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } else {
+        // Update live data matrix smoothly
+        spiderRadarChartInstance.data.labels = labels;
+        spiderRadarChartInstance.data.datasets[0].data = rsData;
+        spiderRadarChartInstance.data.datasets[0].pointBackgroundColor = pointColors;
+        spiderRadarChartInstance.update('none'); // Update without full layout animation to prevent stutter
+    }
+
+    // Update Header (Top / Weak Flow)
+    const sorted = [...data].sort((a,b) => (b.relativeStrength || 0) - (a.relativeStrength || 0));
     if (sorted.length > 0) {
         const top = sorted[0];
         const weak = sorted[sorted.length-1];
         setEl('eq-top-cur', top.symbol);
-        setEl('eq-top-val', `${top.relativeStrength >= 0 ? '+' : ''}${top.relativeStrength.toFixed(2)}% RS`);
+        setEl('eq-top-val', `${top.relativeStrength >= 0 ? '+' : ''}${(top.relativeStrength || 0).toFixed(2)}% RS`);
         setEl('eq-weak-cur', weak.symbol);
-        setEl('eq-weak-val', `${weak.relativeStrength >= 0 ? '+' : ''}${weak.relativeStrength.toFixed(2)}% RS`);
+        setEl('eq-weak-val', `${weak.relativeStrength >= 0 ? '+' : ''}${(weak.relativeStrength || 0).toFixed(2)}% RS`);
     }
 }
 
@@ -660,6 +708,26 @@ function updateSessionRadar(sess) {
     }
 }
 
+// --- Voice Squawk Engine ---
+function squawk(text) {
+    if (!_voiceEnabled || !window.speechSynthesis) return;
+    
+    // Stop any existing speech to prevent stacking lag
+    window.speechSynthesis.cancel();
+    
+    const msg = new SpeechSynthesisUtterance(text);
+    msg.rate = 1.0;
+    msg.pitch = 0.9; // Slightly deeper institutional tone
+    msg.volume = 1.0;
+    
+    // Select a professional sounding voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const targetVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Male')) || voices[0];
+    if (targetVoice) msg.voice = targetVoice;
+    
+    window.speechSynthesis.speak(msg);
+}
+
 // --- Sentinel Core Expert System ---
 function updateSentinelCore(data) {
     if (!data) return;
@@ -671,62 +739,35 @@ function updateSentinelCore(data) {
     
     const price = data.currentPrice || data.price || 0;
     const vwap = data.markers?.vwap || 0;
-    const cvd = data.hybridCVD || 0;
-    const flow = data.netWhaleFlow || 0;
-    // --- NEW: BOARD-WIDE INTELLIGENCE ---
-    if (data.boardSentiment) {
-        const bs = data.boardSentiment;
-        const breadthEl = document.getElementById('tg-board-breadth');
-        const barEl = document.getElementById('tg-board-bar');
-        const signalsEl = document.getElementById('tg-top-watchlist-signals');
-
-        if (breadthEl) breadthEl.innerText = `${bs.bullishPercent}% BULLISH BREADTH`;
-        if (barEl) barEl.style.width = `${bs.bullishPercent}%`;
-        
-        if (signalsEl && bs.topSignals) {
-            if (bs.topSignals.length > 0) {
-                let signalHtml = '<div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 4px; border-top: 1px solid rgba(255,215,0,0.1); padding-top: 8px;">';
-                bs.topSignals.forEach(sig => {
-                    const color = sig.bias.includes('BULLISH') ? 'var(--bullish)' : (sig.bias.includes('BEARISH') ? 'var(--bearish)' : 'var(--gold)');
-                    signalHtml += `
-                        <div style="background:rgba(255,255,255,0.02); padding: 4px 6px; border-radius: 3px; border-left: 2px solid ${color};">
-                            <span style="color:#fff; font-weight:900;">${sig.symbol.replace('=X','')}</span> 
-                            <span style="color:${color}; font-size:0.4rem; float:right;">${sig.score}%</span>
-                            <div style="font-size:0.38rem; color:var(--text-dim); text-transform:uppercase;">${sig.bias}</div>
-                        </div>`;
-                });
-                signalHtml += '</div>';
-                signalsEl.innerHTML = signalHtml;
-            } else {
-                signalsEl.innerHTML = 'MONITORING WATCHLIST... ANALYZING EQUITY FLOWS.';
-            }
-        }
-    }
-
-    // --- EXISTING LOGIC: SYMBOL SPECIFIC ---
-    const score = data.confluenceScore || 0; // 0 to 100
+    const cvd = (data.hybridCVD !== undefined) ? data.hybridCVD : (data.markers?.cvd || 0);
+    const flow = (data.netWhaleFlow !== undefined) ? data.netWhaleFlow : (data.markers?.netWhaleFlow || 0);
     
+    // 0. SMT & Divergence Detection (Power Multiplier)
+    let smtActive = data.markers?.smt || data.analysis?.smt || false;
+    let divergenceDetected = data.markers?.macroDivergence?.active || false;
+
     // 1. VWAP Relation (±25)
     let vwapFactor = '';
-    if (vwap > 0) {
-        if (price > vwap) { conviction += 25; vwapFactor = 'ACTIVE'; rationale.push("Price > VWAP (Systematic bid support)."); }
-        else { conviction -= 25; vwapFactor = 'DANGER'; rationale.push("Price < VWAP (Systematic distribution)."); }
+    if (vwap > 0 && price > 0) {
+        if (price > vwap) { conviction += 25; vwapFactor = 'ACTIVE'; rationale.push("Bullish VWAP hold."); }
+        else { conviction -= 25; vwapFactor = 'DANGER'; rationale.push("Distribution below VWAP."); }
     }
     
     // 2. Hybrid CVD (±25)
     let cvdFactor = '';
-    if (cvd > 500) { conviction += 25; cvdFactor = 'ACTIVE'; rationale.push("Tick accumulation is deeply positive."); }
-    else if (cvd < -500) { conviction -= 25; cvdFactor = 'DANGER'; rationale.push("Aggressive tick distribution active."); }
+    if (cvd > 500) { conviction += 25; cvdFactor = 'ACTIVE'; rationale.push("Aggressive accumulation."); }
+    else if (cvd < -500) { conviction -= 25; cvdFactor = 'DANGER'; rationale.push("Aggressive distribution."); }
     else { cvdFactor = 'WARN'; }
     
     // 3. Net Whale Flow (±25)
-    if (flow > 100000) { conviction += 25; rationale.push("Smart Money block flows are bullish."); }
-    else if (flow < -100000) { conviction -= 25; rationale.push("Macro institutional outflows detected."); }
+    if (flow > 100000) { conviction += 25; rationale.push("Whale inflows detected."); }
+    else if (flow < -100000) { conviction -= 25; rationale.push("Whale dumping detected."); }
     
-    // 4. Timeframe Alignment (±25 calculated from score)
+    // 4. Timeframe Alignment (±25)
+    const score = data.confluenceScore || (data.analysis?.confluenceScore) || 0;
     let tfFactor = 'WARN';
-    if (score > 65) { conviction += 25; tfFactor = 'ACTIVE'; rationale.push("Global macros are highly synchronized."); }
-    else if (score < 35) { conviction -= 25; tfFactor = 'DANGER'; rationale.push("Global macros dragging against trend."); }
+    if (score > 65) { conviction += 25; tfFactor = 'ACTIVE'; rationale.push("High macro sync."); }
+    else if (score < 35) { conviction -= 25; tfFactor = 'DANGER'; rationale.push("Macro drag active."); }
 
     // Factor Update Helpers
     const setFactor = (id, fClass) => {
@@ -745,99 +786,85 @@ function updateSentinelCore(data) {
     setFactor('tg-f-abs', data.markers?.absorption ? (data.markers?.absorptionType === 'BULLISH' ? 'ACTIVE' : 'DANGER') : 'WARN');
     setFactor('tg-f-struct', data.markers?.mss ? (data.markers?.mssType === 'BULLISH' ? 'ACTIVE' : 'DANGER') : 'WARN');
     
-    // 5. Inter-Market Correlation (Whale Sync)
-    const correl = data.aiInsight?.marketCorrelation?.coefficient || 0;
-    const isWhaleSync = Math.abs(correl) > 75;
-    setFactor('tg-f-correl', isWhaleSync ? 'ACTIVE' : (Math.abs(correl) < 30 ? 'DANGER' : 'WARN'));
-    setEl('tg-correl-sync', `WHALE SYNC: ${Math.abs(correl).toFixed(0)}%`);
-    const correlEl = document.getElementById('tg-correl-sync');
-    if (correlEl) {
-        correlEl.style.color = isWhaleSync ? 'var(--gold)' : (Math.abs(correl) < 30 ? 'var(--bearish)' : 'var(--text-dim)');
-        correlEl.style.borderColor = isWhaleSync ? 'var(--gold)' : 'rgba(255,255,255,0.05)';
-    }
-
     // Clamp Conviction Magnitude
     const absConviction = Math.min(Math.abs(conviction), 100);
     const meterEl = document.getElementById('tg-conviction-pct');
     const barEl = document.getElementById('tg-conviction-bar');
     const badgeEl = document.getElementById('tg-alert-badge');
-    const actionEl = document.getElementById('tg-action-strip');
     const actionText = document.getElementById('tg-action-text');
     const actionIcon = document.getElementById('tg-action-icon');
     
     if (meterEl) meterEl.innerText = `${absConviction}%`;
-    if (barEl) barEl.style.width = `${absConviction}%`;
-    
-    let actionStyle = '';
-    
+    if (barEl) {
+        barEl.style.width = `${absConviction}%`;
+        barEl.style.background = conviction > 0 ? 'var(--bullish)' : (conviction < 0 ? 'var(--bearish)' : 'var(--gold)');
+    }
+
     // Final Judgement Logic
+    let signalText = "";
     if (conviction >= 75) {
         state = "HIGH CONVICTION LONG";
-        stateDesc = "Massive structural and flow alignment to the upside.";
+        stateDesc = "Structural and flow alignment confirmed.";
         badgeEl.innerText = "BUY";
-        badgeEl.className = "tg-badge tg-badge-buy"; // assume tg-badge-buy exists or inline style
         badgeEl.style.background = "var(--bullish)";
-        actionText.innerText = `AGGRESSIVE LONG: ${data.symbol || 'ASSET'}`;
-        actionStyle = 'tg-action-hold';
+        actionText.innerText = "AGGRESSIVE LONG - TOP TIER SEARCH";
         actionIcon.innerText = "🟢";
-        if (barEl) barEl.style.background = "var(--bullish)";
-    } else if (conviction >= 25 && conviction < 75) {
+        signalText = "High conviction long signal detected.";
+    } else if (conviction >= 25) {
         state = "BUILD LONG SKEW";
-        stateDesc = "Accumulation detected. Preparing for bullish breakout.";
+        stateDesc = "Retail traps detected. Seeking buy dips.";
         badgeEl.innerText = "PREP";
         badgeEl.style.background = "var(--gold)";
-        actionText.innerText = "SEEK LONGS ON DIPS";
-        actionStyle = 'tg-action-manage';
+        actionText.innerText = "ACCUMULATE ON DISCOUNTED VWAP";
         actionIcon.innerText = "🟡";
-        if (barEl) barEl.style.background = "var(--gold)";
+        signalText = "Bias shifting bullish. Accumulate.";
     } else if (conviction <= -75) {
         state = "HIGH CONVICTION SHORT";
-        stateDesc = "Severe institutional dumping and bearish structure.";
+        stateDesc = "Sever institutional dumping active.";
         badgeEl.innerText = "SHORT";
         badgeEl.style.background = "var(--bearish)";
-        actionText.innerText = `AGGRESSIVE SHORT: ${data.symbol || 'ASSET'}`;
-        actionStyle = 'tg-action-exit';
+        actionText.innerText = "AGGRESSIVE SHORT - DARK POOL SYNC";
         actionIcon.innerText = "🔴";
-        if (barEl) barEl.style.background = "var(--bearish)";
-    } else if (conviction <= -25 && conviction > -75) {
+        signalText = "High conviction short signal. Distribution active.";
+    } else if (conviction <= -25) {
         state = "BUILD SHORT SKEW";
-        stateDesc = "Momentum is breaking down. Heavy distribution.";
+        stateDesc = "Distribution building. Seek exit or short.";
         badgeEl.innerText = "PREP";
         badgeEl.style.background = "var(--gold)";
-        actionText.innerText = "SEEK SHORTS ON RIPS";
-        actionStyle = 'tg-action-manage';
+        actionText.innerText = "DISTRIBUTE ON VWAP PREMIUM";
         actionIcon.innerText = "🟡";
-        if (barEl) barEl.style.background = "var(--gold)";
+        signalText = "Bias shifting bearish. Look for exits.";
     } else {
         state = "TACTICAL STANDBY";
-        stateDesc = "Mixed signals. Order flow is fighting macro structure.";
+        stateDesc = "Mixed signals. Institutions are balancing.";
         badgeEl.innerText = "HOLD";
         badgeEl.style.background = "transparent";
-        badgeEl.style.border = "1px solid var(--text-main)";
-        actionText.innerText = "AWAIT CLEAR SIGNAL";
-        actionStyle = 'tg-action-manage';
+        actionText.innerText = "AWAIT VOLATILITY EXPANSION";
         actionIcon.innerText = "⚪";
-        if (barEl) barEl.style.background = "var(--text-main)";
     }
-    
-    // Append Badge Update
-    document.getElementById('tg-state-label').innerText = state;
-    document.getElementById('tg-state-label').style.color = conviction > 0 ? 'var(--bullish)' : (conviction < 0 ? 'var(--bearish)' : 'var(--text-main)');
-    document.getElementById('tg-state-desc').innerText = stateDesc;
-    
-    if (actionEl) {
-        actionEl.className = `tg-action-strip ${actionStyle}`;
+
+    // VOX Update (Squawk only on state changes)
+    if (_voiceEnabled && state !== _lastSquawkState) {
+        squawk(`${currentSymbol.replace('=X', '')}: ${signalText}`);
+        _lastSquawkState = state;
     }
+
+    // Display updates
+    setEl('tg-state-label', state);
+    const stateEl = document.getElementById('tg-state-label');
+    if (stateEl) stateEl.style.color = conviction > 0 ? 'var(--bullish)' : (conviction < 0 ? 'var(--bearish)' : 'var(--text-main)');
+    setEl('tg-state-desc', stateDesc);
     
-    // Compile Rationale
     const rationaleEl = document.getElementById('tg-rationale');
-    if (rationaleEl) {
-        if (rationale.length === 0) {
-            rationaleEl.innerText = "Waiting for decisive institutional variance...";
-        } else {
-            // Take top 2 reasons
-            rationaleEl.innerText = rationale.slice(0, 2).join(" ");
-        }
+    if (rationaleEl) rationaleEl.innerText = rationale.length > 0 ? rationale.slice(0, 2).join(" ") : "Monitoring adaptive variances...";
+
+    // Contextual Loulou Logic Stream (Top aside)
+    const logicTicker = document.getElementById('loulou-logic-ticker');
+    if (logicTicker) {
+        let logicMsg = rationale.length > 0 ? rationale.join(" | ") : "SYNCHRONIZING WITH MARKET REGIME...";
+        if (smtActive) logicMsg = "⚠️ SMT DIVERGENCE DETECTED | " + logicMsg;
+        if (divergenceDetected) logicMsg = "⚡ MACRO DIVERGENCE ACTIVE | " + logicMsg;
+        logicTicker.innerText = logicMsg.toUpperCase();
     }
 }
 
@@ -944,7 +971,7 @@ function updateTier1EdgePanel(m, sym) {
     }
 }
 
-// --- Global Overnight Pulse ---
+// --- Global Guardian Radar (Overnight Pulse) ---
 function updateGlobalOvernightPulse(over) {
     if (!over) return;
 
@@ -954,33 +981,84 @@ function updateGlobalOvernightPulse(over) {
     setEl('overnight-ny-perf', (over.ny * 100).toFixed(2) + '%');
     setEl('overnight-narrative', over.narrative || `Analyzing institutional global flow for ${currentSymbol} anchor...`);
 
+    // Judas Swing Detection
+    const judasDot = document.getElementById('judas-indicator-dot');
+    const judasText = document.getElementById('judas-status-text');
+    const judasDetected = over.judasDetected || (over.asia > 0 && over.london < 0) || (over.asia < 0 && over.london > 0);
+    
+    if (judasDot && judasText) {
+        if (judasDetected) {
+            judasDot.style.borderColor = 'var(--gold)';
+            judasDot.style.boxShadow = '0 0 10px var(--gold)';
+            judasDot.children[0].style.background = 'var(--gold)';
+            judasDot.classList.add('pulse');
+            judasText.innerText = 'DETECTED';
+            judasText.style.color = 'var(--gold)';
+        } else {
+            judasDot.style.borderColor = '#334155';
+            judasDot.style.boxShadow = 'none';
+            judasDot.children[0].style.background = '#334155';
+            judasDot.classList.remove('pulse');
+            judasText.innerText = 'INACTIVE';
+            judasText.style.color = 'rgba(255,255,255,0.3)';
+        }
+    }
+
     const statusEl = document.getElementById('overnight-global-status');
     if (statusEl) {
         const g = over.global || 'NEUTRAL';
-        if (g.includes('BULL')) statusEl.style.color = 'var(--bullish)', statusEl.style.borderColor = 'var(--bullish)';
-        else if (g.includes('BEAR')) statusEl.style.color = 'var(--bearish)', statusEl.style.borderColor = 'var(--bearish)';
-        else statusEl.style.color = 'var(--gold)', statusEl.style.borderColor = 'var(--gold)';
+        if (g.includes('BULL')) {
+            statusEl.style.color = 'var(--bullish)';
+            statusEl.style.borderColor = 'var(--bullish)';
+            statusEl.style.background = 'rgba(16, 185, 129, 0.1)';
+        } else if (g.includes('BEAR')) {
+            statusEl.style.color = 'var(--bearish)';
+            statusEl.style.borderColor = 'var(--bearish)';
+            statusEl.style.background = 'rgba(239, 68, 68, 0.1)';
+        } else {
+            statusEl.style.color = 'var(--gold)';
+            statusEl.style.borderColor = 'var(--gold)';
+            statusEl.style.background = 'rgba(245, 158, 11, 0.1)';
+        }
     }
 
-    // Performance colors
-    const setPerfColor = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.style.color = val > 0 ? 'var(--bullish)' : (val < 0 ? 'var(--bearish)' : '#fff');
+    // Performance colors & Session Highlighting
+    const updateSessionBlock = (id, perf, isCurrent) => {
+        const block = document.getElementById(`session-block-${id}`);
+        const perfEl = document.getElementById(`overnight-${id}-perf`);
+        if (perfEl) perfEl.style.color = perf > 0 ? 'var(--bullish)' : (perf < 0 ? 'var(--bearish)' : '#fff');
+        
+        if (block) {
+            if (isCurrent) {
+                block.style.background = 'rgba(56, 189, 248, 0.1)';
+                block.style.borderColor = 'var(--cyan)';
+                setEl('guardian-active-session', id.toUpperCase() + ' ACTIVE');
+            } else {
+                block.style.background = 'rgba(0,0,0,0.4)';
+                block.style.borderColor = 'transparent';
+            }
+        }
     };
-    setPerfColor('overnight-asia-perf', over.asia);
-    setPerfColor('overnight-london-perf', over.london);
-    setPerfColor('overnight-ny-perf', over.ny);
+
+    // Determine current session (very rough heuristic, ideally server sends this)
+    const hour = new Date().getUTCHours();
+    const isAsia = hour >= 0 && hour < 8;
+    const isLondon = hour >= 8 && hour < 16;
+    const isNY = hour >= 13 && hour < 21; // Overlap logic simplified
+
+    updateSessionBlock('asia', over.asia, isAsia);
+    updateSessionBlock('london', over.london, isLondon);
+    updateSessionBlock('ny', over.ny, isNY);
 
     // Sentiment Meter
     const fill = document.getElementById('sentiment-meter-fill');
     const marker = document.getElementById('sentiment-meter-marker');
     if (fill && marker) {
-        // Map global sentiment to -50% to +50%
         let pct = 0;
-        if (over.global === 'STRONGLY_BULLISH') pct = 45;
-        else if (over.global === 'BULLISH') pct = 25;
-        else if (over.global === 'STRONGLY_BEARISH') pct = -45;
-        else if (over.global === 'BEARISH') pct = -25;
+        if (over.global?.includes('STRONGLY_BULLISH')) pct = 45;
+        else if (over.global?.includes('BULLISH')) pct = 25;
+        else if (over.global?.includes('STRONGLY_BEARISH')) pct = -45;
+        else if (over.global?.includes('BEARISH')) pct = -25;
         
         fill.style.width = Math.abs(pct) + '%';
         fill.style.left = '50%';
@@ -998,10 +1076,12 @@ function updateGlobalOvernightPulse(over) {
 
     // Sweep Pulse Dots
     const updateSweep = (id, active) => {
-        const el = document.querySelector(`#${id} .pulse-dot`);
-        if (el) {
-            el.style.background = active ? 'var(--gold)' : '#334155';
-            active ? el.classList.add('pulse') : el.classList.remove('pulse');
+        const node = document.getElementById(id);
+        const dot = node?.querySelector('.pulse-dot');
+        if (dot) {
+            dot.style.background = active ? 'var(--gold)' : '#334155';
+            active ? dot.classList.add('pulse') : dot.classList.remove('pulse');
+            if (node) node.style.color = active ? 'var(--gold)' : 'var(--text-dim)';
         }
     };
     updateSweep('radar-sweep-asia', over.asiaSweep);
@@ -1021,6 +1101,12 @@ function updateInstitutionalRadar(r, score, fullData) {
     if (dxyBadge) {
         dxyBadge.innerText = r.dxySync ? 'DXY ANCHOR: SYNCED' : 'DXY ANCHOR: DIVERTED';
         dxyBadge.style.color = r.dxySync ? 'var(--bullish)' : 'var(--bearish)';
+    }
+
+    // Whale Sync
+    const whaleBadge = document.getElementById('tg-whale-sync');
+    if (whaleBadge) {
+        whaleBadge.style.display = r.whaleSync ? 'inline-block' : 'none';
     }
 
     // Precision Meter
@@ -1128,26 +1214,168 @@ function updateInstitutionalRadar(r, score, fullData) {
         if (statusEl) statusEl.style.background = ev.color || 'var(--gold)';
     }
 
-    // Whale Tape
-    const tape = document.getElementById('whale-tape-list');
-    const judas = document.getElementById('judas-indicator');
-    if (tape && fullData?.blockTrades) {
-        const trades = fullData.blockTrades.slice(-6).reverse();
-        tape.innerHTML = trades.map(t => `
-            <div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
-                <span style="color:${t.type === 'BULLISH' ? 'var(--bullish)' : 'var(--bearish)'}">${t.symbol}</span>
-                <span style="color:#fff">$${t.price.toFixed(2)}</span>
-                <span style="color:var(--gold)">${t.value >= 1000000 ? (t.value/1000000).toFixed(1)+'M' : (t.value/1000).toFixed(0)+'K'}</span>
-            </div>
-        `).join('');
+    // --- UPGRADED: WHALE FLOW RADAR ---
+    const tapeInner = document.getElementById('whale-tape-inner');
+    if (tapeInner && fullData?.blockTrades) {
+        const trades = fullData.blockTrades.slice(-8).reverse();
+        let bullVol = 0;
+        let bearVol = 0;
+
+        tapeInner.innerHTML = trades.map(t => {
+            const isBull = t.type === 'BULLISH';
+            if (isBull) bullVol += t.value; else bearVol += t.value;
+            
+            const color = isBull ? 'var(--bullish)' : 'var(--bearish)';
+            const icon = isBull ? '▲' : '▼';
+            const valStr = t.value >= 1000000 ? (t.value/1000000).toFixed(1)+'M' : (t.value/1000).toFixed(0)+'K';
+
+            return `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.03); animation: slideIn 0.3s ease-out;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="color:${color}; font-weight:950;">${icon}</span>
+                        <span style="color:#fff; font-weight:800;">${t.symbol}</span>
+                    </div>
+                    <span style="color:var(--gold); font-weight:900;">$${valStr}</span>
+                    <span style="color:var(--text-dim); font-size:0.5rem;">${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}</span>
+                </div>
+            `;
+        }).join('');
+
+        // 1. Flow Velocity
+        const velocityBadge = document.getElementById('whale-velocity-badge');
+        if (velocityBadge) {
+            const v = trades.length;
+            const status = v > 6 ? 'EXTREME' : (v > 3 ? 'ACTIVE' : 'STABLE');
+            velocityBadge.innerText = `FLOW: ${status}`;
+            velocityBadge.style.color = v > 6 ? 'var(--bearish)' : (v > 3 ? 'var(--gold)' : 'var(--bullish)');
+            velocityBadge.style.borderColor = velocityBadge.style.color;
+        }
+
+        // 2. Net Flow Delta Bar
+        const deltaBar = document.getElementById('whale-flow-delta-bar');
+        const ratioEl = document.getElementById('whale-flow-ratio');
+        if (deltaBar && ratioEl) {
+            const total = bullVol + bearVol;
+            const bullPct = total > 0 ? (bullVol / total) * 100 : 50;
+            const diff = bullPct - 50; // -50 to +50
+            
+            deltaBar.style.width = Math.abs(diff) + '%';
+            deltaBar.style.left = diff >= 0 ? '50%' : (50 + diff) + '%';
+            deltaBar.style.background = diff >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+            deltaBar.style.boxShadow = `0 0 10px ${deltaBar.style.background}`;
+            
+            ratioEl.innerText = `${bullPct.toFixed(0)}% BULLISH ACCUMULATION`;
+            ratioEl.style.color = diff >= 0 ? 'var(--bullish)' : 'var(--bearish)';
+        }
+
+        // 3. Judas Sync Integration
+        const judas = document.getElementById('judas-indicator');
         if (judas) judas.style.display = fullData.forexRadar?.judasDetected ? 'block' : 'none';
     }
+}
 
     // Retail Sentiment
     setEl('retail-sentiment-val', (r.retailSentiment || 50).toFixed(0) + '% LONG');
     const rFill = document.getElementById('retail-sentiment-fill');
     if (rFill) rFill.style.width = (r.retailSentiment || 50) + '%';
     setEl('retail-strategy-text', (r.retailSentiment > 65 ? 'CONTRARIAN BIAS: BEARISH' : (r.retailSentiment < 35 ? 'CONTRARIAN BIAS: BULLISH' : 'CONTRARIAN BIAS: NEUTRAL')));
+}
+
+// --- UPGRADED: G7 CURRENCY POWER-GRID LOGIC ---
+function updateG7SpiderMatrix(basket) {
+    if (!basket) return;
+    
+    let currencies = Object.entries(basket).map(([cur, data]) => ({ cur, ...data }));
+    
+    // Sort for Alpha Rankings
+    currencies.sort((a, b) => b.val - a.val);
+    
+    const strongest = currencies[0];
+    const weakest = currencies[currencies.length - 1];
+    
+    // Update Leader Ribbon
+    setEl('g7-top-cur', strongest.cur);
+    setEl('g7-top-val', (strongest.val >= 0 ? '+' : '') + strongest.val.toFixed(2) + '%');
+    setEl('g7-weak-cur', weakest.cur);
+    setEl('g7-weak-val', weakest.val.toFixed(2) + '%');
+    
+    // Institutional Best Pair Strategy
+    const pairText = `${strongest.cur}/${weakest.cur}`;
+    setEl('g7-best-pair', pairText);
+    setEl('g7-best-dir', `ESTABLISHED DIRECTION: LONG ${strongest.cur} / SHORT ${weakest.cur}`);
+    const bestDirEl = document.getElementById('g7-best-dir');
+    if (bestDirEl) bestDirEl.style.color = 'var(--gold)';
+
+    // Update Individual Nodes
+    currencies.forEach(data => {
+        const node = document.querySelector(`.spider-node[data-cur="${data.cur}"]`);
+        if (!node) return;
+
+        // 1. Value & Bar
+        const valEl = node.querySelector('.val');
+        const fill = node.querySelector('.strength-bar-fill');
+        if (valEl) {
+            valEl.innerText = (data.val >= 0 ? '+' : '') + data.val.toFixed(2) + '%';
+            valEl.style.color = data.val > 0 ? 'var(--bullish)' : (data.val < 0 ? 'var(--bearish)' : '#fff');
+        }
+        if (fill) {
+            const pct = 50 + (data.val * 30); // Higher sensitivity for visualization
+            fill.style.width = Math.max(5, Math.min(95, pct)) + '%';
+            fill.style.background = data.val > 0 ? 'var(--bullish)' : (data.val < 0 ? 'var(--bearish)' : 'var(--gold)');
+        }
+
+        // 2. MTF Harmony Dots
+        let alignedCount = 0;
+        if (data.mtf) {
+            Object.entries(data.mtf).forEach(([tf, strength]) => {
+                const dot = node.querySelector(`.tf-dot[data-tf="${tf}"]`);
+                if (dot) {
+                    const isBull = strength > 0.005;
+                    const isBear = strength < -0.005;
+                    dot.style.background = isBull ? 'var(--bullish)' : (isBear ? 'var(--bearish)' : 'rgba(255,255,255,0.1)');
+                    dot.style.boxShadow = (isBull || isBear) ? `0 0 5px ${dot.style.background}` : 'none';
+                    if ((data.val > 0 && isBull) || (data.val < 0 && isBear)) alignedCount++;
+                }
+            });
+        }
+
+        // 3. Harmony Glow
+        const nameEl = node.querySelector('div[style*="font-size: 0.65rem"]');
+        if (nameEl) {
+            if (alignedCount === 3) {
+                nameEl.style.textShadow = `0 0 8px ${data.val > 0 ? 'var(--bullish)' : 'var(--bearish)'}`;
+                nameEl.style.color = '#fff';
+            } else {
+                nameEl.style.textShadow = 'none';
+                nameEl.style.color = data.cur === 'USD' ? '#00f2ff' : '#fff';
+            }
+        }
+
+        // 4. Exhaustion Markers
+        const isExhausted = Math.abs(data.val) > 0.6; // High standard for exhaustion
+        if (isExhausted) {
+            node.style.borderColor = data.val > 0 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.4)';
+            node.style.background = data.val > 0 ? 'rgba(239, 68, 68, 0.05)' : 'rgba(16, 185, 129, 0.05)';
+        } else {
+            node.style.borderColor = data.cur === 'USD' ? 'rgba(0, 242, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)';
+            node.style.background = data.cur === 'USD' ? 'rgba(0, 242, 255, 0.03)' : 'rgba(255, 255, 255, 0.02)';
+        }
+    });
+
+    // UNIFIED BASKET SYNC indicator
+    const syncEl = document.getElementById('basket-alignment');
+    if (syncEl) {
+        const strongSideCount = currencies.filter(c => Math.abs(c.val) > 0.2).length;
+        if (strongSideCount >= 4) {
+            syncEl.innerText = 'HIGH VOL FLOW';
+            syncEl.style.color = 'var(--gold)';
+            syncEl.style.borderColor = 'var(--gold)';
+        } else {
+            syncEl.innerText = 'UNIFIED BASKET SYNC';
+            syncEl.style.color = '#fff';
+            syncEl.style.borderColor = 'rgba(0,242,255,0.2)';
+        }
+    }
 }
 
 // --- Multi-Utilities ---
@@ -1240,6 +1468,22 @@ function setupUIControls() {
             }
         };
     });
+
+    // Voice Squawk Toggle
+    const voiceBtn = document.getElementById('btn-voice-toggle');
+    const voiceIcon = document.getElementById('voice-icon');
+    if (voiceBtn) {
+        voiceBtn.onclick = () => {
+            _voiceEnabled = !_voiceEnabled;
+            if (voiceIcon) voiceIcon.innerText = _voiceEnabled ? '🔊' : '🔇';
+            voiceBtn.style.color = _voiceEnabled ? 'var(--gold)' : 'var(--text-dim)';
+            voiceBtn.style.borderColor = _voiceEnabled ? 'var(--gold)' : 'var(--border)';
+            
+            if (_voiceEnabled) {
+                squawk("Voice Squawk Enabled. Institutional Narrative Synchronized.");
+            }
+        };
+    }
 }
 
 function showToast(msg, type) {

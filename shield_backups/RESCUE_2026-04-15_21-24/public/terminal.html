@@ -605,9 +605,9 @@
                             </div>
                         </div>
 
-                        <!-- Spider Grid Layout -->
-                        <div id="equity-spider-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
-                            <!-- Injected by JS: 11 Sectors -->
+                        <!-- Spider Radar Chart Container -->
+                        <div id="equity-spider-radar-container" style="position: relative; height: 350px; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 10px;">
+                            <canvas id="spiderRadarCanvas"></canvas>
                         </div>
                     </div>
                 </section>
@@ -852,60 +852,82 @@
                         </div>
                     </div>
                 </section>
-                <!-- GLOBAL MACRO OVERNIGHT PULSE (REBUILT: INSTITUTIONAL GRADE) -->
-                <section class="card reveal-1" style="margin-bottom: 0.75rem; border-color: rgba(255,157,0,0.15); background: linear-gradient(180deg, rgba(15, 23, 42, 0.6) 0%, rgba(0, 0, 0, 0.8) 100%);">
-                    <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.5); padding: 8px 12px; border-bottom: 1px solid rgba(255,157,0,0.3);">
+                <!-- GLOBAL GUARDIAN RADAR (REBUILT: MISSION CRITICAL) -->
+                <section class="card reveal-1" id="global-guardian-section" style="margin-bottom: 0.75rem; border-color: rgba(56, 189, 248, 0.4); background: linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(0, 0, 0, 0.95) 100%); position: relative; overflow: hidden;">
+                    <!-- Background Session Scanning Animation -->
+                    <div id="guardian-scanning-bg" style="position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); animation: scan-line 4s infinite linear; opacity: 0.3;"></div>
+
+                    <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.5); padding: 8px 12px; border-bottom: 1px solid rgba(56, 189, 248, 0.3);">
                         <div style="display:flex; flex-direction:column;">
-                            <span style="letter-spacing:1px; font-weight:950;">GLOBAL OVERNIGHT PULSE</span>
-                            <span style="font-size:0.45rem; color:var(--text-dim); letter-spacing:0.5px;">INSTITUTIONAL ANCHOR: <span style="color:var(--gold);">SPY (S&P 500)</span></span>
+                            <span style="letter-spacing:1.5px; font-weight:950; color: var(--cyan); text-shadow: 0 0 10px rgba(56,189,248,0.4);">GLOBAL GUARDIAN RADAR</span>
+                            <span style="font-size:0.45rem; color:var(--text-dim); letter-spacing:0.5px; font-weight: 800;">SESSION LIQUIDITY MATRIX | <span id="guardian-active-session" style="color:var(--gold);">SCANNING...</span></span>
                         </div>
-                        <div id="overnight-global-status" style="font-size: 0.55rem; color: var(--gold); border: 1px solid var(--gold); padding: 2px 8px; border-radius: 4px; font-weight: 950; text-transform: uppercase;">NEUTRAL</div>
+                        <div id="overnight-global-status" style="font-size: 0.55rem; color: var(--gold); border: 1px solid var(--gold); padding: 2px 8px; border-radius: 4px; font-weight: 950; text-transform: uppercase; background: rgba(245,158,11,0.05);">NEUTRAL</div>
                     </div>
 
-                    <!-- SESSION PERFORMANCE MATRIX -->
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: rgba(255,255,255,0.05); margin-top: 0px;">
-                        <div class="session-stat" style="text-align: center; background: rgba(0,0,0,0.3); padding: 12px 6px;">
-                            <div style="font-size: 0.45rem; color: var(--text-dim); font-weight: 800; margin-bottom: 6px; letter-spacing: 0.5px;">ASIA OPEN</div>
+                    <!-- SESSION PERFORMANCE RIBBON -->
+                    <div style="display: flex; gap: 1px; background: rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <div id="session-block-asia" class="guardian-session-block" style="flex: 1; padding: 12px 8px; background: rgba(0,0,0,0.4); text-align: center; border-bottom: 2px solid transparent; transition: all 0.3s ease;">
+                            <div style="font-size: 0.45rem; color: var(--text-dim); font-weight: 900; letter-spacing: 1px; margin-bottom: 4px;">ASIA</div>
                             <div id="overnight-asia-perf" style="font-size: 1.1rem; font-weight: 950; font-family: 'JetBrains Mono'; color: #fff;">0.00%</div>
+                            <div style="display:flex; justify-content:center; gap:3px; margin-top:5px;">
+                                <div id="asia-h-l" style="font-size:0.35rem; color:rgba(255,255,255,0.3); font-weight:800;">H: 0.00 | L: 0.00</div>
+                            </div>
                         </div>
-                        <div class="session-stat" style="text-align: center; background: rgba(0,0,0,0.3); padding: 12px 6px;">
-                            <div style="font-size: 0.45rem; color: var(--text-dim); font-weight: 800; margin-bottom: 6px; letter-spacing: 0.5px;">LONDON OPEN</div>
+                        <div id="session-block-london" class="guardian-session-block" style="flex: 1; padding: 12px 8px; background: rgba(0,0,0,0.4); text-align: center; border-bottom: 2px solid transparent; transition: all 0.3s ease;">
+                            <div style="font-size: 0.45rem; color: var(--text-dim); font-weight: 900; letter-spacing: 1px; margin-bottom: 4px;">LONDON</div>
                             <div id="overnight-london-perf" style="font-size: 1.1rem; font-weight: 950; font-family: 'JetBrains Mono'; color: #fff;">0.00%</div>
+                            <div style="display:flex; justify-content:center; gap:3px; margin-top:5px;">
+                                <div id="london-h-l" style="font-size:0.35rem; color:rgba(255,255,255,0.3); font-weight:800;">H: 0.00 | L: 0.00</div>
+                            </div>
                         </div>
-                        <div class="session-stat" style="text-align: center; background: rgba(0,0,0,0.3); padding: 12px 6px;">
-                            <div style="font-size: 0.45rem; color: var(--gold); font-weight: 900; margin-bottom: 6px; letter-spacing: 0.5px;">NY MIDNIGHT</div>
+                        <div id="session-block-ny" class="guardian-session-block" style="flex: 1; padding: 12px 8px; background: rgba(0,0,0,0.4); text-align: center; border-bottom: 2px solid transparent; transition: all 0.3s ease;">
+                            <div style="font-size: 0.45rem; color: var(--text-dim); font-weight: 900; letter-spacing: 1px; margin-bottom: 4px;">NEW YORK</div>
                             <div id="overnight-ny-perf" style="font-size: 1.1rem; font-weight: 950; font-family: 'JetBrains Mono'; color: #fff;">0.00%</div>
+                            <div style="display:flex; justify-content:center; gap:3px; margin-top:5px;">
+                                <div id="ny-h-l" style="font-size:0.35rem; color:rgba(255,255,255,0.3); font-weight:800;">H: 0.00 | L: 0.00</div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- INSTITUTIONAL SENTIMENT METER -->
-                    <div style="padding: 15px 12px 8px 12px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.45rem; font-weight: 900; margin-bottom: 6px; text-transform: uppercase;">
-                            <span style="color:var(--bearish);">Bearish Distribution</span>
-                            <span style="color:var(--gold);">Equilibrium</span>
-                            <span style="color:var(--bullish);">Bullish Accumulation</span>
+                    <!-- INSTITUTIONAL SENTIMENT & JUDAS RADAR -->
+                    <div style="padding: 12px; display: grid; grid-template-columns: 1fr 120px; gap: 15px;">
+                        <div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.45rem; font-weight: 900; margin-bottom: 6px; text-transform: uppercase;">
+                                <span style="color:var(--bearish);">Bearish Dist</span>
+                                <span style="color:var(--cyan); letter-spacing: 0.5px;">Global Sentiment</span>
+                                <span style="color:var(--bullish);">Bullish Acc</span>
+                            </div>
+                            <div id="sentiment-meter-container" style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; position: relative; border: 1px solid rgba(255,255,255,0.1);">
+                                <div id="sentiment-meter-fill" style="position: absolute; left: 50%; top: 0; bottom: 0; width: 0%; background: var(--cyan); transition: all 1s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 10px var(--cyan);"></div>
+                                <div id="sentiment-meter-marker" style="position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; background: #fff; z-index: 2; transition: left 1s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+                            </div>
+                            <div id="overnight-narrative" style="font-size: 0.45rem; color: rgba(255,255,255,0.5); font-weight: 700; margin-top: 10px; line-height: 1.4; border-left: 2px solid var(--cyan); padding-left: 8px;">
+                                Analyzing institutional global flow for SPY anchor...
+                            </div>
                         </div>
-                        <div id="sentiment-meter-container" style="height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; position: relative; border: 1px solid rgba(255,255,255,0.1);">
-                            <div id="sentiment-meter-fill" style="position: absolute; left: 50%; top: 0; bottom: 0; width: 0%; background: var(--cyan); transition: all 1s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 10px var(--cyan);"></div>
-                            <div id="sentiment-meter-marker" style="position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; background: #fff; z-index: 2; transition: left 1s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+
+                        <!-- JUDAS INDICATOR -->
+                        <div style="background: rgba(0,0,0,0.3); border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); padding: 6px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                            <div style="font-size:0.4rem; color:var(--text-dim); font-weight:900; margin-bottom: 4px;">JUDAS SWING</div>
+                            <div id="judas-indicator-dot" style="width: 24px; height: 24px; border-radius: 50%; border: 3px solid #334155; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;">
+                                <div style="width: 8px; height: 8px; background: #334155; border-radius: 50%;"></div>
+                            </div>
+                            <div id="judas-status-text" style="font-size:0.4rem; color:rgba(255,255,255,0.3); font-weight:950; margin-top: 5px; text-transform: uppercase;">INACTIVE</div>
                         </div>
                     </div>
 
                     <!-- LIQUIDITY SWEEP RADAR -->
-                    <div style="display: flex; justify-content: space-between; padding: 5px 15px 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.03);">
-                         <div id="radar-sweep-asia" style="display:flex; align-items:center; gap:4px; font-size:0.5rem; color:var(--text-dim); font-weight:800;">
+                    <div style="display: flex; justify-content: space-between; padding: 4px 12px 10px 12px; border-top: 1px solid rgba(0,0,0,0.3); background: rgba(0,0,0,0.2);">
+                        <div id="radar-sweep-asia" class="guardian-sweep-node" style="display:flex; align-items:center; gap:6px; font-size:0.48rem; color:var(--text-dim); font-weight:900; text-shadow: 0 0 5px rgba(0,0,0,0.5);">
                             <div class="pulse-dot" style="width:6px; height:6px; background:#334155; border-radius:50%;"></div> ASIA SWEEP
-                         </div>
-                         <div id="radar-sweep-london" style="display:flex; align-items:center; gap:4px; font-size:0.5rem; color:var(--text-dim); font-weight:800;">
+                        </div>
+                        <div id="radar-sweep-london" class="guardian-sweep-node" style="display:flex; align-items:center; gap:6px; font-size:0.48rem; color:var(--text-dim); font-weight:900; text-shadow: 0 0 5px rgba(0,0,0,0.5);">
                             <div class="pulse-dot" style="width:6px; height:6px; background:#334155; border-radius:50%;"></div> LONDON SWEEP
-                         </div>
-                         <div id="radar-sweep-ny" style="display:flex; align-items:center; gap:4px; font-size:0.5rem; color:var(--text-dim); font-weight:800;">
+                        </div>
+                        <div id="radar-sweep-ny" class="guardian-sweep-node" style="display:flex; align-items:center; gap:6px; font-size:0.48rem; color:var(--text-dim); font-weight:900; text-shadow: 0 0 5px rgba(0,0,0,0.5);">
                             <div class="pulse-dot" style="width:6px; height:6px; background:#334155; border-radius:50%;"></div> NY SWEEP
-                         </div>
-                    </div>
-
-                    <div id="overnight-narrative" style="font-size: 0.5rem; color: rgba(255,255,255,0.4); padding: 10px; font-style: italic; line-height: 1.4; text-align: center; min-height: 40px;">
-                        Analyzing institutional global flow for SPY anchor...
+                        </div>
                     </div>
                 </section>
 
@@ -984,7 +1006,8 @@
                     <div id="tg-board-pulse" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 6px; border: 1px solid rgba(255,215,0,0.1); position: relative; overflow: hidden;">
                         <div style="font-size: 0.5rem; color: var(--gold); font-weight: 950; margin-bottom: 6px; display: flex; justify-content: space-between; letter-spacing: 0.5px;">
                             <span>🛰️ BOARD SENTIMENT PULSE</span>
-                            <span id="tg-correl-sync" style="background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">WHALE SYNC: --%</span>
+                            <span id="tg-correl-sync" style="background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">CORREL: --%</span>
+                            <span id="tg-whale-sync" style="background: rgba(16, 185, 129, 0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--bullish); color: var(--bullish); display: none; font-size: 0.4rem; font-weight: 900; letter-spacing: 0.5px;">WHALE SYNC</span>
                             <span id="tg-board-breadth">--% BULLISH</span>
                         </div>
                         <div style="height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; margin-bottom: 8px;">
@@ -1295,140 +1318,114 @@
                             </div>
                         </div>
 
-                        <!-- NEW: G7 SPIDER CORRELATION MATRIX (Basket Analysis) -->
-                        <div id="spider-matrix-container" style="margin-top: 1rem; padding: 0.8rem; background: rgba(0,180,255,0.03); border-radius: 6px; border: 1px solid rgba(0,180,255,0.1);">
+                        <!-- UPGRADED: G7 CURRENCY POWER-GRID (MISSION CRITICAL) -->
+                        <div id="spider-matrix-container" style="margin-top: 1rem; padding: 0.8rem; background: rgba(0,0,0,0.3); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
                             <!-- Header Row -->
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                <div style="font-size: 0.55rem; font-weight: 800; color: #00f2ff; letter-spacing: 1.2px;">G7 SPIDER MATRIX</div>
-                                <div id="basket-alignment" style="font-size: 0.45rem; font-weight: 900; color: #00f2ff; opacity: 0.8;">BASKET: HARMONIOUS</div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="font-size: 0.55rem; font-weight: 800; color: var(--gold); letter-spacing: 1.5px; text-transform: uppercase;">G7 CURRENCY POWER-GRID</div>
+                                <div id="basket-alignment" style="font-size: 0.45rem; font-weight: 900; color: #fff; background: rgba(0,242,255,0.1); padding: 2px 6px; border-radius: 3px; border: 1px solid rgba(0,242,255,0.2);">UNIFIED BASKET SYNC</div>
                             </div>
-                            <!-- TOP / WEAK Leader Row -->
-                            <div style="display: flex; gap: 6px; margin-bottom: 8px; padding: 4px 6px; background: rgba(0,0,0,0.2); border-radius: 4px; border: 1px solid rgba(255,255,255,0.04);">
-                                <div style="flex:1;">
-                                    <div style="font-size:0.45rem; color:var(--text-dim); font-weight:900; letter-spacing:0.5px;">STRONGEST</div>
-                                    <div id="g7-top-cur" style="font-size:1.1rem; font-weight:900; color:var(--bullish); font-family:'JetBrains Mono',monospace; line-height: 1;">--</div>
-                                    <div id="g7-top-val" style="font-size:0.7rem; color:var(--bullish); font-weight:800; margin-top: 2px;">+0.00%</div>
+                            
+                            <!-- TOP / WEAK Leader Ribbon -->
+                            <div style="display: flex; gap: 8px; margin-bottom: 12px; padding: 6px; background: rgba(255,255,255,0.02); border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+                                <div style="flex:1; border-right: 1px solid rgba(255,255,255,0.05);">
+                                    <div style="font-size:0.4rem; color:var(--text-dim); font-weight:900; letter-spacing:0.5px;">BULLISH ALPHA</div>
+                                    <div id="g7-top-cur" style="font-size:1.4rem; font-weight:950; color:var(--bullish); font-family:'JetBrains Mono',monospace; line-height: 1;">--</div>
+                                    <div id="g7-top-val" style="font-size:0.65rem; color:var(--bullish); font-weight:800; margin-top: 4px;">+0.00%</div>
                                 </div>
-                                <div style="width:1px; background:rgba(255,255,255,0.06);"></div>
-                                <div style="flex:1; text-align:center;">
-                                    <div style="font-size:0.45rem; color:var(--text-dim); font-weight:900; letter-spacing:0.5px;">BEST PAIR</div>
-                                    <div id="g7-best-pair" style="font-size:0.9rem; font-weight:900; color:var(--gold); font-family:'JetBrains Mono',monospace; line-height: 1.2;">--/--</div>
-                                    <div id="g7-best-dir" style="font-size:0.6rem; color:var(--gold); font-weight:800;">LONG --</div>
+                                <div style="flex:1.5; text-align:center;">
+                                    <div style="font-size:0.4rem; color:var(--text-dim); font-weight:900; letter-spacing:0.5px;">INSTITUTIONAL BEST PAIR</div>
+                                    <div id="g7-best-pair" style="font-size:1.4rem; font-weight:950; color:var(--gold); font-family:'JetBrains Mono',monospace; line-height: 1;">--/--</div>
+                                    <div id="g7-best-dir" style="font-size:0.6rem; color:var(--gold); font-weight:900; letter-spacing: 1px; margin-top: 4px;">AWAITING FLOW SYNC</div>
                                 </div>
-                                <div style="width:1px; background:rgba(255,255,255,0.06);"></div>
-                                <div style="flex:1; text-align:right;">
-                                    <div style="font-size:0.45rem; color:var(--text-dim); font-weight:900; letter-spacing:0.5px;">WEAKEST</div>
-                                    <div id="g7-weak-cur" style="font-size:1.1rem; font-weight:900; color:var(--bearish); font-family:'JetBrains Mono',monospace; line-height: 1;">--</div>
-                                    <div id="g7-weak-val" style="font-size:0.7rem; color:var(--bearish); font-weight:800; margin-top: 2px;">-0.00%</div>
+                                <div style="flex:1; border-left: 1px solid rgba(255,255,255,0.05); text-align:right;">
+                                    <div style="font-size:0.4rem; color:var(--text-dim); font-weight:900; letter-spacing:0.5px;">BEARISH ALPHA</div>
+                                    <div id="g7-weak-cur" style="font-size:1.4rem; font-weight:950; color:var(--bearish); font-family:'JetBrains Mono',monospace; line-height: 1;">--</div>
+                                    <div id="g7-weak-val" style="font-size:0.65rem; color:var(--bearish); font-weight:800; margin-top: 4px;">-0.00%</div>
                                 </div>
                             </div>
+
+                            <!-- POWER GRID NODES (8 Currencies) -->
                             <div id="spider-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
-                                <!-- Dynamics injected by app.js -->
-                                <div class="spider-node" data-cur="EUR" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
-                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">EUR <span style="font-size: 0.45rem; opacity: 0.6; font-weight: 400;">(Euro Zone)</span></div>
-                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
-                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
-                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                <div class="spider-node" data-cur="USD" style="background: rgba(0,242,255,0.03); border: 1px solid rgba(0,242,255,0.1); padding: 8px 6px; border-radius: 4px; text-align: center; position: relative;">
+                                    <div style="font-size: 0.65rem; font-weight: 950; color: #00f2ff;">USD</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: #fff; margin: 2px 0;">+0.00%</div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-bottom: 5px;">
+                                        <div class="tf-dot" data-tf="1m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                    </div>
-                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
+                                    <div style="height: 2px; background: rgba(255,255,255,0.05); border-radius: 1px;"><div class="strength-bar-fill" style="width: 50%; height: 100%; background: #00f2ff;"></div></div>
                                 </div>
-                                <div class="spider-node" data-cur="GBP" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
-                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">GBP <span style="font-size: 0.45rem; opacity: 0.6; font-weight: 400;">(United Kingdom)</span></div>
-                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
-                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
-                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                <div class="spider-node" data-cur="EUR" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 6px; border-radius: 4px; text-align: center; position: relative;">
+                                    <div style="font-size: 0.65rem; font-weight: 950; color: #fff;">EUR</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: #fff; margin: 2px 0;">+0.00%</div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-bottom: 5px;">
+                                        <div class="tf-dot" data-tf="1m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                    </div>
-                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
+                                    <div style="height: 2px; background: rgba(255,255,255,0.05); border-radius: 1px;"><div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold);"></div></div>
                                 </div>
-                                <div class="spider-node" data-cur="JPY" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
-                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">JPY <span style="font-size: 0.45rem; opacity: 0.6; font-weight: 400;">(Japan)</span></div>
-                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
-                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
-                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                <div class="spider-node" data-cur="GBP" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 6px; border-radius: 4px; text-align: center; position: relative;">
+                                    <div style="font-size: 0.65rem; font-weight: 950; color: #fff;">GBP</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: #fff; margin: 2px 0;">+0.00%</div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-bottom: 5px;">
+                                        <div class="tf-dot" data-tf="1m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                    </div>
-                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
+                                    <div style="height: 2px; background: rgba(255,255,255,0.05); border-radius: 1px;"><div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold);"></div></div>
                                 </div>
-                                <div class="spider-node" data-cur="AUD" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
-                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">AUD <span style="font-size: 0.45rem; opacity: 0.6; font-weight: 400;">(Australia)</span></div>
-                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
-                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
-                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                <div class="spider-node" data-cur="JPY" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 6px; border-radius: 4px; text-align: center; position: relative;">
+                                    <div style="font-size: 0.65rem; font-weight: 950; color: #fff;">JPY</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: #fff; margin: 2px 0;">+0.00%</div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-bottom: 5px;">
+                                        <div class="tf-dot" data-tf="1m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                    </div>
-                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
+                                    <div style="height: 2px; background: rgba(255,255,255,0.05); border-radius: 1px;"><div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold);"></div></div>
                                 </div>
-                                <div class="spider-node" data-cur="CAD" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
-                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">CAD <span style="font-size: 0.45rem; opacity: 0.6; font-weight: 400;">(Canada)</span></div>
-                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
-                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
-                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                <div class="spider-node" data-cur="AUD" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 6px; border-radius: 4px; text-align: center; position: relative;">
+                                    <div style="font-size: 0.65rem; font-weight: 950; color: #fff;">AUD</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: #fff; margin: 2px 0;">+0.00%</div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-bottom: 5px;">
+                                        <div class="tf-dot" data-tf="1m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                    </div>
-                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
+                                    <div style="height: 2px; background: rgba(255,255,255,0.05); border-radius: 1px;"><div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold);"></div></div>
                                 </div>
-                                <div class="spider-node" data-cur="NZD" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
-                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">NZD <span style="font-size: 0.45rem; opacity: 0.6; font-weight: 400;">(New Zealand)</span></div>
-                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
-                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
-                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                <div class="spider-node" data-cur="CAD" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 6px; border-radius: 4px; text-align: center; position: relative;">
+                                    <div style="font-size: 0.65rem; font-weight: 950; color: #fff;">CAD</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: #fff; margin: 2px 0;">+0.00%</div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-bottom: 5px;">
+                                        <div class="tf-dot" data-tf="1m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                    </div>
-                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
+                                    <div style="height: 2px; background: rgba(255,255,255,0.05); border-radius: 1px;"><div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold);"></div></div>
                                 </div>
-                                <div class="spider-node" data-cur="CHF" style="text-align: center; background: rgba(255,255,255,0.03); padding: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: hidden;">
-                                    <div style="font-size: 0.65rem; font-weight: 900; color: var(--text-dim); margin-bottom: 2px;">CHF <span style="font-size: 0.45rem; opacity: 0.6; font-weight: 400;">(Switzerland)</span></div>
-                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
-                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
-                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold); transition: all 0.5s ease;"></div>
+                                <div class="spider-node" data-cur="NZD" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 6px; border-radius: 4px; text-align: center; position: relative;">
+                                    <div style="font-size: 0.65rem; font-weight: 950; color: #fff;">NZD</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: #fff; margin: 2px 0;">+0.00%</div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-bottom: 5px;">
+                                        <div class="tf-dot" data-tf="1m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                    </div>
-                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
+                                    <div style="height: 2px; background: rgba(255,255,255,0.05); border-radius: 1px;"><div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold);"></div></div>
                                 </div>
-                                <!-- USD node — DXY DRIVER special treatment -->
-                                <div class="spider-node" data-cur="USD" data-usd="true" style="text-align: center; background: rgba(0,180,255,0.05); padding: 5px; border-radius: 4px; border: 1px solid rgba(0,180,255,0.15); position: relative; overflow: hidden;">
-                                    <div style="font-size: 0.65rem; font-weight: 900; color: #00f2ff; margin-bottom: 2px;">USD <span style="font-size: 0.45rem; opacity: 0.6; font-weight: 400;">(United States)</span></div>
-                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: var(--gold);">+0.00%</div>
-                                    <div class="strength-bar-bg" style="width: 100%; height: 2px; background: rgba(255,255,255,0.05); margin-top: 4px;">
-                                        <div class="strength-bar-fill" style="width: 50%; height: 100%; background: #00f2ff; transition: all 0.5s ease;"></div>
+                                <div class="spider-node" data-cur="CHF" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 6px; border-radius: 4px; text-align: center; position: relative;">
+                                    <div style="font-size: 0.65rem; font-weight: 950; color: #fff;">CHF</div>
+                                    <div class="val" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; font-weight: 800; color: #fff; margin: 2px 0;">+0.00%</div>
+                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-bottom: 5px;">
+                                        <div class="tf-dot" data-tf="1m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="5m" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
+                                        <div class="tf-dot" data-tf="1h" style="width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.05);"></div>
                                     </div>
-                                    <div class="mtf-dots" style="display:flex; gap:3px; justify-content:center; align-items:center; margin-top:4px;">
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1M</span><div class="tf-dot" data-tf="1m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">5M</span><div class="tf-dot" data-tf="5m" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                        <span style="font-size:0.28rem;color:var(--text-dim);opacity:0.6;">1H</span><div class="tf-dot" data-tf="1h" style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);transition:background 0.3s;"></div>
-                                    </div>
-                                    <div style="font-size:0.3rem;color:#00f2ff;font-weight:900;letter-spacing:0.5px;margin-top:3px;opacity:0.8;">DXY DRIVER</div>
-                                    <div class="exhaustion-badge" style="display:none; font-size: 0.35rem; font-weight: 900; text-align: center; color: #fff; padding: 1px 2px; border-radius: 2px; margin-top: 3px; text-transform: uppercase;"></div>
+                                    <div style="height: 2px; background: rgba(255,255,255,0.05); border-radius: 1px;"><div class="strength-bar-fill" style="width: 50%; height: 100%; background: var(--gold);"></div></div>
                                 </div>
                             </div>
                         </div>
@@ -1681,11 +1678,99 @@
                 </section>
 
 
-                <!-- Institutional Block Trades -->
-                <section class="card reveal-7">
-                    <div class="card-title">Institutional Block Feed</div>
-                    <div id="block-trades-feed" style="max-height: 150px; overflow-y: auto; font-size: 0.7rem;">
-                        <p style="color:var(--text-dim); text-align:center;">Listening for whales...</p>
+                <!-- UPGRADED: INSTITUTIONAL WHALE RADAR (MISSION CRITICAL) -->
+                <section class="card reveal-7" style="border-color: rgba(245, 158, 11, 0.4); background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(20, 20, 20, 1) 100%);">
+                    <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(245,158,11,0.2); background: rgba(0,0,0,0.3); padding: 8px 12px;">
+                        <span style="color: var(--gold); letter-spacing: 1.5px; font-weight: 950;">WHALE FLOW RADAR</span>
+                        <div id="whale-velocity-badge" style="font-size: 0.45rem; background: rgba(245,158,11,0.1); border: 1px solid var(--gold); padding: 2px 6px; border-radius: 4px; color: var(--gold); font-weight: 950;">FLOW: STABLE</div>
+                    </div>
+                    
+                    <!-- HIGH DENSITY FEED -->
+                    <div id="whale-tape-list" style="height: 180px; overflow-y: hidden; position: relative;">
+                        <!-- Shadow overlay for fade effect -->
+                        <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); z-index: 2; pointer-events: none;"></div>
+                        
+                        <div id="whale-tape-inner" style="padding: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;">
+                            <!-- Logic populates this -->
+                            <div style="color: var(--text-dim); text-align: center; padding-top: 60px; font-style: italic;">Monitoring dark pool and institutional blocks...</div>
+                        </div>
+                    </div>
+
+                    <!-- NET FLOW DELTA -->
+                    <div style="padding: 10px; border-top: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.4);">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.45rem; font-weight: 950; margin-bottom: 6px;">
+                            <span style="color: var(--bearish);">BEARISH FLOW</span>
+                            <span id="whale-flow-ratio" style="color: #fff;">0% ACCUMULATION</span>
+                            <span style="color: var(--bullish);">BULLISH FLOW</span>
+                        </div>
+                        <div style="height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; position: relative;">
+                            <div id="whale-flow-delta-bar" style="position: absolute; left: 50%; width: 0%; height: 100%; background: var(--gold); transition: all 0.5s ease; box-shadow: 0 0 10px var(--gold);"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TIER 1 INSTITUTIONAL EDGE PANEL (HIGH FIDELITY) -->
+                <section class="card reveal-1" id="t1-edge-panel" style="margin-bottom: 0.75rem; border: 1px solid rgba(212, 175, 55, 0.3); background: linear-gradient(180deg, rgba(20, 20, 20, 0.9) 0%, rgba(0, 0, 0, 0.95) 100%);">
+                    <div class="card-title" style="background: rgba(212, 175, 55, 0.1); padding: 8px 12px; border-bottom: 1px solid rgba(212, 175, 55, 0.2); display: flex; justify-content: space-between; align-items: center;">
+                        <span style="letter-spacing:1px; font-weight:950; color: var(--gold); text-shadow: 0 0 8px rgba(212,175,55,0.3);">TIER 1 INSTITUTIONAL EDGE</span>
+                        <div style="font-size: 0.45rem; color: var(--text-dim); font-weight: 800; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 3px;">REAL-TIME FEED</div>
+                    </div>
+
+                    <div style="padding: 12px; display: grid; gap: 12px;">
+                        <!-- VWAP BAND RADAR -->
+                        <div style="background: rgba(255,255,255,0.02); border-radius: 4px; padding: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                                <span style="font-size: 0.55rem; color: var(--text-dim); font-weight: 800;">VWAP BANDS</span>
+                                <span id="t1-vwap-zone" style="font-size: 0.6rem; font-weight: 950; color: var(--gold);">VALUE AREA</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-family: 'JetBrains Mono'; font-size: 0.65rem;">
+                                <div style="color: var(--bearish);">U: <span id="t1-vwap-b2">0.00</span></div>
+                                <div style="color: var(--bullish);">L: <span id="t1-vwap-b1">0.00</span></div>
+                            </div>
+                        </div>
+
+                        <!-- RVOL & MOMENTUM -->
+                        <div style="background: rgba(255,255,255,0.02); border-radius: 4px; padding: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                                <span style="font-size: 0.55rem; color: var(--text-dim); font-weight: 800;">RELATIVE VOLUME (RVOL)</span>
+                                <span id="t1-rvol-label" style="font-size: 0.55rem; font-weight: 900; color: var(--gold);">NORMAL</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div id="t1-rvol-val" style="font-size: 1.1rem; font-weight: 950; font-family: 'JetBrains Mono'; min-width: 60px;">1.00×</div>
+                                <div style="flex: 1; height: 4px; background: rgba(0,0,0,0.3); border-radius: 2px; overflow: hidden;">
+                                    <div id="t1-rvol-bar" style="width: 50%; height: 100%; background: var(--gold); transition: width 0.5s ease;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ORB & GAP DYNAMICS -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div style="background: rgba(255,255,255,0.02); border-radius: 4px; padding: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                                <div style="font-size: 0.5rem; color: var(--text-dim); font-weight: 800; margin-bottom: 4px;">ORB 30M</div>
+                                <div id="t1-orb-label" style="font-size: 0.65rem; font-weight: 900; margin-bottom: 2px;">SCANNING</div>
+                                <div style="font-size: 0.45rem; color: var(--text-dim); font-family: 'JetBrains Mono';">H:<span id="t1-orb-high">0.00</span> | L:<span id="t1-orb-low">0.00</span></div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.02); border-radius: 4px; padding: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                                <div style="font-size: 0.5rem; color: var(--text-dim); font-weight: 800; margin-bottom: 4px;">GAP ENGINE</div>
+                                <div id="t1-gap-label" style="font-size: 0.65rem; font-weight: 900; margin-bottom: 2px;">SYNCING</div>
+                                <div style="font-size: 0.45rem; color: var(--gold); font-weight: 800;">PROB: <span id="t1-gap-prob-val">0%</span></div>
+                            </div>
+                        </div>
+
+                        <!-- EQUAL LEVELS & VOLATILITY -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div style="background: rgba(255,255,255,0.02); border-radius: 4px; padding: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                                <div style="font-size: 0.45rem; color: var(--text-dim); font-weight: 800; margin-bottom: 4px;">EQ HIGHS/LOWS</div>
+                                <div id="t1-eq-highs" style="font-size: 0.55rem; font-weight: 700; color: #fff;">EQH: --</div>
+                                <div id="t1-eq-lows" style="font-size: 0.55rem; font-weight: 700; color: #fff;">EQL: --</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.02); border-radius: 4px; padding: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                                <div style="font-size: 0.45rem; color: var(--text-dim); font-weight: 800; margin-bottom: 4px;">VOL REGIME</div>
+                                <div id="t1-vol-regime-label" style="font-size: 0.65rem; font-weight: 900; color: var(--gold); margin-bottom: 4px;">NORMAL</div>
+                                <div style="width: 100%; height: 2px; background: rgba(0,0,0,0.3);"><div id="t1-vol-regime-bar" style="width: 50%; height: 100%; background: var(--gold);"></div></div>
+                                <div id="t1-vol-ratio" style="font-size: 0.4rem; color: var(--text-dim); margin-top: 2px;">ATR RATIO: 1.00</div>
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -1764,14 +1849,7 @@
             </div>
         </div>
 
-        <div class="whale-tape-wrapper">
-            <div class="whale-label">=ƒÉï WHALE TAPE</div>
-            <div id="whale-ticker" class="whale-ticker">
-                <div class="ticker-scroll">
-                    Detecting Institutional Block Trades... Monitoring Whale Momentum... Tracking Dark Pool Sweeps...
-                </div>
-            </div>
-        </div>
+        <!-- Bottom Ticker Retired: Unified in Whale Radar -->
     </div>
 
     <!-- Institutional Trigger Checklist Modal -->
